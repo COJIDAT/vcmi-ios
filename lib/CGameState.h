@@ -1,22 +1,3 @@
-#pragma once
-
-
-
-//#ifndef _MSC_VER
-#include "CCreatureHandler.h"
-#include "VCMI_Lib.h"
-#include "mapping/CMap.h"
-//#endif
-
-#include "HeroBonus.h"
-#include "CCreatureSet.h"
-#include "ConstTransitivePtr.h"
-#include "IGameCallback.h"
-#include "ResourceSet.h"
-#include "int3.h"
-#include "CRandomGenerator.h"
-#include "CGameStateFwd.h"
-
 /*
  * CGameState.h, part of VCMI engine
  *
@@ -26,12 +7,25 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "CCreatureHandler.h"
+#include "VCMI_Lib.h"
+
+#include "HeroBonus.h"
+#include "CCreatureSet.h"
+#include "ConstTransitivePtr.h"
+#include "IGameCallback.h"
+#include "ResourceSet.h"
+#include "int3.h"
+#include "CRandomGenerator.h"
+#include "CGameStateFwd.h"
+#include "CPathfinder.h"
 
 class CTown;
 class CCallback;
 class IGameCallback;
 class CCreatureSet;
-class CStack;
 class CQuest;
 class CGHeroInstance;
 class CGTownInstance;
@@ -42,9 +36,7 @@ class CGObjectInstance;
 class CCreature;
 class CMap;
 struct StartInfo;
-struct SDL_Surface;
 class CMapHandler;
-class CPathfinder;
 struct SetObjectProperty;
 struct MetaString;
 struct CPack;
@@ -61,84 +53,12 @@ class CQuest;
 class CCampaignScenario;
 struct EventCondition;
 class CScenarioTravel;
+class IMapService;
 
 namespace boost
 {
 	class shared_mutex;
 }
-
-//numbers of creatures are exact numbers if detailed else they are quantity ids (0 - a few, 1 - several and so on; additionally -1 - unknown)
-struct ArmyDescriptor : public std::map<SlotID, CStackBasicDescriptor>
-{
-	bool isDetailed;
-	DLL_LINKAGE ArmyDescriptor(const CArmedInstance *army, bool detailed); //not detailed -> quantity ids as count
-	DLL_LINKAGE ArmyDescriptor();
-
-	DLL_LINKAGE int getStrength() const;
-};
-
-struct DLL_LINKAGE InfoAboutArmy
-{
-	PlayerColor owner;
-	std::string name;
-
-	ArmyDescriptor army;
-
-	InfoAboutArmy();
-	InfoAboutArmy(const CArmedInstance *Army, bool detailed);
-
-	void initFromArmy(const CArmedInstance *Army, bool detailed);
-};
-
-struct DLL_LINKAGE InfoAboutHero : public InfoAboutArmy
-{
-private:
-	void assign(const InfoAboutHero & iah);
-public:
-	struct DLL_LINKAGE Details
-	{
-		std::vector<si32> primskills;
-		si32 mana, luck, morale;
-	} *details;
-
-	const CHeroClass *hclass;
-	int portrait;
-
-	InfoAboutHero();
-	InfoAboutHero(const InfoAboutHero & iah);
-	InfoAboutHero(const CGHeroInstance *h, bool detailed);
-	~InfoAboutHero();
-
-	InfoAboutHero & operator=(const InfoAboutHero & iah);
-
-	void initFromHero(const CGHeroInstance *h, bool detailed);
-};
-
-/// Struct which holds a int information about a town
-struct DLL_LINKAGE InfoAboutTown : public InfoAboutArmy
-{
-	struct DLL_LINKAGE Details
-	{
-		si32 hallLevel, goldIncome;
-		bool customRes;
-		bool garrisonedHero;
-
-	} *details;
-
-	const CTown *tType;
-
-	si32 built;
-	si32 fortLevel; //0 - none
-
-	InfoAboutTown();
-	InfoAboutTown(const CGTownInstance *t, bool detailed);
-	~InfoAboutTown();
-	void initFromTown(const CGTownInstance *t, bool detailed);
-};
-
-// typedef si32 TResourceUnit;
-// typedef std::vector<si32> TResourceVector;
-// typedef std::set<si32> TResourceSet;
 
 struct DLL_LINKAGE SThievesGuildInfo
 {
@@ -151,61 +71,52 @@ struct DLL_LINKAGE SThievesGuildInfo
     std::map<PlayerColor, EAiTactic::EAiTactic> personality; // color to personality // ai tactic
 	std::map<PlayerColor, si32> bestCreature; // color to ID // id or -1 if not known
 
-// 	template <typename Handler> void serialize(Handler &h, const int version)
-// 	{
-// 		h & playerColors & numOfTowns & numOfHeroes & gold & woodOre & mercSulfCrystGems & obelisks & artifacts & army & income;
-// 		h & colorToBestHero & personality & bestCreature;
-// 	}
+//	template <typename Handler> void serialize(Handler &h, const int version)
+//	{
+//		h & playerColors;
+//		h & numOfTowns;
+//		h & numOfHeroes;
+//		h & gold;
+//		h & woodOre;
+//		h & mercSulfCrystGems;
+//		h & obelisks;
+//		h & artifacts;
+//		h & army;
+//		h & income;
+//		h & colorToBestHero;
+//		h & personality;
+//		h & bestCreature;
+//	}
 
 };
 
-struct DLL_LINKAGE PlayerState : public CBonusSystemNode
+struct DLL_LINKAGE RumorState
 {
-public:
-	PlayerColor color;
-	bool human; //true if human controlled player, false for AI
-	TeamID team;
-	TResources resources;
-	std::set<ObjectInstanceID> visitedObjects; // as a std::set, since most accesses here will be from visited status checks
-	std::vector<ConstTransitivePtr<CGHeroInstance> > heroes;
-	std::vector<ConstTransitivePtr<CGTownInstance> > towns;
-	std::vector<ConstTransitivePtr<CGHeroInstance> > availableHeroes; //heroes available in taverns
-	std::vector<ConstTransitivePtr<CGDwelling> > dwellings; //used for town growth
-	std::vector<QuestInfo> quests; //store info about all received quests
+	enum ERumorType : ui8
+	{
+		TYPE_NONE = 0, TYPE_RAND, TYPE_SPECIAL, TYPE_MAP
+	};
 
-	bool enteredWinningCheatCode, enteredLosingCheatCode; //if true, this player has entered cheat codes for loss / victory
-	EPlayerStatus::EStatus status;
-	boost::optional<ui8> daysWithoutCastle;
+	enum ERumorTypeSpecial : ui8
+	{
+		RUMOR_OBELISKS = 208,
+		RUMOR_ARTIFACTS = 209,
+		RUMOR_ARMY = 210,
+		RUMOR_INCOME = 211,
+		RUMOR_GRAIL = 212
+	};
 
-	PlayerState();
-	std::string nodeName() const override;
+	ERumorType type;
+	std::map<ERumorType, std::pair<int, int>> last;
+
+	RumorState(){type = TYPE_NONE;};
+	bool update(int id, int extra);
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & color & human & team & resources & status;
-		h & heroes & towns & availableHeroes & dwellings & visitedObjects;
-		h & getBonusList(); //FIXME FIXME FIXME
-		h & status & daysWithoutCastle;
-		h & enteredLosingCheatCode & enteredWinningCheatCode;
-		h & static_cast<CBonusSystemNode&>(*this);
+		h & type;
+		h & last;
 	}
-};
-
-struct DLL_LINKAGE TeamState : public CBonusSystemNode
-{
-public:
-	TeamID id; //position in gameState::teams
-	std::set<PlayerColor> players; // members of this team
-	std::vector<std::vector<std::vector<ui8> > >  fogOfWarMap; //true - visible, false - hidden
-
-	TeamState();
-
-	template <typename Handler> void serialize(Handler &h, const int version)
-	{
-		h & id & players & fogOfWarMap;
-		h & static_cast<CBonusSystemNode&>(*this);
-	}
-
 };
 
 struct UpgradeInfo
@@ -216,100 +127,7 @@ struct UpgradeInfo
 	UpgradeInfo(){oldID = CreatureID::NONE;};
 };
 
-struct DLL_EXPORT DuelParameters
-{
-	ETerrainType terType;
-	BFieldType bfieldType;
-	struct DLL_EXPORT SideSettings
-	{
-		struct DLL_EXPORT StackSettings
-		{
-			CreatureID type;
-			si32 count;
-			template <typename Handler> void serialize(Handler &h, const int version)
-			{
-				h & type & count;
-			}
-
-			StackSettings();
-			StackSettings(CreatureID Type, si32 Count);
-		} stacks[GameConstants::ARMY_SIZE];
-
-		si32 heroId; //-1 if none
-		std::vector<si32> heroPrimSkills; //may be empty
-		std::map<si32, CArtifactInstance*> artifacts;
-		std::vector<std::pair<si32, si8> > heroSecSkills; //may be empty; pairs <id, level>, level [0-3]
-		std::set<SpellID> spells;
-
-		SideSettings();
-		template <typename Handler> void serialize(Handler &h, const int version)
-		{
-			h & stacks & heroId & heroPrimSkills & artifacts & heroSecSkills & spells;
-		}
-	} sides[2];
-
-	std::vector<shared_ptr<CObstacleInstance> > obstacles;
-
-	static DuelParameters fromJSON(const std::string &fname);
-
-	struct CusomCreature
-	{
-		int id;
-		int attack, defense, dmg, HP, speed, shoots;
-
-		CusomCreature()
-		{
-			id = attack = defense = dmg = HP = speed = shoots = -1;
-		}
-		template <typename Handler> void serialize(Handler &h, const int version)
-		{
-			h & id & attack & defense & dmg & HP & speed & shoots;
-		}
-	};
-
-	std::vector<CusomCreature> creatures;
-
-	DuelParameters();
-	template <typename Handler> void serialize(Handler &h, const int version)
-	{
-		h & terType & bfieldType & sides & obstacles & creatures;
-	}
-};
-
-class CPathfinder : private CGameInfoCallback
-{
-private:
-	bool useSubterraneanGates;
-	bool allowEmbarkAndDisembark;
-	CPathsInfo &out;
-	const CGHeroInstance *hero;
-	const std::vector<std::vector<std::vector<ui8> > > &FoW;
-
-	std::list<CGPathNode*> mq; //BFS queue -> nodes to be checked
-
-
-	int3 curPos;
-	CGPathNode *cp; //current (source) path node -> we took it from the queue
-	CGPathNode *dp; //destination node -> it's a neighbour of cp that we consider
-	const TerrainTile *ct, *dt; //tile info for both nodes
-	ui8 useEmbarkCost; //0 - usual movement; 1 - embark; 2 - disembark
-	int destTopVisObjID;
-
-
-	CGPathNode *getNode(const int3 &coord);
-	void initializeGraph();
-	bool goodForLandSeaTransition(); //checks if current move will be between sea<->land. If so, checks it legality (returns false if movement is not possible) and sets useEmbarkCost
-
-	CGPathNode::EAccessibility evaluateAccessibility(const TerrainTile *tinfo) const;
-	bool canMoveBetween(const int3 &a, const int3 &b) const; //checks only for visitable objects that may make moving between tiles impossible, not other conditions (like tiles itself accessibility)
-
-public:
-	CPathfinder(CPathsInfo &_out, CGameState *_gs, const CGHeroInstance *_hero);
-	void calculatePaths(); //calculates possible paths for hero, uses current hero position and movement left; returns pointer to newly allocated CPath or nullptr if path does not exists
-};
-
-
-struct BattleInfo;
+class BattleInfo;
 
 DLL_LINKAGE std::ostream & operator<<(std::ostream & os, const EVictoryLossCheckResult & victoryLossCheckResult);
 
@@ -326,14 +144,15 @@ public:
 
 		template <typename Handler> void serialize(Handler &h, const int version)
 		{
-			h & heroesPool & pavailable;
+			h & heroesPool;
+			h & pavailable;
 		}
 	} hpool; //we have here all heroes available on this map that are not hired
 
 	CGameState();
 	virtual ~CGameState();
 
-	void init(StartInfo * si);
+	void init(const IMapService * mapService, StartInfo * si, bool allowSavingRandomMap = false);
 
 	ConstTransitivePtr<StartInfo> scenarioOps, initialOpts; //second one is a copy of settings received from pregame (not randomized)
 	PlayerColor currentPlayer; //ID of player currently having turn
@@ -343,19 +162,21 @@ public:
 	std::map<PlayerColor, PlayerState> players;
 	std::map<TeamID, TeamState> teams;
 	CBonusSystemNode globalEffects;
+	RumorState rumor;
 
-	boost::shared_mutex *mx;
+	static boost::shared_mutex mutex;
 
 	void giveHeroArtifact(CGHeroInstance *h, ArtifactID aid);
 
 	void apply(CPack *pack);
-	BFieldType battleGetBattlefieldType(int3 tile);
+	BFieldType battleGetBattlefieldType(int3 tile, CRandomGenerator & rand);
 	UpgradeInfo getUpgradeInfo(const CStackInstance &stack);
 	PlayerRelations::PlayerRelations getPlayerRelations(PlayerColor color1, PlayerColor color2);
 	bool checkForVisitableDir(const int3 & src, const int3 & dst) const; //check if src tile is visitable from dst tile
 	void calculatePaths(const CGHeroInstance *hero, CPathsInfo &out); //calculates possible paths for hero, by default uses current hero position and movement left; returns pointer to newly allocated CPath or nullptr if path does not exists
 	int3 guardingCreaturePosition (int3 pos) const;
 	std::vector<CGObjectInstance*> guardingCreatures (int3 pos) const;
+	void updateRumor();
 
 	// ----- victory, loss condition checks -----
 
@@ -366,21 +187,44 @@ public:
 
 	void obtainPlayersStats(SThievesGuildInfo & tgi, int level); //fills tgi with info about other players that is available at given level of thieves' guild
 	std::map<ui32, ConstTransitivePtr<CGHeroInstance> > unusedHeroesFromPool(); //heroes pool without heroes that are available in taverns
-	BattleInfo * setupBattle(int3 tile, const CArmedInstance *armies[2], const CGHeroInstance * heroes[2], bool creatureBank, const CGTownInstance *town);
 
 	bool isVisible(int3 pos, PlayerColor player);
 	bool isVisible(const CGObjectInstance *obj, boost::optional<PlayerColor> player);
 
-	void getNeighbours(const TerrainTile &srct, int3 tile, std::vector<int3> &vec, const boost::logic::tribool &onLand, bool limitCoastSailing);
-	int getMovementCost(const CGHeroInstance *h, const int3 &src, const int3 &dest, bool flying, int remainingMovePoints=-1, bool checkLast=true);
 	int getDate(Date::EDateType mode=Date::DAY) const; //mode=0 - total days in game, mode=1 - day of week, mode=2 - current week, mode=3 - current month
 
 	// ----- getters, setters -----
+
+	/// This RNG should only be used inside GS or CPackForClient-derived applyGs
+	/// If this doesn't work for your code that mean you need a new netpack
+	///
+	/// Client-side must use CRandomGenerator::getDefault which is not serialized
+	///
+	/// CGameHandler have it's own getter for CRandomGenerator::getDefault
+	/// Any server-side code outside of GH must use CRandomGenerator::getDefault
 	CRandomGenerator & getRandomGenerator();
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & scenarioOps & initialOpts & currentPlayer & day & map & players & teams & hpool & globalEffects & rand;
+		h & scenarioOps;
+		h & initialOpts;
+		h & currentPlayer;
+		h & day;
+		h & map;
+		h & players;
+		h & teams;
+		h & hpool;
+		h & globalEffects;
+		h & rand;
+		if(version >= 755) //save format backward compatibility
+		{
+			h & rumor;
+		}
+		else if(!h.saving)
+		{
+			rumor = RumorState();
+		}
+
 		BONUS_TREE_DESERIALIZATION_FIX
 	}
 
@@ -401,9 +245,8 @@ private:
 
 	// ----- initialization -----
 
-	void initNewGame();
-	void initCampaign();
-	void initDuel();
+	void initNewGame(const IMapService * mapService, bool allowSavingRandomMap);
+	void initCampaign(const IMapService * mapService);
 	void checkMapChecksum();
 	void initGrailPosition();
 	void initRandomFactionsForPlayers();
@@ -417,7 +260,7 @@ private:
 	std::vector<CampaignHeroReplacement> generateCampaignHeroesToReplace(CrossoverHeroesList & crossoverHeroes);
 
 	/// gets prepared and copied hero instances with crossover heroes from prev. scenario and travel options from current scenario
-	void prepareCrossoverHeroes(std::vector<CampaignHeroReplacement> & campaignHeroReplacements, const CScenarioTravel & travelOptions) const;
+	void prepareCrossoverHeroes(std::vector<CampaignHeroReplacement> & campaignHeroReplacements, const CScenarioTravel & travelOptions);
 
 	void replaceHeroesPlaceholders(const std::vector<CampaignHeroReplacement> & campaignHeroReplacements);
 	void placeStartingHeroes();

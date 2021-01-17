@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/term/Trapezoid.h"
@@ -29,36 +21,49 @@ namespace fl {
     Trapezoid::Trapezoid(const std::string& name,
             scalar vertexA, scalar vertexB, scalar vertexC, scalar vertexD, scalar height)
     : Term(name, height), _vertexA(vertexA), _vertexB(vertexB), _vertexC(vertexC), _vertexD(vertexD) {
+        if (Op::isNaN(vertexC) and Op::isNaN(vertexD)) {
+            this->_vertexD = _vertexB;
+            scalar range = _vertexD - _vertexA;
+            this->_vertexB = _vertexA + range * 1.0 / 5.0;
+            this->_vertexC = _vertexA + range * 4.0 / 5.0;
+        }
     }
 
-    Trapezoid::~Trapezoid() {
-    }
+    Trapezoid::~Trapezoid() { }
 
     std::string Trapezoid::className() const {
         return "Trapezoid";
     }
 
+    Complexity Trapezoid::complexity() const {
+        return Complexity().comparison(1 + 6).arithmetic(1 + 3).function(1);
+    }
+
     scalar Trapezoid::membership(scalar x) const {
-        if (fl::Op::isNaN(x)) return fl::nan;
+        if (Op::isNaN(x)) return fl::nan;
 
         if (Op::isLt(x, _vertexA) or Op::isGt(x, _vertexD))
-            return _height * 0.0;
+            return Term::_height * 0.0;
 
-        if (Op::isLt(x, _vertexB))
-            return _height * Op::min(scalar(1.0), (x - _vertexA) / (_vertexB - _vertexA));
-
+        if (Op::isLt(x, _vertexB)) {
+            if (_vertexA == -fl::inf) return Term::_height * 1.0;
+            return Term::_height * Op::min(scalar(1.0), (x - _vertexA) / (_vertexB - _vertexA));
+        }
         if (Op::isLE(x, _vertexC))
-            return _height * 1.0;
+            return Term::_height * 1.0;
 
-        if (Op::isLt(x, _vertexD))
-            return _height * (_vertexD - x) / (_vertexD - _vertexC);
+        if (Op::isLt(x, _vertexD)) {
+            if (_vertexD == fl::inf) return Term::_height * 1.0;
+            return Term::_height * (_vertexD - x) / (_vertexD - _vertexC);
+        }
 
-        return _height * 0.0;
+        if (_vertexD == fl::inf) return Term::_height * 1.0;
+        return Term::_height * 0.0;
     }
 
     std::string Trapezoid::parameters() const {
         return Op::join(4, " ", _vertexA, _vertexB, _vertexC, _vertexD)+
-                (not Op::isEq(_height, 1.0) ? " " + Op::str(_height) : "");
+                (not Op::isEq(getHeight(), 1.0) ? " " + Op::str(getHeight()) : "");
     }
 
     void Trapezoid::configure(const std::string& parameters) {
@@ -69,7 +74,7 @@ namespace fl {
             std::ostringstream ex;
             ex << "[configuration error] term <" << className() << ">"
                     << " requires <" << required << "> parameters";
-            throw fl::Exception(ex.str(), FL_AT);
+            throw Exception(ex.str(), FL_AT);
         }
         setVertexA(Op::toScalar(values.at(0)));
         setVertexB(Op::toScalar(values.at(1)));

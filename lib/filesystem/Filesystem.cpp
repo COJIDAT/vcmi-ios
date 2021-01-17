@@ -1,7 +1,14 @@
+/*
+ * Filesystem.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "Filesystem.h"
-
-#include "CFileInfo.h"
 
 #include "CArchiveLoader.h"
 #include "CFilesystemLoader.h"
@@ -41,19 +48,20 @@ void CFilesystemGenerator::loadConfig(const JsonNode & config)
 		for(auto & entry : mountPoint.second.Vector())
 		{
 			CStopWatch timer;
-			logGlobal->debugStream() << "\t\tLoading resource at " << prefix + entry["path"].String();
+			logGlobal->trace("\t\tLoading resource at %s%s", prefix, entry["path"].String());
 
 			auto map = genFunctorMap();
-			auto functor = map.find(entry["type"].String());
+			auto typeName = entry["type"].String();
+			auto functor = map.find(typeName);
 
 			if (functor != map.end())
 			{
 				functor->second(mountPoint.first, entry);
-				logGlobal->debugStream() << "Resource loaded in " << timer.getDiff() << " ms.";
+				logGlobal->trace("Resource loaded in %d ms", timer.getDiff());
 			}
 			else
 			{
-				logGlobal->errorStream() << "Unknown filesystem format: " << functor->first;
+				logGlobal->error("Unknown filesystem format: %s", typeName);
 			}
 		}
 	}
@@ -118,7 +126,7 @@ ISimpleResourceLoader * CResourceHandler::createInitial()
 {
 	//temporary filesystem that will be used to initialize main one.
 	//used to solve several case-sensivity issues like Mp3 vs MP3
-	auto initialLoader = new CFilesystemList;
+	auto initialLoader = new CFilesystemList();
 
 	//recurse only into specific directories
 	auto recurseInDir = [&](std::string URI, int depth)

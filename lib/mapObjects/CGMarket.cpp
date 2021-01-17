@@ -1,5 +1,4 @@
-﻿/*
- *
+/*
  * CGMarket.cpp, part of VCMI engine
  *
  * Authors: listed in file AUTHORS in main folder
@@ -17,6 +16,8 @@
 #include "../IGameCallback.h"
 #include "../CCreatureHandler.h"
 #include "../CGameState.h"
+#include "CGTownInstance.h"
+#include "../CModHandler.h"
 
 ///helpers
 static void openWindow(const OpenWindow::EWindow type, const int id1, const int id2 = -1)
@@ -162,7 +163,7 @@ std::vector<int> IMarket::availableItemsIds(EMarketMode::EMarketMode mode) const
 	return ret;
 }
 
-const IMarket * IMarket::castFrom(const CGObjectInstance *obj, bool verbose /*= true*/)
+const IMarket * IMarket::castFrom(const CGObjectInstance *obj, bool verbose)
 {
 	switch(obj->ID)
 	{
@@ -178,7 +179,7 @@ const IMarket * IMarket::castFrom(const CGObjectInstance *obj, bool verbose /*= 
 		return static_cast<const CGUniversity*>(obj);
 	default:
 		if(verbose)
-            logGlobal->errorStream() << "Cannot cast to IMarket object with ID " << obj->ID;
+			logGlobal->error("Cannot cast to IMarket object with ID %d", obj->ID);
 		return nullptr;
 	}
 }
@@ -281,18 +282,21 @@ std::vector<int> CGBlackMarket::availableItemsIds(EMarketMode::EMarketMode mode)
 	}
 }
 
-void CGBlackMarket::newTurn() const
+void CGBlackMarket::newTurn(CRandomGenerator & rand) const
 {
+	if(!VLC->modh->settings.BLACK_MARKET_MONTHLY_ARTIFACTS_CHANGE) //check if feature changing OH3 behavior is enabled
+		return;
+
 	if(cb->getDate(Date::DAY_OF_MONTH) != 1) //new month
 		return;
 
 	SetAvailableArtifacts saa;
 	saa.id = id.getNum();
-	cb->pickAllowedArtsSet(saa.arts);
+	cb->pickAllowedArtsSet(saa.arts, rand);
 	cb->sendAndApply(&saa);
 }
 
-void CGUniversity::initObj()
+void CGUniversity::initObj(CRandomGenerator & rand)
 {
 	std::vector<int> toChoose;
 	for(int i = 0; i < GameConstants::SKILL_QUANTITY; ++i)
@@ -304,7 +308,7 @@ void CGUniversity::initObj()
 	}
 	if(toChoose.size() < 4)
 	{
-        logGlobal->warnStream()<<"Warning: less then 4 available skills was found by University initializer!";
+		logGlobal->warn("Warning: less then 4 available skills was found by University initializer!");
 		return;
 	}
 
@@ -312,7 +316,7 @@ void CGUniversity::initObj()
 	for(int i = 0; i < 4; ++i)
 	{
 		// move randomly one skill to selected and remove from list
-		auto it = RandomGeneratorUtil::nextItem(toChoose, cb->gameState()->getRandomGenerator());
+		auto it = RandomGeneratorUtil::nextItem(toChoose, rand);
 		skills.push_back(*it);
 		toChoose.erase(it);
 	}

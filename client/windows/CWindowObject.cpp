@@ -1,3 +1,12 @@
+/*
+ * CWindowObject.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CWindowObject.h"
 
@@ -23,16 +32,6 @@
 
 #include "../../lib/CConfigHandler.h"
 #include "../../lib/CGeneralTextHandler.h" //for Unicode related stuff
-
-/*
- * CWindowObject.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
 
 CWindowObject::CWindowObject(int options_, std::string imageName, Point centerAt):
     CIntObject(getUsedEvents(options_), Point()),
@@ -216,7 +215,7 @@ void CWindowObject::setShadow(bool on)
 		blitAlphaRow(shadowRight, 0);
 
 		//generate "shadow" object with these 3 pieces in it
-		shadow = new CIntObject;
+		shadow = new CIntObject();
 		shadow->addChild(new CPicture(shadowCorner, shadowPos.x, shadowPos.y));
 		shadow->addChild(new CPicture(shadowRight,  shadowPos.x, shadowStart.y));
 		shadow->addChild(new CPicture(shadowBottom, shadowStart.x, shadowPos.y));
@@ -225,9 +224,13 @@ void CWindowObject::setShadow(bool on)
 
 void CWindowObject::showAll(SDL_Surface *to)
 {
+	auto color = LOCPLINT ? LOCPLINT->playerID : PlayerColor(1);
+	if(settings["session"]["spectate"].Bool())
+		color = PlayerColor(1); // TODO: Spectator shouldn't need special code for UI colors
+
 	CIntObject::showAll(to);
 	if ((options & BORDERED) && (pos.h != to->h || pos.w != to->w))
-		CMessage::drawBorder(LOCPLINT ? LOCPLINT->playerID : PlayerColor(1), to, pos.w+28, pos.h+29, pos.x-14, pos.y-15);
+		CMessage::drawBorder(color, to, pos.w+28, pos.h+29, pos.x-14, pos.y-15);
 }
 
 void CWindowObject::close()

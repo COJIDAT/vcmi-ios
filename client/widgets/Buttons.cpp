@@ -1,3 +1,12 @@
+/*
+ * Buttons.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "Buttons.h"
 
@@ -14,49 +23,6 @@
 #include "../windows/InfoWindows.h"
 #include "../../lib/CConfigHandler.h"
 
-/*
- * Buttons.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
-
-ClickableArea::ClickableArea(CIntObject * object, CFunctionList<void()> callback):
-	callback(callback),
-	area(nullptr)
-{
-	if (object)
-		pos = object->pos;
-	setArea(object);
-}
-
-void ClickableArea::addCallback(std::function<void()> callback)
-{
-	this->callback += callback;
-}
-
-void ClickableArea::setArea(CIntObject * object)
-{
-	delete area;
-	addChild(area);
-	pos.w = object->pos.w;
-	pos.h = object->pos.h;
-}
-
-void ClickableArea::onClick()
-{
-	callback();
-}
-
-void ClickableArea::clickLeft(tribool down, bool previousState)
-{
-	if (down)
-		onClick();
-}
-
 void CButton::update()
 {
 	if (overlay)
@@ -68,6 +34,13 @@ void CButton::update()
 	}
 
 	int newPos = stateToIndex[int(state)];
+	if(animateLonelyFrame)
+	{
+		if(state == PRESSED)
+			image->moveBy(Point(1,1));
+		else
+			image->moveBy(Point(-1,-1));
+	}
 	if (newPos < 0)
 		newPos = 0;
 
@@ -119,6 +92,10 @@ void CButton::setImageOrder(int state1, int state2, int state3, int state4)
 	update();
 }
 
+void CButton::setAnimateLonelyFrame(bool agreement)
+{
+	animateLonelyFrame = agreement;
+}
 void CButton::setState(ButtonState newState)
 {
 	if (state == newState)
@@ -144,18 +121,19 @@ bool CButton::isHighlighted()
 
 void CButton::block(bool on)
 {
-	setState(on?BLOCKED:NORMAL);
+	if(on || state == BLOCKED) //dont change button state if unblock requested, but it's not blocked
+		setState(on ? BLOCKED : NORMAL);
 }
 
 void CButton::onButtonClicked()
 {
 	// debug logging to figure out pressed button (and as result - player actions) in case of crash
-	logAnim->traceStream() << "Button clicked at " << pos.x << "x" << pos.y;
+	logAnim->trace("Button clicked at %dx%d", pos.x, pos.y);
 	CIntObject * parent = this->parent;
 	std::string prefix = "Parent is";
 	while (parent)
 	{
-		logAnim->traceStream() << prefix << typeid(*parent).name() << " at " << parent->pos.x << "x" << parent->pos.y;
+		logAnim->trace("%s%s at %dx%d", prefix, typeid(*parent).name(), parent->pos.x, parent->pos.y);
 		parent = parent->parent;
 		prefix = '\t' + prefix;
 	}
@@ -208,10 +186,10 @@ void CButton::hover (bool on)
 		setState(PRESSED);*/
 
 	std::string name = hoverTexts[getState()].empty()
-		? hoverTexts[getState()]
-		: hoverTexts[0];
+		? hoverTexts[0]
+		: hoverTexts[getState()];
 
-	if(!name.empty() && !isBlocked()) //if there is no name, there is nohing to display also
+	if(!name.empty() && !isBlocked()) //if there is no name, there is nothing to display also
 	{
 		if (LOCPLINT && LOCPLINT->battleInt) //for battle buttons
 		{
@@ -271,10 +249,11 @@ void CButton::setIndex(size_t index, bool playerColoredButton)
 	if (index == currentImage || index>=imageNames.size())
 		return;
 	currentImage = index;
-	setImage(new CAnimation(imageNames[index]), playerColoredButton);
+	auto anim = std::make_shared<CAnimation>(imageNames[index]);
+	setImage(anim, playerColoredButton);
 }
 
-void CButton::setImage(CAnimation* anim, bool playerColoredButton, int animFlags)
+void CButton::setImage(std::shared_ptr<CAnimation> anim, bool playerColoredButton, int animFlags)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 
@@ -293,14 +272,9 @@ void CButton::setPlayerColor(PlayerColor player)
 void CButton::showAll(SDL_Surface * to)
 {
 	CIntObject::showAll(to);
-	
-	#ifdef VCMI_SDL1
-	if (borderColor && borderColor->unused == 0)
-		CSDL_Ext::drawBorder(to, pos.x-1, pos.y-1, pos.w+2, pos.h+2, int3(borderColor->r, borderColor->g, borderColor->b));
-	#else
+
 	if (borderColor && borderColor->a == 0)
 		CSDL_Ext::drawBorder(to, pos.x-1, pos.y-1, pos.w+2, pos.h+2, int3(borderColor->r, borderColor->g, borderColor->b));
-	#endif // 0
 }
 
 std::pair<std::string, std::string> CButton::tooltip()
@@ -423,8 +397,8 @@ void CToggleGroup::addToggle(int identifier, CToggleBase* bt)
 	buttons[identifier] = bt;
 }
 
-CToggleGroup::CToggleGroup(const CFunctionList<void(int)> &OnChange, bool musicLikeButtons)
-: onChange(OnChange), musicLike(musicLikeButtons)
+CToggleGroup::CToggleGroup(const CFunctionList<void(int)> &OnChange)
+: onChange(OnChange), selectedID(-2)
 {}
 
 void CToggleGroup::setSelected(int id)
@@ -451,26 +425,86 @@ void CToggleGroup::selectionChanged(int to)
 		parent->redraw();
 }
 
-void CToggleGroup::show(SDL_Surface * to)
+CVolumeSlider::CVolumeSlider(const Point &position, const std::string &defName, const int value,
+                             const std::pair<std::string, std::string> * const help) :
+	value(value),
+	helpHandlers(help)
 {
-	if (musicLike)
-	{
-		if (auto intObj = dynamic_cast<CIntObject*>(buttons[selectedID])) // hack-ish workagound to avoid diamond problem with inheritance
-			intObj->show(to);
-	}
-	else
-		CIntObject::show(to);
+	OBJ_CONSTRUCTION_CAPTURING_ALL;
+	animImage = new CAnimImage(std::make_shared<CAnimation>(defName), 0, 0, position.x, position.y),
+	assert(!defName.empty());
+	addUsedEvents(LCLICK | RCLICK | WHEEL);
+	pos.x += position.x;
+	pos.y += position.y;
+	pos.w = (animImage->pos.w + 1) * animImage->size();
+	pos.h = animImage->pos.h;
+	type |= REDRAW_PARENT;
+	setVolume(value);
 }
 
-void CToggleGroup::showAll(SDL_Surface * to)
+void CVolumeSlider::setVolume(int value_)
 {
-	if (musicLike)
+	value = value_;
+	moveTo(value * static_cast<double>(animImage->size()) / 100.0);
+}
+
+void CVolumeSlider::moveTo(int id)
+{
+	vstd::abetween(id, 0, animImage->size() - 1);
+	animImage->setFrame(id);
+	animImage->moveTo(Point(pos.x + (animImage->pos.w + 1) * id, pos.y));
+	if (active)
+		redraw();
+}
+
+void CVolumeSlider::addCallback(std::function<void(int)> callback)
+{
+	onChange += callback;
+}
+
+void CVolumeSlider::clickLeft(tribool down, bool previousState)
+{
+	if (down)
 	{
-		if (auto intObj = dynamic_cast<CIntObject*>(buttons[selectedID])) // hack-ish workagound to avoid diamond problem with inheritance
-			intObj->showAll(to);
+		double px = GH.current->motion.x - pos.x;
+		double rx = px / static_cast<double>(pos.w);
+		// setVolume is out of 100
+		setVolume(rx * 100);
+		// Volume config is out of 100, set to increments of 5ish roughly based on the half point of the indicator
+		// 0.0 -> 0, 0.05 -> 5, 0.09 -> 5,...,
+		// 0.1 -> 10, ..., 0.19 -> 15, 0.2 -> 20, ...,
+		// 0.28 -> 25, 0.29 -> 30, 0.3 -> 30, ...,
+		// 0.85 -> 85, 0.86 -> 90, ..., 0.87 -> 90,...,
+		// 0.95 -> 95, 0.96 -> 100, 0.99 -> 100
+		int volume = 5 * int(rx * (2 * animImage->size() + 1));
+		onChange(volume);
 	}
-	else
-		CIntObject::showAll(to);
+}
+
+void CVolumeSlider::clickRight(tribool down, bool previousState)
+{
+	if (down)
+	{
+		double px = GH.current->motion.x - pos.x;
+		int index = px / static_cast<double>(pos.w) * animImage->size();
+		std::string hoverText = helpHandlers[index].first;
+		std::string helpBox = helpHandlers[index].second;
+		if(!helpBox.empty())
+			CRClickPopup::createAndPush(helpBox);
+		if(GH.statusbar)
+			GH.statusbar->setText(helpBox);
+	}
+}
+
+void CVolumeSlider::wheelScrolled(bool down, bool in)
+{
+	if (in)
+	{
+		int volume = value + 3 * (down ? 1 : -1);
+		vstd::abetween(volume, 0, 100);
+		setVolume(volume);
+		onChange(volume);
+	}
 }
 
 void CSlider::sliderClicked()
@@ -598,7 +632,7 @@ void CSlider::clickLeft(tribool down, bool previousState)
 			return;
 		// 		if (rw>1) return;
 		// 		if (rw<0) return;
-		slider->clickLeft(true, slider->pressedL);
+		slider->clickLeft(true, slider->mouseState(EIntObjMouseBtnType::LEFT));
 		moveTo(rw * positions  +  0.5);
 		return;
 	}

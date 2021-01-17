@@ -7,7 +7,6 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
- 
 #pragma once
 
 #include <SDL_events.h>
@@ -15,8 +14,8 @@
 #include "../Graphics.h"
 
 struct SDL_Surface;
-class CPicture;
 class CGuiHandler;
+class CPicture;
 
 struct SDL_KeyboardEvent;
 
@@ -28,22 +27,14 @@ class IActivatable
 public:
 	virtual void activate()=0;
 	virtual void deactivate()=0;
-	virtual ~IActivatable(){}; //d-tor
+	virtual ~IActivatable(){};
 };
 
 class IUpdateable
 {
 public:
 	virtual void update()=0;
-	virtual ~IUpdateable(){}; //d-tor
-};
-
-class ILockedUpdatable: public IUpdateable
-{
-	boost::recursive_mutex updateGuard;
-public:
-	virtual void runLocked(std::function<void(IUpdateable * )> cb);	
-	virtual ~ILockedUpdatable(){}; //d-tor	
+	virtual ~IUpdateable(){};
 };
 
 // Defines a show method
@@ -56,7 +47,7 @@ public:
 	{
 		show(to);
 	}
-	virtual ~IShowable(){}; //d-tor
+	virtual ~IShowable(){};
 };
 
 class IShowActivatable : public IShowable, public IActivatable
@@ -66,9 +57,10 @@ public:
 	enum {BLOCK_ADV_HOTKEYS = 2, REDRAW_PARENT=8};
 	int type; //bin flags using etype
 	IShowActivatable();
-	virtual ~IShowActivatable(){}; //d-tor
+	virtual ~IShowActivatable(){};
 };
 
+enum class EIntObjMouseBtnType { LEFT, MIDDLE, RIGHT };
 //typedef ui16 ActivityFlag;
 
 // Base UI element
@@ -80,6 +72,8 @@ class CIntObject : public IShowActivatable //interface object
 	//time handling
 	int toNextTick;
 	int timerDelay;
+
+	std::map<EIntObjMouseBtnType, bool> currentMouseState;
 
 	void onTimer(int timePassed);
 
@@ -97,12 +91,7 @@ public:
  * Don't use them unless you really know what they are for
  */
 	std::vector<CIntObject *> children;
-	
-	//FIXME: workaround
-	void deactivateKeyboard()
-	{
-		deactivate(KEYBOARD);
-	}
+
 
 /*
  * Public interface
@@ -115,15 +104,15 @@ public:
 	/*const*/ Rect pos;
 
 	CIntObject(int used=0, Point offset=Point());
-	virtual ~CIntObject(); //d-tor
+	virtual ~CIntObject();
 
-	//l-clicks handling
-	/*const*/ bool pressedL; //for determining if object is L-pressed
-	virtual void clickLeft(tribool down, bool previousState){}
+	void updateMouseState(EIntObjMouseBtnType btn, bool state) { currentMouseState[btn] = state; }
+	bool mouseState(EIntObjMouseBtnType btn) const { return currentMouseState.count(btn) ? currentMouseState.at(btn) : false; }
 
-	//r-clicks handling
-	/*const*/ bool pressedR; //for determining if object is R-pressed
-	virtual void clickRight(tribool down, bool previousState){}
+	virtual void click(EIntObjMouseBtnType btn, tribool down, bool previousState);
+	virtual void clickLeft(tribool down, bool previousState) {}
+	virtual void clickRight(tribool down, bool previousState) {}
+	virtual void clickMiddle(tribool down, bool previousState) {}
 
 	//hover handling
 	/*const*/ bool hovered;  //for determining if object is hovered
@@ -133,11 +122,9 @@ public:
 	bool captureAllKeys; //if true, only this object should get info about pressed keys
 	virtual void keyPressed(const SDL_KeyboardEvent & key){}
 	virtual bool captureThisEvent(const SDL_KeyboardEvent & key); //allows refining captureAllKeys against specific events (eg. don't capture ENTER)
-	
-#ifndef VCMI_SDL1
+
 	virtual void textInputed(const SDL_TextInputEvent & event){};
 	virtual void textEdited(const SDL_TextEditingEvent & event){};
-#endif // VCMI_SDL1
 
 	//mouse movement handling
 	bool strongInterest; //if true - report all mouse movements, if not - only when hovered
@@ -153,7 +140,7 @@ public:
 	//double click
 	virtual void onDoubleClick(){}
 
-	enum {LCLICK=1, RCLICK=2, HOVER=4, MOVE=8, KEYBOARD=16, TIME=32, GENERAL=64, WHEEL=128, DOUBLECLICK=256, TEXTINPUT=512, ALL=0xffff};
+	enum {LCLICK=1, RCLICK=2, HOVER=4, MOVE=8, KEYBOARD=16, TIME=32, GENERAL=64, WHEEL=128, DOUBLECLICK=256, TEXTINPUT=512, MCLICK=1024, ALL=0xffff};
 	const ui16 & active;
 	void addUsedEvents(ui16 newActions);
 	void removeUsedEvents(ui16 newActions);
@@ -167,15 +154,15 @@ public:
 
 	// activate or deactivate object. Inactive object won't receive any input events (keyboard\mouse)
 	// usually used automatically by parent
-	void activate();
-	void deactivate();
+	void activate() override;
+	void deactivate() override;
 
 	//called each frame to update screen
-	void show(SDL_Surface * to);
+	void show(SDL_Surface * to) override;
 	//called on complete redraw only
-	void showAll(SDL_Surface * to);
+	void showAll(SDL_Surface * to) override;
 	//request complete redraw of this object
-	void redraw();
+	void redraw() override;
 
 	enum EAlignment {TOPLEFT, CENTER, BOTTOMRIGHT};
 
@@ -201,6 +188,7 @@ public:
 	//functions for printing text. Use CLabel where possible instead
 	void printAtLoc(const std::string & text, int x, int y, EFonts font, SDL_Color color, SDL_Surface * dst);
 	void printToLoc(const std::string & text, int x, int y, EFonts font, SDL_Color color, SDL_Surface * dst);
+	void printAtRightLoc(const std::string & text, int x, int y, EFonts font, SDL_Color color, SDL_Surface * dst);
 	void printAtMiddleLoc(const std::string & text, int x, int y, EFonts font, SDL_Color color, SDL_Surface * dst);
 	void printAtMiddleLoc(const std::string & text, const Point &p, EFonts font, SDL_Color color, SDL_Surface * dst);
 	void printAtMiddleWBLoc(const std::string & text, int x, int y, EFonts font, int charsPerLine, SDL_Color color, SDL_Surface * dst);
@@ -221,5 +209,5 @@ public:
 	CKeyShortcut();
 	CKeyShortcut(int key);
 	CKeyShortcut(std::set<int> Keys);
-	virtual void keyPressed(const SDL_KeyboardEvent & key); //call-in
+	virtual void keyPressed(const SDL_KeyboardEvent & key) override; //call-in
 };

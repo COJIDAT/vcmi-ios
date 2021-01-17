@@ -1,17 +1,14 @@
-project(vcmiclient)
-cmake_minimum_required(VERSION 2.6)
-
-include_directories(${CMAKE_HOME_DIRECTORY} ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_HOME_DIRECTORY}/lib)
-include_directories(${SDL_INCLUDE_DIR} ${SDLIMAGE_INCLUDE_DIR} ${SDLMIXER_INCLUDE_DIR} ${SDLTTF_INCLUDE_DIR})
+include_directories(${CMAKE_HOME_DIRECTORY} ${CMAKE_HOME_DIRECTORY}/include ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_HOME_DIRECTORY}/lib)
+include_directories(${SDL2_INCLUDE_DIR} ${SDL2_IMAGE_INCLUDE_DIR} ${SDL2_MIXER_INCLUDE_DIR} ${SDL2_TTF_INCLUDE_DIR})
 include_directories(${Boost_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIR} ${FFMPEG_INCLUDE_DIRS})
 
 set(client_SRCS
 		StdInc.cpp
 		../CCallback.cpp
 
-		battle/CBattleInterface.cpp
 		battle/CBattleAnimations.cpp
 		battle/CBattleInterfaceClasses.cpp
+		battle/CBattleInterface.cpp
 		battle/CCreatureAnimation.cpp
 
 		gui/CAnimation.cpp
@@ -35,17 +32,19 @@ set(client_SRCS
 		windows/CAdvmapInterface.cpp
 		windows/CCastleInterface.cpp
 		windows/CCreatureWindow.cpp
+		windows/CreaturePurchaseCard.cpp
 		windows/CHeroWindow.cpp
 		windows/CKingdomInterface.cpp
 		windows/CQuestLog.cpp
 		windows/CSpellWindow.cpp
 		windows/CTradeWindow.cpp
-		windows/CWindowObject
-		windows/InfoWindows.cpp
+		windows/CWindowObject.cpp
 		windows/GUIClasses.cpp
+		windows/InfoWindows.cpp
+		windows/QuickRecruitmentWindow.cpp
 
 		CBitmapHandler.cpp
-		CDefHandler.cpp
+		CreatureCostBox.cpp
 		CGameInfo.cpp
 		Client.cpp
 		CMessage.cpp
@@ -57,78 +56,115 @@ set(client_SRCS
 		Graphics.cpp
 		mapHandler.cpp
 		NetPacksClient.cpp
+		SDLRWwrapper.cpp
 )
 
 set(client_HEADERS
-		gui/SDL_Pixels.h
+		StdInc.h
+
+		battle/CBattleAnimations.h
+		battle/CBattleInterfaceClasses.h
+		battle/CBattleInterface.h
+		battle/CCreatureAnimation.h
+
+		gui/CAnimation.h
+		gui/CCursorHandler.h
+		gui/CGuiHandler.h
+		gui/CIntObject.h
+		gui/Fonts.h
+		gui/Geometries.h
 		gui/SDL_Compat.h
+		gui/SDL_Extensions.h
+		gui/SDL_Pixels.h
+
+		widgets/AdventureMapClasses.h
+		widgets/Buttons.h
+		widgets/CArtifactHolder.h
+		widgets/CComponent.h
+		widgets/CGarrisonInt.h
+		widgets/Images.h
+		widgets/MiscWidgets.h
+		widgets/ObjectLists.h
+		widgets/TextControls.h
+		windows/CAdvmapInterface.h
+		windows/CCastleInterface.h
+		windows/CCreatureWindow.h
+		windows/CreaturePurchaseCard.h
+		windows/CHeroWindow.h
+		windows/CKingdomInterface.h
+		windows/CQuestLog.h
+		windows/CSpellWindow.h
+		windows/CTradeWindow.h
+		windows/CWindowObject.h
+		windows/GUIClasses.h
+		windows/InfoWindows.h
+		windows/QuickRecruitmentWindow.h
+
+		CBitmapHandler.h
+		CreatureCostBox.h
+		CGameInfo.h
+		Client.h
+		CMessage.h
+		CMT.h
+		CMusicHandler.h
+		CPlayerInterface.h
+		CPreGame.h
+		CVideoHandler.h
+		Graphics.h
+		mapHandler.h
+		resource.h
+		SDLMain.h
+		SDLRWwrapper.h
 )
 
-if(APPLE)
-	# OS X specific includes
-	include_directories(${SPARKLE_INCLUDE_DIR})
+assign_source_group(${client_SRCS} ${client_HEADERS} VCMI_client.rc)
 
-	# OS X specific source files
-	set(client_SRCS ${client_SRCS} SDLMain.m OSX.mm Info.plist vcmi.icns ../osx/vcmi_dsa_public.pem)
-	add_executable(vcmiclient MACOSX_BUNDLE ${client_SRCS} ${client_HEADERS})
-
-	# OS X specific libraries
-	target_link_libraries(vcmiclient ${SPARKLE_FRAMEWORK})
-
-	# Because server and AI libs would be copies to bundle they need to be built before client
-	add_dependencies(vcmiclient vcmiserver VCAI EmptyAI StupidAI BattleAI minizip)
-
-	# Custom Info.plist
-	set_target_properties(vcmiclient PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist)
-
-	# Copy icon file and public key for Sparkle
-	set_source_files_properties(vcmi.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-	set_source_files_properties(../osx/vcmi_dsa_public.pem PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-
-	set_target_properties(vcmiclient PROPERTIES XCODE_ATTRIBUTE_LD_RUNPATH_SEARCH_PATHS "@executable_path/../Frameworks @executable_path/")
-
-	# Copy server executable, libs and game data to bundle
-	set(BUNDLE_PATH ${CMAKE_HOME_DIRECTORY}/bin/$(CONFIGURATION)/vcmiclient.app/Contents)
-	set(MakeVCMIBundle
-		# Copy all needed binaries
-		mkdir -p ${BUNDLE_PATH}/MacOS/AI &&
-		cp ${CMAKE_HOME_DIRECTORY}/bin/$(CONFIGURATION)/vcmiserver ${BUNDLE_PATH}/MacOS/vcmiserver &&
-		cp ${CMAKE_HOME_DIRECTORY}/bin/$(CONFIGURATION)/libvcmi.dylib ${BUNDLE_PATH}/MacOS/libvcmi.dylib &&
-		cp ${CMAKE_HOME_DIRECTORY}/bin/$(CONFIGURATION)/libminizip.dylib ${BUNDLE_PATH}/MacOS/libminizip.dylib &&
-		cp ${CMAKE_HOME_DIRECTORY}/bin/$(CONFIGURATION)/libVCAI.dylib ${BUNDLE_PATH}/MacOS/AI/libVCAI.dylib &&
-		cp ${CMAKE_HOME_DIRECTORY}/bin/$(CONFIGURATION)/libStupidAI.dylib ${BUNDLE_PATH}/MacOS/AI/libStupidAI.dylib &&
-		cp ${CMAKE_HOME_DIRECTORY}/bin/$(CONFIGURATION)/libEmptyAI.dylib ${BUNDLE_PATH}/MacOS/AI/libEmptyAI.dylib &&
-		cp ${CMAKE_HOME_DIRECTORY}/bin/$(CONFIGURATION)/libBattleAI.dylib ${BUNDLE_PATH}/MacOS/AI/libBattleAI.dylib &&
-		cp -r ${CMAKE_HOME_DIRECTORY}/osx/vcmibuilder.app ${BUNDLE_PATH}/MacOS/vcmibuilder.app &&
-
-		# Copy frameworks
-		cp -r ${CMAKE_HOME_DIRECTORY}/${CMAKE_FRAMEWORK_PATH} ${BUNDLE_PATH}/Frameworks/ &&
-
-		# Copy vcmi data
-		mkdir -p ${BUNDLE_PATH}/Data &&
-		mkdir -p ${BUNDLE_PATH}/Data/Mods &&
-		mkdir -p ${BUNDLE_PATH}/Data/launcher &&
-		cp -r ${CMAKE_HOME_DIRECTORY}/config/ ${BUNDLE_PATH}/Data/config/ &&
-		cp -r ${CMAKE_HOME_DIRECTORY}/Mods/vcmi/ ${BUNDLE_PATH}/Data/Mods/vcmi/ &&
-		cp -r ${CMAKE_HOME_DIRECTORY}/Mods/WoG/ ${BUNDLE_PATH}/Data/Mods/WoG/ &&
-		cp -r ${CMAKE_HOME_DIRECTORY}/launcher/icons/ ${BUNDLE_PATH}/Data/launcher/icons/)
-		
-	add_custom_command(TARGET vcmiclient POST_BUILD COMMAND ${MakeVCMIBundle})
-elseif(WIN32)
-	add_executable(vcmiclient ${client_SRCS} VCMI_client.rc)
-else()
-	add_executable(vcmiclient ${client_SRCS})
+if(ANDROID) # android needs client/server to be libraries, not executables, so we can't reuse the build part of this script
+	return()
 endif()
+
+if(APPLE)
+	set(client_SRCS ${client_SRCS} SDLMain.m)
+elseif(WIN32)
+	set(client_ICON "VCMI_client.rc")
+endif()
+
+if(ENABLE_DEBUG_CONSOLE)
+	add_executable(vcmiclient ${client_SRCS} ${client_HEADERS} ${client_ICON})
+else()
+	add_executable(vcmiclient WIN32 ${client_SRCS} ${client_HEADERS} ${client_ICON})
+endif(ENABLE_DEBUG_CONSOLE)
+add_dependencies(vcmiclient vcmiserver BattleAI StupidAI VCAI)
 
 if(WIN32)
-	set_target_properties(vcmiclient PROPERTIES OUTPUT_NAME VCMI_client)
+	set_target_properties(vcmiclient
+		PROPERTIES
+			OUTPUT_NAME "VCMI_client"
+			PROJECT_LABEL "VCMI_client"
+	)
+	set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT vcmiclient)
+	if(NOT ENABLE_DEBUG_CONSOLE)
+		target_link_libraries(vcmiclient ${SDLMAIN_LIBRARY})
+	endif()
 endif()
 
-target_link_libraries(vcmiclient vcmi ${Boost_LIBRARIES} ${SDL_LIBRARY} ${SDLIMAGE_LIBRARY} ${SDLMIXER_LIBRARY} ${SDLTTF_LIBRARY} ${ZLIB_LIBRARIES} ${FFMPEG_LIBRARIES} ${SYSTEM_LIBS})
+target_link_libraries(vcmiclient vcmi ${Boost_LIBRARIES}
+	${SDL2_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_MIXER_LIBRARY} ${SDL2_TTF_LIBRARY}
+	${ZLIB_LIBRARIES} ${FFMPEG_LIBRARIES} ${FFMPEG_EXTRA_LINKING_OPTIONS} ${SYSTEM_LIBS}
+)
+vcmi_set_output_dir(vcmiclient "")
 
 set_target_properties(vcmiclient PROPERTIES ${PCH_PROPERTIES})
 cotire(vcmiclient)
 
-
 install(TARGETS vcmiclient DESTINATION ${BIN_DIR})
 
+#install icons and desktop file on Linux
+if(NOT WIN32 AND NOT APPLE)
+	#FIXME: move to client makefile?
+	install(FILES "${CMAKE_SOURCE_DIR}/client/icons/vcmiclient.64x64.png"   DESTINATION share/icons/hicolor/64x64/apps RENAME vcmiclient.png)
+	install(FILES "${CMAKE_SOURCE_DIR}/client/icons/vcmiclient.48x48.png"   DESTINATION share/icons/hicolor/48x48/apps RENAME vcmiclient.png)
+	install(FILES "${CMAKE_SOURCE_DIR}/client/icons/vcmiclient.32x32.png"   DESTINATION share/icons/hicolor/32x32/apps RENAME vcmiclient.png)
+	install(FILES "${CMAKE_SOURCE_DIR}/client/icons/vcmiclient.256x256.png" DESTINATION share/icons/hicolor/256x256/apps RENAME vcmiclient.png)
+	install(FILES "${CMAKE_SOURCE_DIR}/client/icons/vcmiclient.desktop"     DESTINATION share/applications)
+endif()

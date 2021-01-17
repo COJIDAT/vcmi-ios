@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/term/GaussianProduct.h"
@@ -30,32 +22,37 @@ namespace fl {
             scalar meanA, scalar standardDeviationA, scalar meanB, scalar standardDeviationB,
             scalar height)
     : Term(name, height), _meanA(meanA), _standardDeviationA(standardDeviationA),
-    _meanB(meanB), _standardDeviationB(standardDeviationB) {
-    }
+    _meanB(meanB), _standardDeviationB(standardDeviationB) { }
 
-    GaussianProduct::~GaussianProduct() {
-    }
+    GaussianProduct::~GaussianProduct() { }
 
     std::string GaussianProduct::className() const {
         return "GaussianProduct";
     }
 
+    Complexity GaussianProduct::complexity() const {
+        return Complexity().comparison(1 + 2).arithmetic(9 + 9 + 2).function(2);
+    }
+
     scalar GaussianProduct::membership(scalar x) const {
-        if (fl::Op::isNaN(x)) return fl::nan;
-        bool xLEa = fl::Op::isLE(x, _meanA);
-        scalar a = (1 - xLEa) + xLEa * std::exp(
-                (-(x - _meanA) * (x - _meanA)) / (2 * _standardDeviationA * _standardDeviationA)
-                );
-        bool xGEb = fl::Op::isGE(x, _meanB);
-        scalar b = (1 - xGEb) + xGEb * std::exp(
-                (-(x - _meanB) * (x - _meanB)) / (2 * _standardDeviationB * _standardDeviationB)
-                );
-        return _height * a * b;
+        if (Op::isNaN(x)) return fl::nan;
+
+        scalar a = 1.0, b = 1.0;
+        if (Op::isLt(x, _meanA)) {
+            a = std::exp((-(x - _meanA) * (x - _meanA)) /
+                    (2.0 * _standardDeviationA * _standardDeviationA));
+        }
+        if (Op::isGt(x, _meanB)) {
+            b = std::exp((-(x - _meanB) * (x - _meanB)) /
+                    (2.0 * _standardDeviationB * _standardDeviationB));
+        }
+
+        return Term::_height * a * b;
     }
 
     std::string GaussianProduct::parameters() const {
         return Op::join(4, " ", _meanA, _standardDeviationA, _meanB, _standardDeviationB) +
-                (not Op::isEq(_height, 1.0) ? " " + Op::str(_height) : "");
+                (not Op::isEq(getHeight(), 1.0) ? " " + Op::str(getHeight()) : "");
     }
 
     void GaussianProduct::configure(const std::string& parameters) {
@@ -66,7 +63,7 @@ namespace fl {
             std::ostringstream ex;
             ex << "[configuration error] term <" << className() << ">"
                     << " requires <" << required << "> parameters";
-            throw fl::Exception(ex.str(), FL_AT);
+            throw Exception(ex.str(), FL_AT);
         }
         setMeanA(Op::toScalar(values.at(0)));
         setStandardDeviationA(Op::toScalar(values.at(1)));

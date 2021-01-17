@@ -1,3 +1,12 @@
+/*
+ * CIntObject.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CIntObject.h"
 
@@ -10,19 +19,13 @@ IShowActivatable::IShowActivatable()
 	type = 0;
 }
 
-void ILockedUpdatable::runLocked(std::function<void(IUpdateable*)> cb)
-{
-	boost::unique_lock<boost::recursive_mutex> lock(updateGuard);	
-	cb(this);
-}
-
 CIntObject::CIntObject(int used_, Point pos_):
 	parent_m(nullptr),
 	active_m(0),
 	parent(parent_m),
 	active(active_m)
 {
-	pressedL = pressedR = hovered = captureAllKeys = strongInterest = false;
+	hovered = captureAllKeys = strongInterest = false;
 	toNextTick = timerDelay = 0;
 	used = used_;
 
@@ -82,7 +85,7 @@ void CIntObject::activate()
 			return;
 		else
 		{
-            logGlobal->warnStream() << "Warning: IntObject re-activated with mismatching used and active";
+			logGlobal->warn("Warning: IntObject re-activated with mismatching used and active");
 			deactivate(); //FIXME: better to avoid such possibility at all
 		}
 	}
@@ -140,12 +143,34 @@ CIntObject::~CIntObject()
 		parent_m->removeChild(this);
 }
 
-void CIntObject::printAtLoc( const std::string & text, int x, int y, EFonts font, SDL_Color kolor/*=Colors::WHITE*/, SDL_Surface * dst/*=screen*/ )
+void CIntObject::click(EIntObjMouseBtnType btn, tribool down, bool previousState)
+{
+	switch(btn)
+	{
+	default:
+	case EIntObjMouseBtnType::LEFT:
+		clickLeft(down, previousState);
+		break;
+	case EIntObjMouseBtnType::MIDDLE:
+		clickMiddle(down, previousState);
+		break;
+	case EIntObjMouseBtnType::RIGHT:
+		clickRight(down, previousState);
+		break;
+	}
+}
+
+void CIntObject::printAtLoc(const std::string & text, int x, int y, EFonts font, SDL_Color kolor, SDL_Surface * dst)
 {
 	graphics->fonts[font]->renderTextLeft(dst, text, kolor, Point(pos.x + x, pos.y + y));
 }
 
-void CIntObject::printAtMiddleLoc( const std::string & text, int x, int y, EFonts font, SDL_Color kolor/*=Colors::WHITE*/, SDL_Surface * dst/*=screen*/ )
+void CIntObject::printAtRightLoc(const std::string & text, int x, int y, EFonts font, SDL_Color kolor, SDL_Surface * dst)
+{
+	graphics->fonts[font]->renderTextRight(dst, text, kolor, Point(pos.x + x, pos.y + y));
+}
+
+void CIntObject::printAtMiddleLoc(const std::string & text, int x, int y, EFonts font, SDL_Color kolor, SDL_Surface * dst)
 {
 	printAtMiddleLoc(text, Point(x,y), font, kolor, dst);
 }
@@ -226,7 +251,7 @@ void CIntObject::fitToScreen(int borderWidth, bool propagate)
 		moveTo(newPos, propagate);
 }
 
-void CIntObject::moveBy( const Point &p, bool propagate /*= true*/ )
+void CIntObject::moveBy(const Point & p, bool propagate)
 {
 	pos.x += p.x;
 	pos.y += p.y;
@@ -235,12 +260,12 @@ void CIntObject::moveBy( const Point &p, bool propagate /*= true*/ )
 			elem->moveBy(p, propagate);
 }
 
-void CIntObject::moveTo( const Point &p, bool propagate /*= true*/ )
+void CIntObject::moveTo(const Point & p, bool propagate)
 {
 	moveBy(Point(p.x - pos.x, p.y - pos.y), propagate);
 }
 
-void CIntObject::addChild(CIntObject *child, bool adjustPosition /*= false*/)
+void CIntObject::addChild(CIntObject * child, bool adjustPosition)
 {
 	if (vstd::contains(children, child))
 	{
@@ -261,7 +286,7 @@ void CIntObject::addChild(CIntObject *child, bool adjustPosition /*= false*/)
 		child->activate();
 }
 
-void CIntObject::removeChild(CIntObject *child, bool adjustPosition /*= false*/)
+void CIntObject::removeChild(CIntObject * child, bool adjustPosition)
 {
 	if (!child)
 		return;
@@ -310,10 +335,10 @@ const Rect & CIntObject::center( bool propagate )
 	return center(pos, propagate);
 }
 
-const Rect & CIntObject::center(const Point &p, bool propagate /*= true*/)
+const Rect & CIntObject::center(const Point & p, bool propagate)
 {
-	moveBy(Point(p.x - pos.w/2 - pos.x, 
-		p.y - pos.h/2 - pos.y), 
+	moveBy(Point(p.x - pos.w/2 - pos.x,
+		p.y - pos.h/2 - pos.y),
 		propagate);
 	return pos;
 }
@@ -333,7 +358,7 @@ CKeyShortcut::CKeyShortcut(int key)
 }
 
 CKeyShortcut::CKeyShortcut(std::set<int> Keys)
-    :assignedKeys(Keys)
+	:assignedKeys(Keys)
 {}
 
 void CKeyShortcut::keyPressed(const SDL_KeyboardEvent & key)
@@ -341,16 +366,9 @@ void CKeyShortcut::keyPressed(const SDL_KeyboardEvent & key)
 	if(vstd::contains(assignedKeys,key.keysym.sym)
 	 || vstd::contains(assignedKeys, CGuiHandler::numToDigit(key.keysym.sym)))
 	{
-		bool prev = pressedL;
-		if(key.state == SDL_PRESSED) 
-		{
-			pressedL = true;
-			clickLeft(true, prev);
-		} 
-		else 
-		{
-			pressedL = false;
-			clickLeft(false, prev);
-		}
+		bool prev = mouseState(EIntObjMouseBtnType::LEFT);
+		updateMouseState(EIntObjMouseBtnType::LEFT, key.state == SDL_PRESSED);
+		clickLeft(key.state == SDL_PRESSED, prev);
+
 	}
 }

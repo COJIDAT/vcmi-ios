@@ -1,3 +1,12 @@
+/*
+ * Images.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "Images.h"
 
@@ -5,7 +14,6 @@
 
 #include "../gui/CAnimation.h"
 #include "../gui/SDL_Pixels.h"
-#include "../gui/SDL_Extensions.h"
 #include "../gui/CGuiHandler.h"
 #include "../gui/CCursorHandler.h"
 
@@ -26,16 +34,6 @@
 #include "../../lib/CGeneralTextHandler.h" //for Unicode related stuff
 #include "../../lib/CRandomGenerator.h"
 
-/*
- * Images.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
-
 CPicture::CPicture( SDL_Surface *BG, int x, int y, bool Free )
 {
 	init();
@@ -51,7 +49,7 @@ CPicture::CPicture( const std::string &bmpname, int x, int y )
 {
 	init();
 	bg = BitmapHandler::loadBitmap(bmpname);
-	freeSurf = true;;
+	freeSurf = true;
 	pos.x += x;
 	pos.y += y;
 	if(bg)
@@ -65,20 +63,21 @@ CPicture::CPicture( const std::string &bmpname, int x, int y )
 	}
 }
 
-CPicture::CPicture(const Rect &r, const SDL_Color &color, bool screenFormat /*= false*/)
+CPicture::CPicture(const Rect &r, const SDL_Color &color, bool screenFormat)
 {
 	init();
 	createSimpleRect(r, screenFormat, SDL_MapRGB(bg->format, color.r, color.g,color.b));
 }
 
-CPicture::CPicture(const Rect &r, ui32 color, bool screenFormat /*= false*/)
+CPicture::CPicture(const Rect &r, ui32 color, bool screenFormat)
 {
 	init();
 	createSimpleRect(r, screenFormat, color);
 }
 
-CPicture::CPicture(SDL_Surface *BG, const Rect &SrcRect, int x /*= 0*/, int y /*= 0*/, bool free /*= false*/)
+CPicture::CPicture(SDL_Surface * BG, const Rect &SrcRect, int x, int y, bool free)
 {
+	visible = true;
 	needRefresh = false;
 	srcRect = new Rect(SrcRect);
 	pos.x += x;
@@ -113,19 +112,20 @@ CPicture::~CPicture()
 
 void CPicture::init()
 {
+	visible = true;
 	needRefresh = false;
 	srcRect = nullptr;
 }
 
 void CPicture::show(SDL_Surface * to)
 {
-	if (needRefresh)
+	if (visible && needRefresh)
 		showAll(to);
 }
 
 void CPicture::showAll(SDL_Surface * to)
 {
-	if(bg)
+	if(bg && visible)
 	{
 		if(srcRect)
 		{
@@ -145,17 +145,13 @@ void CPicture::convertToScreenBPP()
 {
 	SDL_Surface *hlp = bg;
 	bg = SDL_ConvertSurface(hlp,screen->format,0);
-	CSDL_Ext::setDefaultColorKey(bg);	
+	CSDL_Ext::setDefaultColorKey(bg);
 	SDL_FreeSurface(hlp);
 }
 
 void CPicture::setAlpha(int value)
-{	
-	#ifdef VCMI_SDL1
-	SDL_SetAlpha(bg, SDL_SRCALPHA, value);	
-	#else
-	SDL_SetSurfaceAlphaMod(bg,value);
-	#endif // 0
+{
+	CSDL_Ext::setAlpha (bg, value);
 }
 
 void CPicture::scaleTo(Point size)
@@ -215,7 +211,7 @@ void CFilledTexture::showAll(SDL_Surface *to)
 	CSDL_Ext::fillTexture(to, texture);
 }
 
-CAnimImage::CAnimImage(std::string name, size_t Frame, size_t Group, int x, int y, ui8 Flags):
+CAnimImage::CAnimImage(const std::string & name, size_t Frame, size_t Group, int x, int y, ui8 Flags):
 	frame(Frame),
 	group(Group),
 	player(-1),
@@ -223,11 +219,11 @@ CAnimImage::CAnimImage(std::string name, size_t Frame, size_t Group, int x, int 
 {
 	pos.x += x;
 	pos.y += y;
-	anim = new CAnimation(name);
+	anim = std::make_shared<CAnimation>(name);
 	init();
 }
 
-CAnimImage::CAnimImage(CAnimation *Anim, size_t Frame, size_t Group, int x, int y, ui8 Flags):
+CAnimImage::CAnimImage(std::shared_ptr<CAnimation> Anim, size_t Frame, size_t Group, int x, int y, ui8 Flags):
 	anim(Anim),
 	frame(Frame),
 	group(Group),
@@ -246,6 +242,7 @@ size_t CAnimImage::size()
 
 void CAnimImage::init()
 {
+	visible = true;
 	anim->load(frame, group);
 	if (flags & CShowableAnim::BASE)
 		anim->load(0,group);
@@ -263,11 +260,13 @@ CAnimImage::~CAnimImage()
 	anim->unload(frame, group);
 	if (flags & CShowableAnim::BASE)
 		anim->unload(0,group);
-	delete anim;
 }
 
 void CAnimImage::showAll(SDL_Surface * to)
 {
+	if(!visible)
+		return;
+
 	IImage *img;
 
 	if ( flags & CShowableAnim::BASE && frame != 0)
@@ -298,7 +297,7 @@ void CAnimImage::setFrame(size_t Frame, size_t Group)
 		}
 	}
 	else
-		logGlobal->errorStream() << "Error: accessing unavailable frame " << Group << ":" << Frame << " in CAnimation!";
+		logGlobal->error("Error: accessing unavailable frame %d:%d in CAnimation!", Group, Frame);
 }
 
 void CAnimImage::playerColored(PlayerColor currPlayer)
@@ -445,7 +444,7 @@ CCreatureAnim::CCreatureAnim(int x, int y, std::string name, Rect picPos, ui8 fl
 		pos.w = picPos.w;
 	if (picPos.h)
 		pos.h = picPos.h;
-};
+}
 
 void CCreatureAnim::loopPreview(bool warMachine)
 {

@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * CMemoryStream.h, part of VCMI engine
  *
@@ -9,12 +7,14 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 #include "CInputStream.h"
 
 /**
  * A class which provides method definitions for reading from memory.
- */
+ * @deprecated use CMemoryBuffer
+ */ 
 class DLL_LINKAGE CMemoryStream : public CInputStream
 {
 public:

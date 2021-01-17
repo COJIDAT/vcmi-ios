@@ -1,7 +1,5 @@
-#pragma once
-
 /*
- * CLodStream.h, part of VCMI engine
+ * CCompressedStream.h, part of VCMI engine
  *
  * Authors: listed in file AUTHORS in main folder
  *
@@ -9,6 +7,7 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 #include "CInputStream.h"
 
@@ -116,7 +115,7 @@ private:
 	/**
 	 * Decompresses data to ensure that buffer has newSize bytes or end of stream was reached
 	 */
-	si64 readMore(ui8 * data, si64 size);
+	si64 readMore(ui8 * data, si64 size) override;
 
 	/** The file stream with compressed data. */
 	std::unique_ptr<CInputStream> gzipStream;

@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * GameConstants.h, part of VCMI engine
  *
@@ -9,16 +7,13 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 #include "ConstTransitivePtr.h"
 
 namespace GameConstants
 {
-	const std::string VCMI_VERSION = "VCMI 0.97b";
-
-	const int BFIELD_WIDTH = 17;
-	const int BFIELD_HEIGHT = 11;
-	const int BFIELD_SIZE = BFIELD_WIDTH * BFIELD_HEIGHT;
+	DLL_LINKAGE extern const std::string VCMI_VERSION;
 
 	const int PUZZLE_MAP_PIECES = 48;
 
@@ -33,7 +28,9 @@ namespace GameConstants
 	const int SPELL_SCHOOL_LEVELS = 4;
 	const int CRE_LEVELS = 10; // number of creature experience levels
 
+	const int HERO_GOLD_COST = 2500;
 	const int SPELLBOOK_GOLD_COST = 500;
+	const int SKILL_GOLD_COST = 2000;
 	const int BATTLE_PENALTY_DISTANCE = 10; //if the distance is > than this, then shooting stack has distance penalty
 	const int ARMY_SIZE = 7;
 	const int SKILL_PER_HERO=8;
@@ -51,12 +48,17 @@ namespace GameConstants
 	const int SPELLS_QUANTITY=70;
 	const int CREATURES_COUNT = 197;
 
+	const ui32 BASE_MOVEMENT_COST = 100; //default cost for non-diagonal movement
+
+	const int HERO_PORTRAIT_SHIFT = 30;// 2 special frames + some extra portraits
 }
 
 class CArtifact;
 class CArtifactInstance;
 class CCreature;
+class CHero;
 class CSpell;
+class CSkill;
 class CGameInfoCallback;
 class CNonConstInfoCallback;
 
@@ -92,18 +94,37 @@ CLASS_NAME & advance(int i)							\
 }
 
 
-#define ID_LIKE_OPERATORS_INTERNAL_DECLS(A, B)			\
-bool DLL_LINKAGE operator==(const A & a, const B & b);	\
-bool DLL_LINKAGE operator!=(const A & a, const B & b);	\
-bool DLL_LINKAGE operator<(const A & a, const B & b);	\
-bool DLL_LINKAGE operator<=(const A & a, const B & b);	\
-bool DLL_LINKAGE operator>(const A & a, const B & b);	\
-bool DLL_LINKAGE operator>=(const A & a, const B & b);
+// Operators are performance-critical and to be inlined they must be in header
+#define ID_LIKE_OPERATORS_INTERNAL(A, B, AN, BN)	\
+STRONG_INLINE bool operator==(const A & a, const B & b)			\
+{													\
+	return AN == BN ;								\
+}													\
+STRONG_INLINE bool operator!=(const A & a, const B & b)			\
+{													\
+	return AN != BN ;								\
+}													\
+STRONG_INLINE bool operator<(const A & a, const B & b)			\
+{													\
+	return AN < BN ;								\
+}													\
+STRONG_INLINE bool operator<=(const A & a, const B & b)			\
+{													\
+	return AN <= BN ;								\
+}													\
+STRONG_INLINE bool operator>(const A & a, const B & b)			\
+{													\
+	return AN > BN ;								\
+}													\
+STRONG_INLINE bool operator>=(const A & a, const B & b)			\
+{													\
+	return AN >= BN ;								\
+}
 
-#define ID_LIKE_OPERATORS_DECLS(CLASS_NAME, ENUM_NAME)			\
-	ID_LIKE_OPERATORS_INTERNAL_DECLS(CLASS_NAME, CLASS_NAME)	\
-	ID_LIKE_OPERATORS_INTERNAL_DECLS(CLASS_NAME, ENUM_NAME)		\
-	ID_LIKE_OPERATORS_INTERNAL_DECLS(ENUM_NAME, CLASS_NAME)
+#define ID_LIKE_OPERATORS(CLASS_NAME, ENUM_NAME)	\
+	ID_LIKE_OPERATORS_INTERNAL(CLASS_NAME, CLASS_NAME, a.num, b.num)	\
+	ID_LIKE_OPERATORS_INTERNAL(CLASS_NAME, ENUM_NAME, a.num, b)	\
+	ID_LIKE_OPERATORS_INTERNAL(ENUM_NAME, CLASS_NAME, a, b.num)
 
 
 #define OP_DECL_INT(CLASS_NAME, OP)					\
@@ -181,7 +202,6 @@ class ArtifactInstanceID : public BaseForID<ArtifactInstanceID, si32>
 	friend class CNonConstInfoCallback;
 };
 
-
 class QueryID : public BaseForID<QueryID, si32>
 {
 	INSTID_LIKE_CLASS_COMMON(QueryID, si32)
@@ -201,7 +221,6 @@ class ObjectInstanceID : public BaseForID<ObjectInstanceID, si32>
 	friend class CNonConstInfoCallback;
 };
 
-
 class HeroTypeID : public BaseForID<HeroTypeID, si32>
 {
 	INSTID_LIKE_CLASS_COMMON(HeroTypeID, si32)
@@ -215,6 +234,9 @@ class SlotID : public BaseForID<SlotID, si32>
 	friend class CNonConstInfoCallback;
 
 	DLL_LINKAGE static const SlotID COMMANDER_SLOT_PLACEHOLDER;
+	DLL_LINKAGE static const SlotID SUMMONED_SLOT_PLACEHOLDER; ///<for all summoned creatures, only during battle
+	DLL_LINKAGE static const SlotID WAR_MACHINES_SLOT; ///<for all war machines during battle
+	DLL_LINKAGE static const SlotID ARROW_TOWERS_SLOT; ///<for all arrow towers during battle
 
 	bool validSlot() const
 	{
@@ -231,12 +253,17 @@ class PlayerColor : public BaseForID<PlayerColor, ui8>
 		PLAYER_LIMIT_I = 8
 	};
 
+	DLL_LINKAGE static const PlayerColor SPECTATOR; //252
 	DLL_LINKAGE static const PlayerColor CANNOT_DETERMINE; //253
 	DLL_LINKAGE static const PlayerColor UNFLAGGABLE; //254 - neutral objects (pandora, banks)
 	DLL_LINKAGE static const PlayerColor NEUTRAL; //255
 	DLL_LINKAGE static const PlayerColor PLAYER_LIMIT; //player limit per map
 
 	DLL_LINKAGE bool isValidPlayer() const; //valid means < PLAYER_LIMIT (especially non-neutral)
+	DLL_LINKAGE bool isSpectator() const;
+
+	DLL_LINKAGE std::string getStr(bool L10n = false) const;
+	DLL_LINKAGE std::string getStrCap(bool L10n = false) const;
 
 	friend class CGameInfoCallback;
 	friend class CNonConstInfoCallback;
@@ -247,6 +274,14 @@ class TeamID : public BaseForID<TeamID, ui8>
 	INSTID_LIKE_CLASS_COMMON(TeamID, ui8)
 
 	DLL_LINKAGE static const TeamID NO_TEAM;
+
+	friend class CGameInfoCallback;
+	friend class CNonConstInfoCallback;
+};
+
+class TeleportChannelID : public BaseForID<TeleportChannelID, si32>
+{
+	INSTID_LIKE_CLASS_COMMON(TeleportChannelID, si32)
 
 	friend class CGameInfoCallback;
 	friend class CNonConstInfoCallback;
@@ -282,12 +317,14 @@ public:
 	SecondarySkill(ESecondarySkill _num = WRONG) : num(_num)
 	{}
 
+	DLL_LINKAGE const CSkill * toSkill() const;
+
 	ID_LIKE_CLASS_COMMON(SecondarySkill, ESecondarySkill)
 
 	ESecondarySkill num;
 };
 
-ID_LIKE_OPERATORS_DECLS(SecondarySkill, SecondarySkill::ESecondarySkill)
+ID_LIKE_OPERATORS(SecondarySkill, SecondarySkill::ESecondarySkill)
 
 namespace EAlignment
 {
@@ -375,7 +412,19 @@ public:
 	EBuildingID num;
 };
 
-ID_LIKE_OPERATORS_DECLS(BuildingID, BuildingID::EBuildingID)
+ID_LIKE_OPERATORS(BuildingID, BuildingID::EBuildingID)
+
+namespace EAiTactic
+{
+enum EAiTactic
+{
+	NONE = -1,
+	RANDOM,
+	WARRIOR,
+	BUILDER,
+	EXPLORER
+};
+}
 
 namespace EBuildingState
 {
@@ -390,19 +439,13 @@ namespace ESpellCastProblem
 {
 	enum ESpellCastProblem
 	{
-		OK, NO_HERO_TO_CAST_SPELL, ALREADY_CASTED_THIS_TURN, NO_SPELLBOOK, ANOTHER_ELEMENTAL_SUMMONED,
+		OK, NO_HERO_TO_CAST_SPELL, CASTS_PER_TURN_LIMIT, NO_SPELLBOOK,
 		HERO_DOESNT_KNOW_SPELL, NOT_ENOUGH_MANA, ADVMAP_SPELL_INSTEAD_OF_BATTLE_SPELL,
-		SECOND_HEROS_SPELL_IMMUNITY, SPELL_LEVEL_LIMIT_EXCEEDED, NO_SPELLS_TO_DISPEL,
+		SPELL_LEVEL_LIMIT_EXCEEDED, NO_SPELLS_TO_DISPEL,
 		NO_APPROPRIATE_TARGET, STACK_IMMUNE_TO_SPELL, WRONG_SPELL_TARGET, ONGOING_TACTIC_PHASE,
 		MAGIC_IS_BLOCKED, //For Orb of Inhibition and similar - no casting at all
 		INVALID
 	};
-}
-
-namespace ECastingMode
-{
-	enum ECastingMode {HERO_CASTING, AFTER_ATTACK_CASTING, //also includes cast before attack
-		MAGIC_MIRROR, CREATURE_ACTIVE_CASTING, ENCHANTER_CASTING};
 }
 
 namespace EMarketMode
@@ -413,12 +456,6 @@ namespace EMarketMode
 		ARTIFACT_RESOURCE, ARTIFACT_EXP, CREATURE_EXP, CREATURE_UNDEAD, RESOURCE_SKILL,
 		MARTKET_AFTER_LAST_PLACEHOLDER
 	};
-}
-
-namespace EBattleStackState
-{
-	enum EBattleStackState{ALIVE = 180, SUMMONED, CLONED, DEAD_CLONE, HAD_MORALE, WAITING, MOVED, DEFENDING, FEAR,
-		DRAINED_MANA /*remember to drain mana only once per turn*/};
 }
 
 namespace ECommander
@@ -445,8 +482,29 @@ namespace EWallState
 		DESTROYED,
 		DAMAGED,
 		INTACT
+	};
+}
 
+enum class EGateState : ui8
+{
+	NONE,
+	CLOSED,
+	BLOCKED, //dead or alive stack blocking from outside
+	OPENED,
+	DESTROYED
+};
 
+namespace ESiegeHex
+{
+	enum ESiegeHex : si16
+	{
+		DESTRUCTIBLE_WALL_1 = 29,
+		DESTRUCTIBLE_WALL_2 = 78,
+		DESTRUCTIBLE_WALL_3 = 130,
+		DESTRUCTIBLE_WALL_4 = 182,
+		GATE_BRIDGE = 94,
+		GATE_OUTER = 95,
+		GATE_INNER = 96
 	};
 }
 
@@ -458,6 +516,31 @@ namespace ETileType
 		POSSIBLE,
 		BLOCKED,
 		USED
+	};
+}
+
+enum class ETeleportChannelType
+{
+	IMPASSABLE,
+	BIDIRECTIONAL,
+	UNIDIRECTIONAL,
+	MIXED
+};
+
+
+namespace ERiverType
+{
+	enum ERiverType
+	{
+		NO_RIVER, CLEAR_RIVER, ICY_RIVER, MUDDY_RIVER, LAVA_RIVER
+	};
+}
+
+namespace ERoadType
+{
+	enum ERoadType
+	{
+		NO_ROAD, DIRT_ROAD, GRAVEL_ROAD, COBBLESTONE_ROAD
 	};
 }
 
@@ -611,7 +694,7 @@ public:
 	EObj num;
 };
 
-ID_LIKE_OPERATORS_DECLS(Obj, Obj::EObj)
+ID_LIKE_OPERATORS(Obj, Obj::EObj)
 
 namespace SecSkillLevel
 {
@@ -657,31 +740,29 @@ namespace Date
 	};
 }
 
-namespace Battle
+enum class EActionType : int32_t
 {
-	enum ActionType
-	{
-		END_TACTIC_PHASE = -2,
-		INVALID = -1,
-		NO_ACTION = 0,
-		HERO_SPELL,
-		WALK, DEFEND,
-		RETREAT,
-		SURRENDER,
-		WALK_AND_ATTACK,
-		SHOOT,
-		WAIT,
-		CATAPULT,
-		MONSTER_SPELL,
-		BAD_MORALE,
-		STACK_HEAL,
-		DAEMON_SUMMONING
-	};
-}
+	CANCEL = -3,
+	END_TACTIC_PHASE = -2,
+	INVALID = -1,
+	NO_ACTION = 0,
+	HERO_SPELL,
+	WALK, DEFEND,
+	RETREAT,
+	SURRENDER,
+	WALK_AND_ATTACK,
+	SHOOT,
+	WAIT,
+	CATAPULT,
+	MONSTER_SPELL,
+	BAD_MORALE,
+	STACK_HEAL,
+	DAEMON_SUMMONING
+};
 
-std::ostream & operator<<(std::ostream & os, const Battle::ActionType actionType);
+DLL_LINKAGE std::ostream & operator<<(std::ostream & os, const EActionType actionType);
 
-class ETerrainType
+class DLL_LINKAGE ETerrainType
 {
 public:
 	enum EETerrainType
@@ -696,10 +777,55 @@ public:
 	ID_LIKE_CLASS_COMMON(ETerrainType, EETerrainType)
 
 	EETerrainType num;
+
+	std::string toString() const;
 };
 
-ID_LIKE_OPERATORS_DECLS(ETerrainType, ETerrainType::EETerrainType)
+DLL_LINKAGE std::ostream & operator<<(std::ostream & os, const ETerrainType terrainType);
 
+ID_LIKE_OPERATORS(ETerrainType, ETerrainType::EETerrainType)
+
+class DLL_LINKAGE EDiggingStatus
+{
+public:
+	enum EEDiggingStatus
+	{
+		UNKNOWN = -1,
+		CAN_DIG = 0,
+		LACK_OF_MOVEMENT,
+		WRONG_TERRAIN,
+		TILE_OCCUPIED
+	};
+
+	EDiggingStatus(EEDiggingStatus _num = UNKNOWN) : num(_num)
+	{}
+
+	ID_LIKE_CLASS_COMMON(EDiggingStatus, EEDiggingStatus)
+
+	EEDiggingStatus num;
+};
+
+ID_LIKE_OPERATORS(EDiggingStatus, EDiggingStatus::EEDiggingStatus)
+
+class DLL_LINKAGE EPathfindingLayer
+{
+public:
+	enum EEPathfindingLayer : ui8
+	{
+		LAND = 0, SAIL = 1, WATER, AIR, NUM_LAYERS, WRONG, AUTO
+	};
+
+	EPathfindingLayer(EEPathfindingLayer _num = WRONG) : num(_num)
+	{}
+
+	ID_LIKE_CLASS_COMMON(EPathfindingLayer, EEPathfindingLayer)
+
+	EEPathfindingLayer num;
+};
+
+DLL_LINKAGE std::ostream & operator<<(std::ostream & os, const EPathfindingLayer pathfindingLayer);
+
+ID_LIKE_OPERATORS(EPathfindingLayer, EPathfindingLayer::EEPathfindingLayer)
 
 class BFieldType
 {
@@ -707,10 +833,10 @@ public:
 	//   1. sand/shore   2. sand/mesas   3. dirt/birches   4. dirt/hills   5. dirt/pines   6. grass/hills   7. grass/pines
 	//8. lava   9. magic plains   10. snow/mountains   11. snow/trees   12. subterranean   13. swamp/trees   14. fiery fields
 	//15. rock lands   16. magic clouds   17. lucid pools   18. holy ground   19. clover field   20. evil fog
-	//21. "favourable winds" text on magic plains background   22. cursed ground   23. rough   24. ship to ship   25. ship
+	//21. "favorable winds" text on magic plains background   22. cursed ground   23. rough   24. ship to ship   25. ship
 	enum EBFieldType {NONE = -1, NONE2, SAND_SHORE, SAND_MESAS, DIRT_BIRCHES, DIRT_HILLS, DIRT_PINES, GRASS_HILLS,
 		GRASS_PINES, LAVA, MAGIC_PLAINS, SNOW_MOUNTAINS, SNOW_TREES, SUBTERRANEAN, SWAMP_TREES, FIERY_FIELDS,
-		ROCKLANDS, MAGIC_CLOUDS, LUCID_POOLS, HOLY_GROUND, CLOVER_FIELD, EVIL_FOG, FAVOURABLE_WINDS, CURSED_GROUND,
+		ROCKLANDS, MAGIC_CLOUDS, LUCID_POOLS, HOLY_GROUND, CLOVER_FIELD, EVIL_FOG, FAVORABLE_WINDS, CURSED_GROUND,
 		ROUGH, SHIP_TO_SHIP, SHIP
 	};
 
@@ -722,7 +848,7 @@ public:
 	EBFieldType num;
 };
 
-ID_LIKE_OPERATORS_DECLS(BFieldType, BFieldType::EBFieldType)
+ID_LIKE_OPERATORS(BFieldType, BFieldType::EBFieldType)
 
 namespace EPlayerStatus
 {
@@ -762,7 +888,7 @@ public:
 	EArtifactPosition num;
 };
 
-ID_LIKE_OPERATORS_DECLS(ArtifactPosition, ArtifactPosition::EArtifactPosition)
+ID_LIKE_OPERATORS(ArtifactPosition, ArtifactPosition::EArtifactPosition)
 
 class ArtifactID
 {
@@ -779,9 +905,12 @@ public:
 		FIRST_AID_TENT = 6,
 		//CENTAUR_AXE = 7,
 		//BLACKSHARD_OF_THE_DEAD_KNIGHT = 8,
+		ARMAGEDDONS_BLADE = 128,
+		TITANS_THUNDER = 135,
 		//CORNUCOPIA = 140,
+		//FIXME: the following is only true if WoG is enabled. Otherwise other mod artifacts will take these slots.
 		ART_SELECTION = 144,
-		ART_LOCK = 145,
+		ART_LOCK = 145, // FIXME: We must get rid of this one since it's conflict with artifact from mods. See issue 2455
 		AXE_OF_SMASHING = 146,
 		MITHRIL_MAIL = 147,
 		SWORD_OF_SHARPNESS = 148,
@@ -797,14 +926,18 @@ public:
 	ArtifactID(EArtifactID _num = NONE) : num(_num)
 	{}
 
-	DLL_LINKAGE CArtifact * toArtifact() const;
+	DLL_LINKAGE const CArtifact * toArtifact() const;
+
+	///json serialization helpers
+	static si32 decode(const std::string & identifier);
+	static std::string encode(const si32 index);
 
 	ID_LIKE_CLASS_COMMON(ArtifactID, EArtifactID)
 
 	EArtifactID num;
 };
 
-ID_LIKE_OPERATORS_DECLS(ArtifactID, ArtifactID::EArtifactID)
+ID_LIKE_OPERATORS(ArtifactID, ArtifactID::EArtifactID)
 
 class CreatureID
 {
@@ -821,13 +954,17 @@ public:
 		WALKING_DEAD = 58,
 		WIGHTS = 60,
 		LICHES = 64,
+		BONE_DRAGON = 68,
 		TROGLODYTES = 70,
+		HYDRA = 110,
+		CHAOS_HYDRA = 111,
 		AIR_ELEMENTAL = 112,
 		EARTH_ELEMENTAL = 113,
 		FIRE_ELEMENTAL = 114,
 		WATER_ELEMENTAL = 115,
 		GOLD_GOLEM = 116,
 		DIAMOND_GOLEM = 117,
+		PSYCHIC_ELEMENTAL = 120,
 		CATAPULT = 145,
 		BALLISTA = 146,
 		FIRST_AID_TENT = 147,
@@ -838,14 +975,18 @@ public:
 	CreatureID(ECreatureID _num = NONE) : num(_num)
 	{}
 
-	DLL_LINKAGE CCreature * toCreature() const;
+	DLL_LINKAGE const CCreature * toCreature() const;
 
 	ID_LIKE_CLASS_COMMON(CreatureID, ECreatureID)
 
 	ECreatureID num;
+
+	///json serialization helpers
+	static si32 decode(const std::string & identifier);
+	static std::string encode(const si32 index);
 };
 
-ID_LIKE_OPERATORS_DECLS(CreatureID, CreatureID::ECreatureID)
+ID_LIKE_OPERATORS(CreatureID, CreatureID::ECreatureID)
 
 class SpellID
 {
@@ -881,31 +1022,71 @@ public:
 	SpellID(ESpellID _num = NONE) : num(_num)
 	{}
 
-	//TODO: should this be const?
-	DLL_LINKAGE CSpell * toSpell() const;
+	DLL_LINKAGE const CSpell * toSpell() const;
 
 	ID_LIKE_CLASS_COMMON(SpellID, ESpellID)
 
 	ESpellID num;
+
+	///json serialization helpers
+	static si32 decode(const std::string & identifier);
+	static std::string encode(const si32 index);
 };
 
-ID_LIKE_OPERATORS_DECLS(SpellID, SpellID::ESpellID)
+ID_LIKE_OPERATORS(SpellID, SpellID::ESpellID)
+
+enum class ESpellSchool: ui8
+{
+	AIR 	= 0,
+	FIRE 	= 1,
+	WATER 	= 2,
+	EARTH 	= 3
+};
+
+enum class EMetaclass: ui8
+{
+	INVALID = 0,
+	ARTIFACT,
+	CREATURE,
+	FACTION,
+	EXPERIENCE,
+	HERO,
+	HEROCLASS,
+	LUCK,
+	MANA,
+	MORALE,
+	MOVEMENT,
+	OBJECT,
+	PRIMARY_SKILL,
+	SECONDARY_SKILL,
+	SPELL,
+	RESOURCE
+};
+
+enum class EHealLevel: ui8
+{
+	HEAL,
+	RESURRECT,
+	OVERHEAL
+};
+
+enum class EHealPower : ui8
+{
+	ONE_BATTLE,
+	PERMANENT
+};
 
 // Typedef declarations
 typedef ui8 TFaction;
 typedef si64 TExpType;
-typedef std::pair<ui32, ui32> TDmgRange;
+typedef std::pair<si64, si64> TDmgRange;
 typedef si32 TBonusSubtype;
 typedef si32 TQuantity;
 
 typedef int TRmgTemplateZoneId;
 
 #undef ID_LIKE_CLASS_COMMON
-#undef ID_LIKE_OPERATORS_DECLS
-#undef ID_LIKE_OPERATORS_INTERNAL_DECLS
+#undef ID_LIKE_OPERATORS
+#undef ID_LIKE_OPERATORS_INTERNAL
 #undef INSTID_LIKE_CLASS_COMMON
 #undef OP_DECL_INT
-
-
-
-

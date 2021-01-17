@@ -1,4 +1,3 @@
-
 /*
  * CMap.h, part of VCMI engine
  *
@@ -19,6 +18,7 @@
 #include "../int3.h"
 #include "../GameConstants.h"
 #include "../LogicalExpression.h"
+#include "CMapDefines.h"
 
 class CArtifactInstance;
 class CGObjectInstance;
@@ -43,21 +43,10 @@ struct DLL_LINKAGE SHeroName
 	template <typename Handler>
 	void serialize(Handler & h, const int version)
 	{
-		h & heroId & heroName;
+		h & heroId;
+		h & heroName;
 	}
 };
-
-namespace EAiTactic
-{
-enum EAiTactic
-{
-	NONE = -1,
-	RANDOM,
-	WARRIOR,
-	BUILDER,
-	EXPLORER
-};
-}
 
 /// The player info constains data about which factions are allowed, AI tactical settings,
 /// the main hero name, where to generate the hero, whether the faction should be selected randomly,...
@@ -79,16 +68,22 @@ struct DLL_LINKAGE PlayerInfo
 	std::set<TFaction> allowedFactions;
 	bool isFactionRandom;
 
-	si32 mainCustomHeroPortrait; /// The default value is -1.
+	///main hero instance (VCMI maps only)
+	std::string mainHeroInstance;
+	/// Player has a random main hero
+	bool hasRandomHero;
+	/// The default value is -1.
+	si32 mainCustomHeroPortrait;
 	std::string mainCustomHeroName;
-	si32 mainCustomHeroId; /// ID of custom hero (only if portrait and hero name are set, otherwise unpredicted value), -1 if none (not always -1)
+	/// ID of custom hero (only if portrait and hero name are set, otherwise unpredicted value), -1 if none (not always -1)
+	si32 mainCustomHeroId;
 
 	std::vector<SHeroName> heroesNames; /// list of placed heroes on the map
 	bool hasMainTown; /// The default value is false.
 	bool generateHeroAtMainTown; /// The default value is false.
 	int3 posOfMainTown;
-	TeamID team; /// The default value is 255 representing that the player belongs to no team.
-	bool hasRandomHero; /// Player has a random hero
+	TeamID team; /// The default value NO_TEAM
+
 
 	bool generateHero; /// Unused.
 	si32 p7; /// Unknown and unused.
@@ -99,9 +94,27 @@ struct DLL_LINKAGE PlayerInfo
 	template <typename Handler>
 	void serialize(Handler & h, const int version)
 	{
-		h & p7 & hasRandomHero & mainCustomHeroId & canHumanPlay & canComputerPlay & aiTactic & allowedFactions & isFactionRandom &
-				mainCustomHeroPortrait & mainCustomHeroName & heroesNames & hasMainTown & generateHeroAtMainTown &
-				posOfMainTown & team & generateHero;
+		h & p7;
+		h & hasRandomHero;
+		h & mainCustomHeroId;
+		h & canHumanPlay;
+		h & canComputerPlay;
+		h & aiTactic;
+		h & allowedFactions;
+		h & isFactionRandom;
+		h & mainCustomHeroPortrait;
+		h & mainCustomHeroName;
+		h & heroesNames;
+		h & hasMainTown;
+		h & generateHeroAtMainTown;
+		h & posOfMainTown;
+		h & team;
+		h & generateHero;
+
+		if(version >= 770)
+		{
+			h & mainHeroInstance;
+		}
 	}
 };
 
@@ -109,6 +122,7 @@ struct DLL_LINKAGE PlayerInfo
 struct DLL_LINKAGE EventCondition
 {
 	enum EWinLoseType {
+		//internal use, deprecated
 		HAVE_ARTIFACT,     // type - required artifact
 		HAVE_CREATURES,    // type - creatures to collect, value - amount to collect
 		HAVE_RESOURCES,    // type - resource ID, value - amount to collect
@@ -116,26 +130,49 @@ struct DLL_LINKAGE EventCondition
 		CONTROL,           // position - position of object, optional, type - type of object
 		DESTROY,           // position - position of object, optional, type - type of object
 		TRANSPORT,         // position - where artifact should be transported, type - type of artifact
+
+		//map format version pre 1.0
 		DAYS_PASSED,       // value - number of days from start of the game
 		IS_HUMAN,          // value - 0 = player is AI, 1 = player is human
 		DAYS_WITHOUT_TOWN, // value - how long player can live without town, 0=instakill
 		STANDARD_WIN,      // normal defeat all enemies condition
-		CONST_VALUE        // condition that always evaluates to "value" (0 = false, 1 = true)
+		CONST_VALUE,        // condition that always evaluates to "value" (0 = false, 1 = true)
+
+		//map format version 1.0+
+		HAVE_0,
+		HAVE_BUILDING_0,
+		DESTROY_0
 	};
 
 	EventCondition(EWinLoseType condition = STANDARD_WIN);
 	EventCondition(EWinLoseType condition, si32 value, si32 objectType, int3 position = int3(-1, -1, -1));
 
-	const CGObjectInstance * object; // object that was at specified position on start
+	const CGObjectInstance * object; // object that was at specified position or with instance name on start
+	EMetaclass metaType;
 	si32 value;
 	si32 objectType;
+	si32 objectSubtype;
+	std::string objectInstanceName;
 	int3 position;
 	EWinLoseType condition;
 
 	template <typename Handler>
 	void serialize(Handler & h, const int version)
 	{
-		h & object & value & objectType & position & condition;
+		h & object;
+		h & value;
+		h & objectType;
+		h & position;
+		h & condition;
+		if(version > 759)
+		{
+			h & objectSubtype;
+			h & objectInstanceName;
+		}
+		if(version >= 770)
+		{
+			h & metaType;
+		}
 	}
 };
 
@@ -158,7 +195,8 @@ struct DLL_LINKAGE EventEffect
 	template <typename Handler>
 	void serialize(Handler & h, const int version)
 	{
-		h & type & toOtherMessage;
+		h & type;
+		h & toOtherMessage;
 	}
 };
 
@@ -182,7 +220,11 @@ struct DLL_LINKAGE TriggeredEvent
 	template <typename Handler>
 	void serialize(Handler & h, const int version)
 	{
-		h & identifier & trigger & description & onFulfill & effect;
+		h & identifier;
+		h & trigger;
+		h & description;
+		h & onFulfill;
+		h & effect;
 	}
 };
 
@@ -192,11 +234,17 @@ struct DLL_LINKAGE Rumor
 	std::string name;
 	std::string text;
 
+	Rumor() = default;
+	~Rumor() = default;
+
 	template <typename Handler>
 	void serialize(Handler & h, const int version)
 	{
-		h & name & text;
+		h & name;
+		h & text;
 	}
+
+	void serializeJson(JsonSerializeFormat & handler);
 };
 
 /// The disposed hero struct describes which hero can be hired from which player.
@@ -212,116 +260,16 @@ struct DLL_LINKAGE DisposedHero
 	template <typename Handler>
 	void serialize(Handler & h, const int version)
 	{
-		h & heroId & portrait & name & players;
-	}
-};
-
-/// The map event is an event which e.g. gives or takes resources of a specific
-/// amount to/from players and can appear regularly or once a time.
-class DLL_LINKAGE CMapEvent
-{
-public:
-	CMapEvent();
-
-	bool earlierThan(const CMapEvent & other) const;
-	bool earlierThanOrEqual(const CMapEvent & other) const;
-
-	std::string name;
-	std::string message;
-	TResources resources;
-	ui8 players; // affected players, bit field?
-	ui8 humanAffected;
-	ui8 computerAffected;
-	ui32 firstOccurence;
-	ui32 nextOccurence; /// specifies after how many days the event will occur the next time; 0 if event occurs only one time
-
-	template <typename Handler>
-	void serialize(Handler & h, const int version)
-	{
-		h & name & message & resources
-				& players & humanAffected & computerAffected & firstOccurence & nextOccurence;
-	}
-};
-
-/// The castle event builds/adds buildings/creatures for a specific town.
-class DLL_LINKAGE CCastleEvent: public CMapEvent
-{
-public:
-	CCastleEvent();
-
-	std::set<BuildingID> buildings;
-	std::vector<si32> creatures;
-	CGTownInstance * town;
-
-	template <typename Handler>
-	void serialize(Handler & h, const int version)
-	{
-		h & static_cast<CMapEvent &>(*this);
-		h & buildings & creatures;
-	}
-};
-
-namespace ERiverType
-{
-enum ERiverType
-{
-	NO_RIVER, CLEAR_RIVER, ICY_RIVER, MUDDY_RIVER, LAVA_RIVER
-};
-}
-
-namespace ERoadType
-{
-enum ERoadType
-{
-	NO_ROAD, DIRT_ROAD, GRAVEL_ROAD, COBBLESTONE_ROAD
-};
-}
-
-/// The terrain tile describes the terrain type and the visual representation of the terrain.
-/// Furthermore the struct defines whether the tile is visitable or/and blocked and which objects reside in it.
-struct DLL_LINKAGE TerrainTile
-{
-	TerrainTile();
-
-	/// Gets true if the terrain is not a rock. If from is water/land, same type is also required.
-	bool entrableTerrain(const TerrainTile * from = nullptr) const;
-	bool entrableTerrain(bool allowLand, bool allowSea) const;
-	/// Checks for blocking objects and terraint type (water / land).
-	bool isClear(const TerrainTile * from = nullptr) const;
-	/// Gets the ID of the top visitable object or -1 if there is none.
-	int topVisitableId() const;
-	CGObjectInstance * topVisitableObj() const;
-	bool isWater() const;
-	bool isCoastal() const;
-	bool hasFavourableWinds() const;
-
-	ETerrainType terType;
-	ui8 terView;
-	ERiverType::ERiverType riverType;
-	ui8 riverDir;
-	ERoadType::ERoadType roadType;
-	ui8 roadDir;
-	/// first two bits - how to rotate terrain graphic (next two - river graphic, next two - road);
-	///	7th bit - whether tile is coastal (allows disembarking if land or block movement if water); 8th bit - Favourable Winds effect
-	ui8 extTileFlags;
-	bool visitable;
-	bool blocked;
-
-	std::vector<CGObjectInstance *> visitableObjects;
-	std::vector<CGObjectInstance *> blockingObjects;
-
-	template <typename Handler>
-	void serialize(Handler & h, const int version)
-	{
-		h & terType & terView & riverType & riverDir & roadType &roadDir & extTileFlags;
-		h & visitable & blocked;
-		h & visitableObjects & blockingObjects;
+		h & heroId;
+		h & portrait;
+		h & name;
+		h & players;
 	}
 };
 
 namespace EMapFormat
 {
-enum EMapFormat
+enum EMapFormat: ui8
 {
 	INVALID = 0,
 	//    HEX     DEC
@@ -329,7 +277,8 @@ enum EMapFormat
 	AB  = 0x15, // 21
 	SOD = 0x1c, // 28
 // HOTA = 0x1e ... 0x20 // 28 ... 30
-	WOG = 0x33  // 51
+	WOG = 0x33,  // 51
+	VCMI = 0xF0
 };
 }
 
@@ -365,7 +314,7 @@ public:
 	std::vector<PlayerInfo> players; /// The default size of the vector is PlayerColor::PLAYER_LIMIT.
 	ui8 howManyTeams;
 	std::vector<bool> allowedHeroes;
-	std::vector<ui16> placeholdedHeroes;
+
 	bool areAnyPlayers; /// Unused. True if there are any playable players on the map.
 
 	/// "main quests" of the map that describe victory and loss conditions
@@ -374,9 +323,23 @@ public:
 	template <typename Handler>
 	void serialize(Handler & h, const int Version)
 	{
-		h & version & name & description & width & height & twoLevel & difficulty & levelLimit & areAnyPlayers;
-		h & players & howManyTeams & allowedHeroes & triggeredEvents;
-		h & victoryMessage & victoryIconIndex & defeatMessage & defeatIconIndex;
+		h & version;
+		h & name;
+		h & description;
+		h & width;
+		h & height;
+		h & twoLevel;
+		h & difficulty;
+		h & levelLimit;
+		h & areAnyPlayers;
+		h & players;
+		h & howManyTeams;
+		h & allowedHeroes;
+		h & triggeredEvents;
+		h & victoryMessage;
+		h & victoryIconIndex;
+		h & defeatMessage;
+		h & defeatIconIndex;
 	}
 };
 
@@ -391,8 +354,11 @@ public:
 	CMapEditManager * getEditManager();
 	TerrainTile & getTile(const int3 & tile);
 	const TerrainTile & getTile(const int3 & tile) const;
+	bool isCoastalTile(const int3 & pos) const;
 	bool isInTheMap(const int3 & pos) const;
 	bool isWaterTile(const int3 & pos) const;
+
+	bool canMoveBetween(const int3 &src, const int3 &dst) const;
 	bool checkForVisitableDir( const int3 & src, const TerrainTile *pom, const int3 & dst ) const;
 	int3 guardingCreaturePosition (int3 pos) const;
 
@@ -402,7 +368,11 @@ public:
 
 	void addNewArtifactInstance(CArtifactInstance * art);
 	void eraseArtifactInstance(CArtifactInstance * art);
-	void addQuest(CGObjectInstance * quest);
+
+	void addNewQuestInstance(CQuest * quest);
+
+	///Use only this method when creating new map object instances
+	void addNewObject(CGObjectInstance * obj);
 
 	/// Gets object of specified type on requested position
 	const CGObjectInstance * getObjectiveObjectFrom(int3 pos, Obj::EObj type);
@@ -420,8 +390,7 @@ public:
 	std::vector<bool> allowedAbilities;
 	std::list<CMapEvent> events;
 	int3 grailPos;
-	int grailRadious;
-
+	int grailRadius;
 
 	//Central lists of items in game. Position of item in the vectors below is their (instance) id.
 	std::vector< ConstTransitivePtr<CGObjectInstance> > objects;
@@ -432,13 +401,16 @@ public:
 
 	//Helper lists
 	std::vector< ConstTransitivePtr<CGHeroInstance> > heroesOnMap;
+	std::map<TeleportChannelID, std::shared_ptr<TeleportChannel> > teleportChannels;
 
 	/// associative list to identify which hero/creature id belongs to which object id(index for objects)
 	std::map<si32, ObjectInstanceID> questIdentifierToId;
 
-	unique_ptr<CMapEditManager> editManager;
+	std::unique_ptr<CMapEditManager> editManager;
 
 	int3 ***guardingCreaturePositions;
+
+	std::map<std::string, ConstTransitivePtr<CGObjectInstance> > instanceNames;
 
 private:
 	/// a 3-dimensional array of terrain tiles, access is as follows: x, y, level. where level=1 is underground
@@ -449,8 +421,15 @@ public:
 	void serialize(Handler &h, const int formatVersion)
 	{
 		h & static_cast<CMapHeader&>(*this);
-		h & rumors & allowedSpell & allowedAbilities & allowedArtifact & events & grailPos;
-		h & artInstances & quests & allHeroes;
+		h & rumors;
+		h & allowedSpell;
+		h & allowedAbilities;
+		h & allowedArtifact;
+		h & events;
+		h & grailPos;
+		h & artInstances;
+		h & quests;
+		h & allHeroes;
 		h & questIdentifierToId;
 
 		//TODO: viccondetails
@@ -499,15 +478,22 @@ public:
 		}
 
 		h & objects;
-		h & heroesOnMap & towns & artInstances;
+		h & heroesOnMap;
+		h & teleportChannels;
+		h & towns;
+		h & artInstances;
 
 		// static members
-		h & CGTeleport::objs;
-		h & CGTeleport::gates;
 		h & CGKeys::playerKeyMap;
 		h & CGMagi::eyelist;
-		h & CGObelisk::obeliskCount & CGObelisk::visited;
+		h & CGObelisk::obeliskCount;
+		h & CGObelisk::visited;
 		h & CGTownInstance::merchantArtifacts;
 		h & CGTownInstance::universitySkills;
+
+		if(formatVersion >= 759)
+		{
+			h & instanceNames;
+		}
 	}
 };

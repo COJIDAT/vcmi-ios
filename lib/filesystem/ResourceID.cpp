@@ -1,7 +1,15 @@
+/*
+ * ResourceID.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "ResourceID.h"
-
-#include "CFileInfo.h"
+#include "FileInfo.h"
 
 // trivial to_upper that completely ignores localization and only work with ASCII
 // Technically not a problem since
@@ -23,28 +31,56 @@ static inline void toUpper(std::string & string)
 	for (char & symbol : string)
 		toUpper(symbol);
 }
-
+#else
+static inline void toUpper(std::string & string)
+{
+	boost::to_upper(string);
+}
 #endif
 
+static inline EResType::Type readType(const std::string& name)
+{
+	return EResTypeHelper::getTypeFromExtension(FileInfo::GetExtension(name).to_string());
+}
 
+static inline std::string readName(std::string name)
+{
+	const auto dotPos = name.find_last_of('.');
+
+	//do not cut "extension" of directory name
+	auto delimPos = name.find_last_of('/');
+	if(delimPos == std::string::npos)
+		delimPos = name.find_last_of('\\');
+
+	if((delimPos == std::string::npos || delimPos < dotPos) && dotPos != std::string::npos)
+	{
+		auto type = EResTypeHelper::getTypeFromExtension(name.substr(dotPos));
+		if(type != EResType::OTHER)
+			name.resize(dotPos);
+	}
+
+	toUpper(name);
+
+	return name;
+}
+
+#if 0
 ResourceID::ResourceID()
 	:type(EResType::OTHER)
 {
 }
+#endif
 
-ResourceID::ResourceID(std::string name)
-{
-	CFileInfo info(std::move(name));
-	setName(info.getStem());
-	setType(info.getType());
-}
+ResourceID::ResourceID(std::string name_):
+	type{readType(name_)},
+	name{readName(std::move(name_))}
+{}
 
-ResourceID::ResourceID(std::string name, EResType::Type type)
-{
-	setName(std::move(name));
-	setType(type);
-}
-
+ResourceID::ResourceID(std::string name_, EResType::Type type_):
+	type{type_},
+	name{readName(std::move(name_))}
+{}
+#if 0
 std::string ResourceID::getName() const
 {
 	return name;
@@ -57,33 +93,30 @@ EResType::Type ResourceID::getType() const
 
 void ResourceID::setName(std::string name)
 {
+	// setName shouldn't be used if type is UNDEFINED
+	assert(type != EResType::UNDEFINED);
+
 	this->name = std::move(name);
 
 	size_t dotPos = this->name.find_last_of("/.");
 
-	if(dotPos != std::string::npos && this->name[dotPos] == '.')
+	if(dotPos != std::string::npos && this->name[dotPos] == '.'
+		&& this->type == EResTypeHelper::getTypeFromExtension(this->name.substr(dotPos)))
+	{
 		this->name.erase(dotPos);
+	}
 
-#ifdef ENABLE_TRIVIAL_TOUPPER
 	toUpper(this->name);
-#else
-	// strangely enough but this line takes 40-50% of filesystem loading time
-	boost::to_upper(this->name);
-#endif
 }
 
 void ResourceID::setType(EResType::Type type)
 {
 	this->type = type;
 }
-
+#endif
 EResType::Type EResTypeHelper::getTypeFromExtension(std::string extension)
 {
-#ifdef ENABLE_TRIVIAL_TOUPPER
 	toUpper(extension);
-#else
-	boost::to_upper(extension);
-#endif
 
 	static const std::map<std::string, EResType::Type> stringToRes =
 	{
@@ -121,7 +154,8 @@ EResType::Type EResTypeHelper::getTypeFromExtension(std::string extension)
 		{".VSGM1", EResType::SERVER_SAVEGAME},
 		{".ERM",   EResType::ERM},
 		{".ERT",   EResType::ERT},
-		{".ERS",   EResType::ERS}
+		{".ERS",   EResType::ERS},
+		{".VMAP",  EResType::MAP}
 	};
 
 	auto iter = stringToRes.find(extension);

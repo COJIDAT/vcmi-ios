@@ -1,7 +1,3 @@
-#pragma once
-
-#include "../../lib/GameConstants.h"
-
 /*
  * CCampaignHandler.h, part of VCMI engine
  *
@@ -11,6 +7,9 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "../../lib/GameConstants.h"
 
 struct StartInfo;
 class CGHeroInstance;
@@ -39,9 +38,18 @@ public:
 	std::string filename;
 	ui8 loadFromLod; //if true, this campaign must be loaded fro, .lod file
 
+	CCampaignHeader();
+
 	template <typename Handler> void serialize(Handler &h, const int formatVersion)
 	{
-		h & version & mapVersion & name & description & difficultyChoosenByPlayer & music & filename & loadFromLod;
+		h & version;
+		h & mapVersion;
+		h & name;
+		h & description;
+		h & difficultyChoosenByPlayer;
+		h & music;
+		h & filename;
+		h & loadFromLod;
 	}
 };
 
@@ -65,17 +73,29 @@ public:
 
 		bool isBonusForHero() const;
 
+		STravelBonus();
+
 		template <typename Handler> void serialize(Handler &h, const int formatVersion)
 		{
-			h & type & info1 & info2 & info3;
+			h & type;
+			h & info1;
+			h & info2;
+			h & info3;
 		}
 	};
 
 	std::vector<STravelBonus> bonusesToChoose;
 
+	CScenarioTravel();
+
 	template <typename Handler> void serialize(Handler &h, const int formatVersion)
 	{
-		h & whatHeroKeeps & monstersKeptByHero & artifsKeptByHero & startOptions & playerColor & bonusesToChoose;
+		h & whatHeroKeeps;
+		h & monstersKeptByHero;
+		h & artifsKeptByHero;
+		h & startOptions;
+		h & playerColor;
+		h & bonusesToChoose;
 	}
 
 };
@@ -90,9 +110,14 @@ public:
 		ui8 prologMusic; // from CmpMusic.txt
 		std::string prologText;
 
+		SScenarioPrologEpilog();
+
 		template <typename Handler> void serialize(Handler &h, const int formatVersion)
 		{
-			h & hasPrologEpilog & prologVideo & prologMusic & prologText;
+			h & hasPrologEpilog;
+			h & prologVideo;
+			h & prologMusic;
+			h & prologText;
 		}
 	};
 
@@ -117,10 +142,24 @@ public:
 	bool isNotVoid() const;
 	std::vector<CGHeroInstance *> getLostCrossoverHeroes() const; /// returns a list of crossover heroes which started the scenario, but didn't complete it
 
+	CCampaignScenario();
+
 	template <typename Handler> void serialize(Handler &h, const int formatVersion)
 	{
-		h & mapName & scenarioName & packedMapSize & preconditionRegions & regionColor & difficulty & conquered & regionText & 
-			prolog & epilog & travelOptions & crossoverHeroes & placedCrossoverHeroes & keepHeroes;
+		h & mapName;
+		h & scenarioName;
+		h & packedMapSize;
+		h & preconditionRegions;
+		h & regionColor;
+		h & difficulty;
+		h & conquered;
+		h & regionText;
+		h & prolog;
+		h & epilog;
+		h & travelOptions;
+		h & crossoverHeroes;
+		h & placedCrossoverHeroes;
+		h & keepHeroes;
 	}
 };
 
@@ -133,7 +172,9 @@ public:
 
 	template <typename Handler> void serialize(Handler &h, const int formatVersion)
 	{
-		h & header & scenarios & mapPieces;
+		h & header;
+		h & scenarios;
+		h & mapPieces;
 	}
 
 	bool conquerable(int whichScenario) const;
@@ -144,8 +185,8 @@ public:
 class DLL_LINKAGE CCampaignState
 {
 public:
-	unique_ptr<CCampaign> camp;
-	std::string campaignName; 
+	std::unique_ptr<CCampaign> camp;
+	std::string campaignName;
 	std::vector<ui8> mapsConquered, mapsRemaining;
 	boost::optional<si32> currentMap;
 
@@ -159,12 +200,16 @@ public:
 	ui8 currentBonusID() const;
 
 	CCampaignState();
-	CCampaignState(unique_ptr<CCampaign> _camp);
+	CCampaignState(std::unique_ptr<CCampaign> _camp);
 	~CCampaignState(){};
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & camp & campaignName & mapsRemaining & mapsConquered & currentMap;
+		h & camp;
+		h & campaignName;
+		h & mapsRemaining;
+		h & mapsConquered;
+		h & currentMap;
 		h & chosenCampaignBonuses;
 	}
 };
@@ -184,5 +229,5 @@ public:
 
 	static CCampaignHeader getHeader( const std::string & name); //name - name of appropriate file
 
-	static unique_ptr<CCampaign> getCampaign(const std::string & name); //name - name of appropriate file
+	static std::unique_ptr<CCampaign> getCampaign(const std::string & name); //name - name of appropriate file
 };

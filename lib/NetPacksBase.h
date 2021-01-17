@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * NetPacksBase.h, part of VCMI engine
  *
@@ -9,8 +7,12 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
+class CClient;
 class CGameState;
+class CGameHandler;
+class CConnection;
 class CStackBasicDescriptor;
 class CGHeroInstance;
 class CStackInstance;
@@ -18,48 +20,86 @@ class CArmedInstance;
 class CArtifactSet;
 class CBonusSystemNode;
 struct ArtSlotInfo;
-
-
+class BattleInfo;
 
 #include "ConstTransitivePtr.h"
 #include "GameConstants.h"
-
+#include "JsonNode.h"
 
 struct DLL_LINKAGE CPack
 {
-	ui16 type;
+	CPack() {};
+	virtual ~CPack() {};
 
-	CPack(){};
-	virtual ~CPack(){};
-	ui16 getType() const{return type;}
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-        logNetwork->errorStream() << "CPack serialized... this should not happen!";
+		logNetwork->error("CPack serialized... this should not happen!");
+		assert(false && "CPack serialized");
 	}
-	void applyGs(CGameState *gs) { }
-	virtual std::string toString() const { return boost::str(boost::format("{CPack: type '%d'}") % type); }
+
+	void applyGs(CGameState * gs)
+	{}
 };
 
-std::ostream & operator<<(std::ostream & out, const CPack * pack);
+struct CPackForClient : public CPack
+{
+	CPackForClient(){};
 
+	CGameState* GS(CClient *cl);
+	void applyFirstCl(CClient *cl)//called before applying to gs
+	{}
+	void applyCl(CClient *cl)//called after applying to gs
+	{}
+};
 
-struct DLL_LINKAGE MetaString : public CPack //2001 helper for object scrips
+struct CPackForServer : public CPack
+{
+	PlayerColor player;
+	CConnection *c;
+	CGameState* GS(CGameHandler *gh);
+	CPackForServer():
+		player(PlayerColor::NEUTRAL),
+		c(nullptr)
+	{
+	}
+
+	bool applyGh(CGameHandler *gh) //called after applying to gs
+	{
+		logGlobal->error("Should not happen... applying plain CPackForServer");
+		return false;
+	}
+
+protected:
+	void throwNotAllowedAction();
+	void throwOnWrongOwner(CGameHandler * gh, ObjectInstanceID id);
+	void throwOnWrongPlayer(CGameHandler * gh, PlayerColor player);
+	void throwAndCompain(CGameHandler * gh, std::string txt);
+	bool isPlayerOwns(CGameHandler * gh, ObjectInstanceID id);
+
+private:
+	void wrongPlayerMessage(CGameHandler * gh, PlayerColor expectedplayer);
+};
+
+struct DLL_LINKAGE MetaString
 {
 private:
 	enum EMessage {TEXACT_STRING, TLOCAL_STRING, TNUMBER, TREPLACE_ESTRING, TREPLACE_LSTRING, TREPLACE_NUMBER, TREPLACE_PLUSNUMBER};
 public:
 	enum {GENERAL_TXT=1, XTRAINFO_TXT, OBJ_NAMES, RES_NAMES, ART_NAMES, ARRAY_TXT, CRE_PL_NAMES, CREGENS, MINE_NAMES,
-		MINE_EVNTS, ADVOB_TXT, ART_EVNTS, SPELL_NAME, SEC_SKILL_NAME, CRE_SING_NAMES, CREGENS4, COLOR, ART_DESCR};
+		MINE_EVNTS, ADVOB_TXT, ART_EVNTS, SPELL_NAME, SEC_SKILL_NAME, CRE_SING_NAMES, CREGENS4, COLOR, ART_DESCR, JK_TXT};
 
 	std::vector<ui8> message; //vector of EMessage
 
-	std::vector<std::pair<ui8,ui32> > localStrings; //pairs<text handler type, text number>; types: 1 - generaltexthandler->all; 2 - objh->xtrainfo; 3 - objh->names; 4 - objh->restypes; 5 - arth->artifacts[id].name; 6 - generaltexth->arraytxt; 7 - creh->creatures[os->subID].namePl; 8 - objh->creGens; 9 - objh->mines[ID]->first; 10 - objh->mines[ID]->second; 11 - objh->advobtxt
+	std::vector<std::pair<ui8,ui32> > localStrings;
 	std::vector<std::string> exactStrings;
 	std::vector<si32> numbers;
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & exactStrings & localStrings & message & numbers;
+		h & exactStrings;
+		h & localStrings;
+		h & message;
+		h & numbers;
 	}
 	void addTxt(ui8 type, ui32 serial)
 	{
@@ -118,13 +158,10 @@ public:
 	std::string toString() const;
 	void getLocalString(const std::pair<ui8,ui32> &txt, std::string &dst) const;
 
-	MetaString()
-	{
-		type = 2001;
-	}
+	MetaString(){}
 };
 
-struct Component : public CPack //2002 helper for object scrips informations
+struct Component
 {
 	enum EComponentType {PRIM_SKILL, SEC_SKILL, RESOURCE, CREATURE, ARTIFACT, EXPERIENCE, SPELL, MORALE, LUCK, BUILDING, HERO_PORTRAIT, FLAG};
 	ui16 id, subtype; //id uses ^^^ enums, when id==EXPPERIENCE subtype==0 means exp points and subtype==1 levels)
@@ -133,17 +170,19 @@ struct Component : public CPack //2002 helper for object scrips informations
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & id & subtype & val & when;
+		h & id;
+		h & subtype;
+		h & val;
+		h & when;
 	}
 	Component()
+		:id(0), subtype(0), val(0), when(0)
 	{
-		type = 2002;
 	}
 	DLL_LINKAGE explicit Component(const CStackBasicDescriptor &stack);
 	Component(Component::EComponentType Type, ui16 Subtype, si32 Val, si16 When)
 		:id(Type),subtype(Subtype),val(Val),when(When)
 	{
-		type = 2002;
 	}
 };
 
@@ -195,6 +234,109 @@ struct ArtifactLocation
 	DLL_LINKAGE const ArtSlotInfo *getSlot() const;
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & artHolder & slot;
+		h & artHolder;
+		h & slot;
+	}
+};
+
+///custom effect (resistance, reflection, etc)
+struct CustomEffectInfo
+{
+	CustomEffectInfo()
+		:effect(0),
+		sound(0),
+		stack(0)
+	{
+	}
+	/// WoG AC format
+	ui32 effect;
+	ui32 sound;
+	ui32 stack;
+	template <typename Handler> void serialize(Handler & h, const int version)
+	{
+		h & effect;
+		h & sound;
+		h & stack;
+	}
+};
+
+class BattleChanges
+{
+public:
+	enum class EOperation : si8
+	{
+		ADD,
+		RESET_STATE,
+		UPDATE,
+		REMOVE
+	};
+
+	JsonNode data;
+	EOperation operation;
+
+	BattleChanges()
+		: operation(EOperation::RESET_STATE),
+		data()
+	{
+	}
+
+	BattleChanges(EOperation operation_)
+		: operation(operation_),
+		data()
+	{
+	}
+};
+
+class UnitChanges : public BattleChanges
+{
+public:
+	uint32_t id;
+	int64_t healthDelta;
+
+	UnitChanges()
+		: BattleChanges(EOperation::RESET_STATE),
+		id(0),
+		healthDelta(0)
+	{
+	}
+
+	UnitChanges(uint32_t id_, EOperation operation_)
+		: BattleChanges(operation_),
+		id(id_),
+		healthDelta(0)
+	{
+	}
+
+	template <typename Handler> void serialize(Handler & h, const int version)
+	{
+		h & id;
+		h & healthDelta;
+		h & data;
+		h & operation;
+	}
+};
+
+class ObstacleChanges : public BattleChanges
+{
+public:
+	uint32_t id;
+
+	ObstacleChanges()
+		: BattleChanges(EOperation::RESET_STATE),
+		id(0)
+	{
+	}
+
+	ObstacleChanges(uint32_t id_, EOperation operation_)
+		: BattleChanges(operation_),
+		id(id_)
+	{
+	}
+
+	template <typename Handler> void serialize(Handler & h, const int version)
+	{
+		h & id;
+		h & data;
+		h & operation;
 	}
 };

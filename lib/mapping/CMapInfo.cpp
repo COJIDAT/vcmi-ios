@@ -1,9 +1,17 @@
+/*
+ * CMapInfo.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CMapInfo.h"
 
+#include "../filesystem/ResourceID.h"
 #include "../StartInfo.h"
-#include "CMap.h"
-#include "CCampaignHandler.h"
 #include "../GameConstants.h"
 #include "CMapService.h"
 
@@ -37,11 +45,13 @@ CMapInfo::CMapInfo() : scenarioOpts(nullptr), playerAmnt(0), humanPlayers(0),
 
 #define STEAL(x) x = std::move(tmp.x)
 
-CMapInfo::CMapInfo(CMapInfo && tmp)
+CMapInfo::CMapInfo(CMapInfo && tmp):
+	scenarioOpts(nullptr), playerAmnt(0), humanPlayers(0),
+	actualHumanPlayers(0), isRandomMap(false)
 {
+	std::swap(scenarioOpts, tmp.scenarioOpts);
 	STEAL(mapHeader);
 	STEAL(campaignHeader);
-	STEAL(scenarioOpts);
 	STEAL(fileURI);
 	STEAL(date);
 	STEAL(playerAmnt);
@@ -50,11 +60,16 @@ CMapInfo::CMapInfo(CMapInfo && tmp)
 	STEAL(isRandomMap);
 }
 
+CMapInfo::~CMapInfo()
+{
+	vstd::clear_pointer(scenarioOpts);
+}
 
 void CMapInfo::mapInit(const std::string & fname)
 {
 	fileURI = fname;
-	mapHeader = CMapService::loadMapHeader(fname);
+	CMapService mapService;
+	mapHeader = mapService.loadMapHeader(ResourceID(fname, EResType::MAP));
 	countPlayers();
 }
 
@@ -77,3 +92,4 @@ CMapInfo & CMapInfo::operator=(CMapInfo &&tmp)
 	return *this;
 }
 
+#undef STEAL

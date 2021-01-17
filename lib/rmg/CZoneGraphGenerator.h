@@ -1,4 +1,3 @@
-
 /*
  * CZoneGraphGenerator.h, part of VCMI engine
  *
@@ -40,9 +39,9 @@ class CZoneGraphGenerator
 public:
 	CZoneGraphGenerator();
 
-	unique_ptr<CZoneGraph> generate(const CMapGenOptions & options, CRandomGenerator * gen);
+	std::unique_ptr<CZoneGraph> generate(const CMapGenOptions & options, CRandomGenerator * gen);
 
 private:
-	unique_ptr<CZoneGraph> graph;
+	std::unique_ptr<CZoneGraph> graph;
 	//CRandomGenerator * gen;
 };

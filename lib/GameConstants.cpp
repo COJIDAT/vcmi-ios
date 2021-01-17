@@ -12,82 +12,106 @@
 
 #include "StdInc.h"
 
+#ifndef VCMI_NO_EXTRA_VERSION
+#include "../Version.h"
+#endif
+
 #include "VCMI_Lib.h"
 #include "mapObjects/CObjectClassesHandler.h"
 #include "CArtHandler.h"
 #include "CCreatureHandler.h"
-#include "CSpellHandler.h"
+#include "spells/CSpellHandler.h"
+#include "CSkillHandler.h"
+#include "StringConstants.h"
+#include "CGeneralTextHandler.h"
+#include "CModHandler.h"
 
 const SlotID SlotID::COMMANDER_SLOT_PLACEHOLDER = SlotID(-2);
+const SlotID SlotID::SUMMONED_SLOT_PLACEHOLDER = SlotID(-3);
+const SlotID SlotID::WAR_MACHINES_SLOT = SlotID(-4);
+const SlotID SlotID::ARROW_TOWERS_SLOT = SlotID(-5);
+
+const PlayerColor PlayerColor::SPECTATOR = PlayerColor(252);
 const PlayerColor PlayerColor::CANNOT_DETERMINE = PlayerColor(253);
 const PlayerColor PlayerColor::UNFLAGGABLE = PlayerColor(254);
 const PlayerColor PlayerColor::NEUTRAL = PlayerColor(255);
 const PlayerColor PlayerColor::PLAYER_LIMIT = PlayerColor(PLAYER_LIMIT_I);
 const TeamID TeamID::NO_TEAM = TeamID(255);
 
-#define ID_LIKE_OPERATORS_INTERNAL(A, B, AN, BN)	\
-bool operator==(const A & a, const B & b)			\
-{													\
-	return AN == BN ;								\
-}													\
-bool operator!=(const A & a, const B & b)			\
-{													\
-	return AN != BN ;								\
-}													\
-bool operator<(const A & a, const B & b)			\
-{													\
-	return AN < BN ;								\
-}													\
-bool operator<=(const A & a, const B & b)			\
-{													\
-	return AN <= BN ;								\
-}													\
-bool operator>(const A & a, const B & b)			\
-{													\
-	return AN > BN ;								\
-}													\
-bool operator>=(const A & a, const B & b)			\
-{													\
-	return AN >= BN ;								\
+namespace GameConstants
+{
+#ifdef VCMI_NO_EXTRA_VERSION
+	const std::string VCMI_VERSION = std::string("VCMI 0.99");
+#else
+	const std::string VCMI_VERSION = std::string("VCMI 0.99 Dev");
+#endif
 }
 
-#define ID_LIKE_OPERATORS(CLASS_NAME, ENUM_NAME)	\
-	ID_LIKE_OPERATORS_INTERNAL(CLASS_NAME, CLASS_NAME, a.num, b.num)	\
-	ID_LIKE_OPERATORS_INTERNAL(CLASS_NAME, ENUM_NAME, a.num, b)	\
-	ID_LIKE_OPERATORS_INTERNAL(ENUM_NAME, CLASS_NAME, a, b.num)
-
-
-ID_LIKE_OPERATORS(SecondarySkill, SecondarySkill::ESecondarySkill)
-
-ID_LIKE_OPERATORS(Obj, Obj::EObj)
-
-ID_LIKE_OPERATORS(ETerrainType, ETerrainType::EETerrainType)
-
-ID_LIKE_OPERATORS(ArtifactID, ArtifactID::EArtifactID)
-
-ID_LIKE_OPERATORS(ArtifactPosition, ArtifactPosition::EArtifactPosition)
-
-ID_LIKE_OPERATORS(CreatureID, CreatureID::ECreatureID)
-
-ID_LIKE_OPERATORS(SpellID, SpellID::ESpellID)
-
-ID_LIKE_OPERATORS(BuildingID, BuildingID::EBuildingID)
-
-ID_LIKE_OPERATORS(BFieldType, BFieldType::EBFieldType)
-
-CArtifact * ArtifactID::toArtifact() const
+const CArtifact * ArtifactID::toArtifact() const
 {
-	return VLC->arth->artifacts[*this];
+	return VLC->arth->artifacts.at(*this);
 }
 
-CCreature * CreatureID::toCreature() const
+si32 ArtifactID::decode(const std::string & identifier)
 {
-	return VLC->creh->creatures[*this];
+	auto rawId = VLC->modh->identifiers.getIdentifier("core", "artifact", identifier);
+	if(rawId)
+		return rawId.get();
+	else
+		return -1;
 }
 
-CSpell * SpellID::toSpell() const
+std::string ArtifactID::encode(const si32 index)
 {
+	return VLC->arth->artifacts.at(index)->identifier;
+}
+
+const CCreature * CreatureID::toCreature() const
+{
+	return VLC->creh->creatures.at(*this);
+}
+
+si32 CreatureID::decode(const std::string & identifier)
+{
+	auto rawId = VLC->modh->identifiers.getIdentifier("core", "creature", identifier);
+	if(rawId)
+		return rawId.get();
+	else
+		return -1;
+}
+
+std::string CreatureID::encode(const si32 index)
+{
+	return VLC->creh->creatures.at(index)->identifier;
+}
+
+const CSpell * SpellID::toSpell() const
+{
+	if(num < 0 || num >= VLC->spellh->objects.size())
+	{
+		logGlobal->error("Unable to get spell of invalid ID %d", int(num));
+		return nullptr;
+	}
 	return VLC->spellh->objects[*this];
+}
+
+si32 SpellID::decode(const std::string & identifier)
+{
+	auto rawId = VLC->modh->identifiers.getIdentifier("core", "spell", identifier);
+	if(rawId)
+		return rawId.get();
+	else
+		return -1;
+}
+
+std::string SpellID::encode(const si32 index)
+{
+	return VLC->spellh->objects.at(index)->identifier;
+}
+
+const CSkill * SecondarySkill::toSkill() const
+{
+	return VLC->skillh->objects.at(*this);
 }
 
 //template std::ostream & operator << <ArtifactInstanceID>(std::ostream & os, BaseForID<ArtifactInstanceID> id);
@@ -98,29 +122,112 @@ bool PlayerColor::isValidPlayer() const
 	return num < PLAYER_LIMIT_I;
 }
 
-std::ostream & operator<<(std::ostream & os, const Battle::ActionType actionType)
+bool PlayerColor::isSpectator() const
 {
-	static const std::map<Battle::ActionType, std::string> actionTypeToString =
+	return num == 252;
+}
+
+std::string PlayerColor::getStr(bool L10n) const
+{
+	std::string ret = "unnamed";
+	if(isValidPlayer())
 	{
-		{Battle::END_TACTIC_PHASE, "End tactic phase"},
-		{Battle::INVALID, "Invalid"},
-		{Battle::NO_ACTION, "No action"},
-		{Battle::HERO_SPELL, "Hero spell"},
-		{Battle::WALK, "Walk"},
-		{Battle::DEFEND, "Defend"},
-		{Battle::RETREAT, "Retreat"},
-		{Battle::SURRENDER, "Surrender"},
-		{Battle::WALK_AND_ATTACK, "Walk and attack"},
-		{Battle::SHOOT, "Shoot"},
-		{Battle::WAIT, "Wait"},
-		{Battle::CATAPULT, "Catapult"},
-		{Battle::MONSTER_SPELL, "Monster spell"},
-		{Battle::BAD_MORALE, "Bad morale"},
-		{Battle::STACK_HEAL, "Stack heal"},
-		{Battle::DAEMON_SUMMONING, "Daemon summoning"}
+		if(L10n)
+			ret = VLC->generaltexth->colors[num];
+		else
+			ret = GameConstants::PLAYER_COLOR_NAMES[num];
+	}
+	else if(L10n)
+	{
+		ret = VLC->generaltexth->allTexts[508];
+		ret[0] = std::tolower(ret[0]);
+	}
+
+	return ret;
+}
+
+std::string PlayerColor::getStrCap(bool L10n) const
+{
+	std::string ret = getStr(L10n);
+	ret[0] = std::toupper(ret[0]);
+	return ret;
+}
+
+std::ostream & operator<<(std::ostream & os, const EActionType actionType)
+{
+	static const std::map<EActionType, std::string> actionTypeToString =
+	{
+		{EActionType::END_TACTIC_PHASE, "End tactic phase"},
+		{EActionType::INVALID, "Invalid"},
+		{EActionType::NO_ACTION, "No action"},
+		{EActionType::HERO_SPELL, "Hero spell"},
+		{EActionType::WALK, "Walk"},
+		{EActionType::DEFEND, "Defend"},
+		{EActionType::RETREAT, "Retreat"},
+		{EActionType::SURRENDER, "Surrender"},
+		{EActionType::WALK_AND_ATTACK, "Walk and attack"},
+		{EActionType::SHOOT, "Shoot"},
+		{EActionType::WAIT, "Wait"},
+		{EActionType::CATAPULT, "Catapult"},
+		{EActionType::MONSTER_SPELL, "Monster spell"},
+		{EActionType::BAD_MORALE, "Bad morale"},
+		{EActionType::STACK_HEAL, "Stack heal"},
+		{EActionType::DAEMON_SUMMONING, "Daemon summoning"}
 	};
 
 	auto it = actionTypeToString.find(actionType);
 	if (it == actionTypeToString.end()) return os << "<Unknown type>";
+	else return os << it->second;
+}
+
+std::ostream & operator<<(std::ostream & os, const ETerrainType terrainType)
+{
+	static const std::map<ETerrainType::EETerrainType, std::string> terrainTypeToString =
+	{
+	#define DEFINE_ELEMENT(element) {ETerrainType::element, #element}
+		DEFINE_ELEMENT(WRONG),
+		DEFINE_ELEMENT(BORDER),
+		DEFINE_ELEMENT(DIRT),
+		DEFINE_ELEMENT(SAND),
+		DEFINE_ELEMENT(GRASS),
+		DEFINE_ELEMENT(SNOW),
+		DEFINE_ELEMENT(SWAMP),
+		DEFINE_ELEMENT(ROUGH),
+		DEFINE_ELEMENT(SUBTERRANEAN),
+		DEFINE_ELEMENT(LAVA),
+		DEFINE_ELEMENT(WATER),
+		DEFINE_ELEMENT(ROCK)
+	#undef DEFINE_ELEMENT
+	};
+
+	auto it = terrainTypeToString.find(terrainType.num);
+	if (it == terrainTypeToString.end()) return os << "<Unknown type>";
+	else return os << it->second;
+}
+
+std::string ETerrainType::toString() const
+{
+	std::stringstream ss;
+	ss << *this;
+	return ss.str();
+}
+
+std::ostream & operator<<(std::ostream & os, const EPathfindingLayer pathfindingLayer)
+{
+	static const std::map<EPathfindingLayer::EEPathfindingLayer, std::string> pathfinderLayerToString
+	{
+	#define DEFINE_ELEMENT(element) {EPathfindingLayer::element, #element}
+		DEFINE_ELEMENT(WRONG),
+		DEFINE_ELEMENT(AUTO),
+		DEFINE_ELEMENT(LAND),
+		DEFINE_ELEMENT(SAIL),
+		DEFINE_ELEMENT(WATER),
+		DEFINE_ELEMENT(AIR),
+		DEFINE_ELEMENT(NUM_LAYERS)
+	#undef DEFINE_ELEMENT
+	};
+
+	auto it = pathfinderLayerToString.find(pathfindingLayer.num);
+	if (it == pathfinderLayerToString.end()) return os << "<Unknown type>";
 	else return os << it->second;
 }

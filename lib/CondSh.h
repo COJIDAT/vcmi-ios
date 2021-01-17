@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * CondSh.h, part of VCMI engine
  *
@@ -9,6 +7,7 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 /// Used for multithreading, wraps boost functions
 template <typename T> struct CondSh
@@ -17,15 +16,14 @@ template <typename T> struct CondSh
 	boost::condition_variable cond;
 	boost::mutex mx;
 
-	CondSh() {}
 	CondSh(T t) : data(t) {}
 
 	// set data
 	void set(T t)
 	{
-		boost::unique_lock<boost::mutex> lock(mx); 
+		boost::unique_lock<boost::mutex> lock(mx);
 		data = t;
-	} 
+	}
 
 	// set data and notify
 	void setn(T t)
@@ -37,7 +35,7 @@ template <typename T> struct CondSh
 	// get stored value
 	T get()
 	{
-		boost::unique_lock<boost::mutex> lock(mx); 
+		boost::unique_lock<boost::mutex> lock(mx);
 		return data;
 	}
 

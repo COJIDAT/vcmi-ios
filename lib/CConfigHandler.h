@@ -1,9 +1,5 @@
-#pragma once
-
-#include "../lib/JsonNode.h"
-
 /*
- * CConfighandler.h, part of VCMI engine
+ * CConfigHandler.h, part of VCMI engine
  *
  * Authors: listed in file AUTHORS in main folder
  *
@@ -11,6 +7,10 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "../lib/JsonNode.h"
+
 class Settings;
 class SettingsListener;
 
@@ -133,8 +133,11 @@ namespace config
 		int advmapX, advmapY, advmapW, advmapH;
 		bool smoothMove;
 		bool puzzleSepia;
+		bool screenFading;
+		bool objectFading;
 		//general properties
 		std::string mainGraphic;
+		std::string worldViewGraphic;
 		//buttons
 		ButtonInfo kingOverview, underground, questlog,	sleepWake, moveHero, spellbook,	advOptions,
 			sysOptions,	nextHero, endTurn;
@@ -166,8 +169,8 @@ namespace config
 		typedef std::map<std::pair<int,int>, GUIOptions > GuiOptionsMap;
 		GuiOptionsMap guiOptions;
 		void init();
-		CConfigHandler(void); //c-tor
-		~CConfigHandler(void); //d-tor
+		CConfigHandler();
+		~CConfigHandler();
 
 		GUIOptions *go() { return current; };
 		void SetResolution(int x, int y)

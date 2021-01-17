@@ -1,3 +1,12 @@
+/*
+ * CCastleInterface.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CCastleInterface.h"
 
@@ -5,15 +14,14 @@
 #include "CHeroWindow.h"
 #include "CTradeWindow.h"
 #include "GUIClasses.h"
+#include "QuickRecruitmentWindow.h"
 
 #include "../CBitmapHandler.h"
-#include "../CDefHandler.h"
 #include "../CGameInfo.h"
 #include "../CMessage.h"
 #include "../CMusicHandler.h"
 #include "../CPlayerInterface.h"
 #include "../Graphics.h"
-
 #include "../gui/CGuiHandler.h"
 #include "../gui/SDL_Extensions.h"
 #include "../windows/InfoWindows.h"
@@ -26,21 +34,11 @@
 #include "../../lib/CCreatureHandler.h"
 #include "../../lib/CGeneralTextHandler.h"
 #include "../../lib/CModHandler.h"
-#include "../../lib/CSpellHandler.h"
+#include "../../lib/spells/CSpellHandler.h"
 #include "../../lib/CTownHandler.h"
 #include "../../lib/GameConstants.h"
 #include "../../lib/mapObjects/CGHeroInstance.h"
 #include "../../lib/mapObjects/CGTownInstance.h"
-
-/*
- * CCastleInterface.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
 
 const CBuilding * CBuildingRect::getBuilding()
 {
@@ -110,7 +108,7 @@ void CBuildingRect::hover(bool on)
 
 void CBuildingRect::clickLeft(tribool down, bool previousState)
 {
-	if( previousState && !down && area && (parent->selectedBuilding==this) && getBuilding() )
+	if( previousState && getBuilding() && area && !down && (parent->selectedBuilding==this))
 		if (!CSDL_Ext::isTransparent(area, GH.current->motion.x-pos.x, GH.current->motion.y-pos.y) ) //inside building image
 			parent->buildingClicked(getBuilding()->bid);
 }
@@ -142,6 +140,7 @@ SDL_Color multiplyColors (const SDL_Color &b, const SDL_Color &a, double f)
 	ret.r = a.r*f + b.r*(1-f);
 	ret.g = a.g*f + b.g*(1-f);
 	ret.b = a.b*f + b.b*(1-f);
+	ret.a = a.a*f + b.b*(1-f);
 	return ret;
 }
 
@@ -230,7 +229,7 @@ std::string CBuildingRect::getSubtitle()//hover text for building
 		}
 		else
 		{
-            logGlobal->warnStream() << "Problem: dwelling with id " << bid << " offers no creatures!";
+			logGlobal->warn("Dwelling with id %d offers no creatures!", bid);
 			return "#ERROR#";
 		}
 	}
@@ -261,7 +260,7 @@ void CBuildingRect::mouseMoved (const SDL_MouseMotionEvent & sEvent)
 }
 
 CDwellingInfoBox::CDwellingInfoBox(int centerX, int centerY, const CGTownInstance *Town, int level):
-    CWindowObject(RCLICK_POPUP | PLAYER_COLORED, "CRTOINFO", Point(centerX, centerY))
+CWindowObject(RCLICK_POPUP | PLAYER_COLORED, "CRTOINFO", Point(centerX, centerY))
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 
@@ -381,7 +380,10 @@ void CHeroGSlot::clickLeft(tribool down, bool previousState)
 			other->setHighlight(false);
 
 			if(allow)
+			{
 				owner->swapArmies();
+				hero = other->hero;
+			}
 		}
 		else if(hero)
 		{
@@ -390,6 +392,14 @@ void CHeroGSlot::clickLeft(tribool down, bool previousState)
 			showAll(screen2);
 		}
 		hover(false);hover(true); //refresh statusbar
+	}
+}
+
+void CHeroGSlot::clickRight(tribool down, bool previousState)
+{
+	if(hero && down)
+	{
+		GH.pushInt(new CInfoBoxPopup(Point(pos.x + 175, pos.y + 100), hero));
 	}
 }
 
@@ -411,7 +421,7 @@ CHeroGSlot::CHeroGSlot(int x, int y, int updown, const CGHeroInstance *h, HeroSl
 	image = nullptr;
 	set(h);
 
-	addUsedEvents(LCLICK | HOVER);
+	addUsedEvents(LCLICK | RCLICK | HOVER);
 }
 
 CHeroGSlot::~CHeroGSlot()
@@ -490,7 +500,10 @@ void CCastleBuildings::recreate()
 
 	if(vstd::contains(town->builtBuildings, BuildingID::SHIPYARD))
 	{
-		std::vector <const CGObjectInstance *> vobjs = LOCPLINT->cb->getVisitableObjs(town->bestLocation());
+		auto bayPos = town->bestLocation();
+		if(!bayPos.valid())
+			logGlobal->warn("Shipyard in non-coastal town!");
+		std::vector <const CGObjectInstance *> vobjs = LOCPLINT->cb->getVisitableObjs(bayPos, false);
 		//there is visitable obj at shipyard output tile and it's a boat or hero (on boat)
 		if(!vobjs.empty() && (vobjs.front()->ID == Obj::BOAT || vobjs.front()->ID == Obj::HERO))
 		{
@@ -587,7 +600,7 @@ const CGHeroInstance* CCastleBuildings::getHero()
 
 void CCastleBuildings::buildingClicked(BuildingID building)
 {
-    logGlobal->traceStream()<<"You've clicked on "<<building;
+	logGlobal->trace("You've clicked on %d", (int)building.toEnum());
 	const CBuilding *b = town->town->buildings.find(building)->second;
 
 	if(building >= BuildingID::DWELL_FIRST)
@@ -613,6 +626,8 @@ void CCastleBuildings::buildingClicked(BuildingID building)
 		case BuildingID::SHIPYARD:
 				if(town->shipyardStatus() == IBoatGenerator::GOOD)
 					LOCPLINT->showShipyardDialog(town);
+				else if(town->shipyardStatus() == IBoatGenerator::BOAT_ALREADY_BUILT)
+					LOCPLINT->showInfoDialog(CGI->generaltexth->allTexts[51]);
 				break;
 
 		case BuildingID::FORT:
@@ -738,7 +753,8 @@ void CCastleBuildings::enterBlacksmith(ArtifactID artifactID)
 	}
 	int price = CGI->arth->artifacts[artifactID]->price;
 	bool possible = LOCPLINT->cb->getResourceAmount(Res::GOLD) >= price && !hero->hasArt(artifactID);
-	GH.pushInt(new CBlacksmithDialog(possible, CArtHandler::machineIDToCreature(artifactID), artifactID, hero->id));
+	CreatureID cre = artifactID.toArtifact()->warMachine;
+	GH.pushInt(new CBlacksmithDialog(possible, cre, artifactID, hero->id));
 }
 
 void CCastleBuildings::enterBuilding(BuildingID building)
@@ -757,7 +773,7 @@ void CCastleBuildings::enterCastleGate()
 		return;//only visiting hero can use castle gates
 	}
 	std::vector <int> availableTowns;
-	std::vector <const CGTownInstance*> Towns = LOCPLINT->cb->getTownsInfo(false);
+	std::vector <const CGTownInstance*> Towns = LOCPLINT->cb->getTownsInfo(true);
 	for(auto & Town : Towns)
 	{
 		const CGTownInstance *t = Town;
@@ -767,8 +783,8 @@ void CCastleBuildings::enterCastleGate()
 			availableTowns.push_back(t->id.getNum());//add to the list
 		}
 	}
-	auto  titlePic = new CPicture (LOCPLINT->castleInt->bicons->ourImages[BuildingID::CASTLE_GATE].bitmap, 0,0, false);//will be deleted by selection window
-	GH.pushInt (new CObjectListWindow(availableTowns, titlePic, CGI->generaltexth->jktexts[40],
+	auto gateIcon = new CAnimImage(town->town->clientInfo.buildingsIcons, BuildingID::CASTLE_GATE);//will be deleted by selection window
+	GH.pushInt (new CObjectListWindow(availableTowns, gateIcon, CGI->generaltexth->jktexts[40],
 	    CGI->generaltexth->jktexts[41], std::bind (&CCastleInterface::castleTeleport, LOCPLINT->castleInt, _1)));
 }
 
@@ -777,6 +793,11 @@ void CCastleBuildings::enterDwelling(int level)
 	assert(level >= 0 && level < town->creatures.size());
 	auto recruitCb = [=](CreatureID id, int count){ LOCPLINT->cb->recruitCreatures(town, town->getUpperArmy(), id, count, level); };
 	GH.pushInt(new CRecruitmentWindow(town, level, town, recruitCb, -87));
+}
+
+void CCastleBuildings::enterToTheQuickRecruitmentWindow()
+{
+	GH.pushInt(new QuickRecruitmentWindow(town, pos));
 }
 
 void CCastleBuildings::enterFountain(BuildingID building)
@@ -812,10 +833,10 @@ void CCastleBuildings::enterMagesGuild()
 		}
 		else
 		{
-			CFunctionList<void()> onYes = [this]{ openMagesGuild(); };
+			CFunctionList<void()> onYes = [this](){ openMagesGuild(); };
 			CFunctionList<void()> onNo = onYes;
-			onYes += [hero]{ LOCPLINT->cb->buyArtifact(hero, ArtifactID::SPELLBOOK); };
-			std::vector<CComponent*> components(1, new CComponent(CComponent::artifact,0,0));
+			onYes += [hero](){ LOCPLINT->cb->buyArtifact(hero, ArtifactID::SPELLBOOK); };
+			std::vector<CComponent*> components(1, new CComponent(CComponent::artifact,ArtifactID::SPELLBOOK,0));
 
 			LOCPLINT->showYesNoDialog(CGI->generaltexth->allTexts[214], onYes, onNo, true, components);
 		}
@@ -834,8 +855,8 @@ void CCastleBuildings::enterTownHall()
 		if(!vstd::contains(town->forbiddenBuildings, BuildingID::GRAIL))
 		{
 			LOCPLINT->showYesNoDialog(CGI->generaltexth->allTexts[597], //Do you wish this to be the permanent home of the Grail?
-										[&]{ LOCPLINT->cb->buildBuilding(town, BuildingID::GRAIL); },
-										[&]{ openTownHall(); },
+										[&](){ LOCPLINT->cb->buildBuilding(town, BuildingID::GRAIL); },
+										[&](){ openTownHall(); },
 										true);
 		}
 		else
@@ -863,12 +884,14 @@ void CCastleBuildings::openTownHall()
 }
 
 CCastleInterface::CCastleInterface(const CGTownInstance * Town, const CGTownInstance * from):
-    CWindowObject(PLAYER_COLORED | BORDERED),
+	CWindowObject(PLAYER_COLORED | BORDERED),
 	hall(nullptr),
 	fort(nullptr),
+	fastArmyPurhase(nullptr),
 	town(Town)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
+
 	LOCPLINT->castleInt = this;
 	addUsedEvents(KEYBOARD);
 
@@ -881,16 +904,18 @@ CCastleInterface::CCastleInterface(const CGTownInstance * Town, const CGTownInst
 	updateShadow();
 
 	garr = new CGarrisonInt(305, 387, 4, Point(0,96), panel->bg, Point(62,374), town->getUpperArmy(), town->visitingHero);
+	garr->type |= REDRAW_PARENT;
+
 	heroes = new HeroSlots(town, Point(241, 387), Point(241, 483), garr, true);
 	title = new CLabel(85, 387, FONT_MEDIUM, TOPLEFT, Colors::WHITE, town->name);
 	income = new CLabel(195, 443, FONT_SMALL, CENTER);
 	icon = new CAnimImage("ITPT", 0, 0, 15, 387);
 
-	exit = new CButton(Point(744, 544), "TSBTNS", CButton::tooltip(CGI->generaltexth->tcommands[8]), [&]{close();}, SDLK_RETURN);
+	exit = new CButton(Point(744, 544), "TSBTNS", CButton::tooltip(CGI->generaltexth->tcommands[8]), [&](){close();}, SDLK_RETURN);
 	exit->assignedKeys.insert(SDLK_ESCAPE);
 	exit->setImageOrder(4, 5, 6, 7);
 
-	split = new CButton(Point(744, 382), "TSBTNS.DEF", CButton::tooltip(CGI->generaltexth->tcommands[3]), [&]{garr->splitClick();});
+	split = new CButton(Point(744, 382), "TSBTNS.DEF", CButton::tooltip(CGI->generaltexth->tcommands[3]), [&](){garr->splitClick();});
 	split->addCallback(std::bind(&HeroSlots::splitClicked, heroes));
 	garr->addSplitBtn(split);
 
@@ -907,14 +932,11 @@ CCastleInterface::CCastleInterface(const CGTownInstance * Town, const CGTownInst
 
 	recreateIcons();
 	CCS->musich->playMusic(town->town->clientInfo.musicTheme, true);
-
-	bicons = CDefHandler::giveDefEss(town->town->clientInfo.buildingsIcons);
 }
 
 CCastleInterface::~CCastleInterface()
 {
 	LOCPLINT->castleInt = nullptr;
-	delete bicons;
 }
 
 void CCastleInterface::close()
@@ -967,7 +989,7 @@ void CCastleInterface::recreateIcons()
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 	delete fort;
 	delete hall;
-
+	delete fastArmyPurhase;
 	size_t iconIndex = town->town->clientInfo.icons[town->hasFort()][town->builded >= CGI->modh->settings.MAX_BUILDING_PER_TURN];
 
 	icon->setFrame(iconIndex);
@@ -977,6 +999,9 @@ void CCastleInterface::recreateIcons()
 	hall = new CTownInfo( 80, 413, town, true);
 	fort = new CTownInfo(122, 413, town, false);
 
+	fastArmyPurhase = new CButton(Point(122, 413), "itmcl.def", CButton::tooltip(), [&](){builds->enterToTheQuickRecruitmentWindow();});
+	fastArmyPurhase->setImageOrder(town->fortLevel()-1,town->fortLevel()-1,town->fortLevel()-1,town->fortLevel()-1);
+	fastArmyPurhase->setAnimateLonelyFrame(true);
 	for (auto & elem : creainfo)
 		delete elem;
 	creainfo.clear();
@@ -1001,6 +1026,7 @@ CCreaInfo::CCreaInfo(Point position, const CGTownInstance *Town, int Level, bool
 		level = -1;
 		label = nullptr;
 		picture = nullptr;
+		creature = nullptr;
 		return;//No creature
 	}
 	addUsedEvents(LCLICK | RCLICK | HOVER);
@@ -1112,6 +1138,8 @@ CTownInfo::CTownInfo(int posX, int posY, const CGTownInstance* Town, bool townHa
 	pos.y += posY;
 	int buildID;
 
+	picture = nullptr;
+
 	if (townHall)
 	{
 		buildID = 10 + town->hallLevel();
@@ -1121,7 +1149,7 @@ CTownInfo::CTownInfo(int posX, int posY, const CGTownInstance* Town, bool townHa
 	{
 		buildID = 6 + town->fortLevel();
 		if (buildID == 6)
-			return;
+			return;//FIXME: suspicious statement, fix or comment
 		picture = new CAnimImage("ITMCL.DEF", town->fortLevel()-1);
 	}
 	building = town->town->buildings.at(BuildingID(buildID));
@@ -1141,7 +1169,7 @@ void CTownInfo::hover(bool on)
 
 void CTownInfo::clickRight(tribool down, bool previousState)
 {
-	if(down && building)
+	if(building && down)
 		CRClickPopup::createAndPush(CInfoWindow::genText(building->Name(), building->Description()),
 		                            new CComponent(CComponent::building, building->town->faction->index, building->bid));
 
@@ -1166,7 +1194,7 @@ void CCastleInterface::keyPressed( const SDL_KeyboardEvent & key )
 			for(const CStructure * str : town->town->clientInfo.structures)
 			{
 				if (str->building)
-                    logGlobal->errorStream() << int(str->building->bid) << " -> " << int(str->pos.z);
+					logGlobal->error("%d -> %d", int(str->building->bid), int(str->pos.z));
 			}
 		}
 		break;
@@ -1182,7 +1210,7 @@ void CCastleInterface::keyPressed( const SDL_KeyboardEvent & key )
 			for(const CStructure * str : town->town->clientInfo.structures)
 			{
 				if (str->building)
-                    logGlobal->errorStream() << int(str->building->bid) << " -> " << int(str->pos.z);
+					logGlobal->error("%d -> %d", int(str->building->bid), int(str->pos.z));
 			}
 
 		}
@@ -1285,31 +1313,35 @@ CHallInterface::CBuildingBox::CBuildingBox(int x, int y, const CGTownInstance * 
 	pos.h = 92;
 
 	state = LOCPLINT->cb->canBuildStructure(town,building->bid);
-	assert(state < EBuildingState::BUILDING_ERROR);
-	static int panelIndex[10] = { 3,  3,  3, 0, 0, 2, 2,  1, 2, 2};
-	static int  iconIndex[10] = {-1, -1, -1, 0, 0, 1, 2, -1, 1, 1};
 
-	picture = new CAnimImage(town->town->clientInfo.buildingsIcons, building->bid, 0, 2, 2);
-	panel = new CAnimImage("TPTHBAR", panelIndex[state], 0,   1, 73);
-	if ( iconIndex[state] >=0 )
-		icon  = new CAnimImage("TPTHCHK",  iconIndex[state], 0, 136, 56);
-	label = new CLabel(75, 81, FONT_SMALL, CENTER, Colors::WHITE, building->Name());
+	static int panelIndex[12] = { 3,  3,  3, 0, 0, 2, 2,  1, 2, 2,  3,  3};
+	static int  iconIndex[12] = {-1, -1, -1, 0, 0, 1, 2, -1, 1, 1, -1, -1};
+
+	new CAnimImage(town->town->clientInfo.buildingsIcons, building->bid, 0, 2, 2);
+	new CAnimImage("TPTHBAR", panelIndex[state], 0,   1, 73);
+	if (iconIndex[state] >=0)
+		new CAnimImage("TPTHCHK",  iconIndex[state], 0, 136, 56);
+	new CLabel(75, 81, FONT_SMALL, CENTER, Colors::WHITE, building->Name());
+
+	//todo: add support for all possible states
+	if(state >= EBuildingState::BUILDING_ERROR)
+		state = EBuildingState::FORBIDDEN;
 }
 
 CHallInterface::CHallInterface(const CGTownInstance *Town):
-    CWindowObject(PLAYER_COLORED | BORDERED, Town->town->clientInfo.hallBackground),
+	CWindowObject(PLAYER_COLORED | BORDERED, Town->town->clientInfo.hallBackground),
 	town(Town)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 
-	resdatabar = new CMinorResDataBar;
+	resdatabar = new CMinorResDataBar();
 	resdatabar->pos.x += pos.x;
 	resdatabar->pos.y += pos.y;
 	Rect barRect(5, 556, 740, 18);
 	statusBar = new CGStatusBar(new CPicture(*background, barRect, 5, 556, false));
 
 	title = new CLabel(399, 12, FONT_MEDIUM, CENTER, Colors::WHITE, town->town->buildings.at(BuildingID(town->hallLevel()+BuildingID::VILLAGE_HALL))->Name());
-	exit = new CButton(Point(748, 556), "TPMAGE1.DEF", CButton::tooltip(CGI->generaltexth->hcommands[8]), [&]{close();}, SDLK_RETURN);
+	exit = new CButton(Point(748, 556), "TPMAGE1.DEF", CButton::tooltip(CGI->generaltexth->hcommands[8]), [&](){close();}, SDLK_RETURN);
 	exit->assignedKeys.insert(SDLK_ESCAPE);
 
 	auto & boxList = town->town->clientInfo.hallSlots;
@@ -1318,14 +1350,22 @@ CHallInterface::CHallInterface(const CGTownInstance *Town):
 	{
 		for(size_t col=0; col<boxList[row].size(); col++) //for each box
 		{
-			const CBuilding *building = nullptr;
-			for(auto & elem : boxList[row][col])//we are looking for the first not build structure
+			const CBuilding * building = nullptr;
+			for(auto & buildingID : boxList[row][col])//we are looking for the first not built structure
 			{
-				auto buildingID = elem;
-				building = town->town->buildings.at(buildingID);
-
-				if(!vstd::contains(town->builtBuildings,buildingID))
-					break;
+				const CBuilding * current = town->town->buildings.at(buildingID);
+				if(vstd::contains(town->builtBuildings, buildingID))
+				{
+					building = current;
+				}
+				else
+				{
+					if(current->mode == CBuilding::BUILD_NORMAL)
+					{
+						building = current;
+						break;
+					}
+				}
 			}
 			int posX = pos.w/2 - boxList[row].size()*154/2 - (boxList[row].size()-1)*20 + 194*col,
 			    posY = 35 + 104*row;
@@ -1378,9 +1418,9 @@ std::string CBuildWindow::getTextForState(int state)
 }
 
 CBuildWindow::CBuildWindow(const CGTownInstance *Town, const CBuilding * Building, int state, bool rightClick):
-    CWindowObject(PLAYER_COLORED | (rightClick ? RCLICK_POPUP : 0), "TPUBUILD"),
+	CWindowObject(PLAYER_COLORED | (rightClick ? RCLICK_POPUP : 0), "TPUBUILD"),
 	town(Town),
-    building(Building)
+	building(Building)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 
@@ -1410,12 +1450,12 @@ CBuildWindow::CBuildWindow(const CGTownInstance *Town, const CBuilding * Buildin
 		std::string tooltipYes = boost::str(boost::format(CGI->generaltexth->allTexts[595]) % building->Name());
 		std::string tooltipNo  = boost::str(boost::format(CGI->generaltexth->allTexts[596]) % building->Name());
 
-		buy = new CButton(Point(45, 446), "IBUY30", CButton::tooltip(tooltipYes), [&]{ buyFunc(); }, SDLK_RETURN);
-		buy->borderColor = Colors::METALLIC_GOLD;
-
-		cancel = new CButton(Point(290, 445), "ICANCEL", CButton::tooltip(tooltipNo), [&] { close();}, SDLK_ESCAPE);
-		cancel->borderColor = Colors::METALLIC_GOLD;
+		CButton * buy = new CButton(Point(45, 446), "IBUY30", CButton::tooltip(tooltipYes), [&](){ buyFunc(); }, SDLK_RETURN);
+		buy->borderColor = boost::make_optional(Colors::METALLIC_GOLD);
 		buy->block(state!=7 || LOCPLINT->playerID != town->tempOwner);
+
+		CButton * cancel = new CButton(Point(290, 445), "ICANCEL", CButton::tooltip(tooltipNo), [&](){ close();}, SDLK_ESCAPE);
+		cancel->borderColor = boost::make_optional(Colors::METALLIC_GOLD);
 	}
 }
 
@@ -1433,7 +1473,7 @@ std::string CFortScreen::getBgName(const CGTownInstance *town)
 }
 
 CFortScreen::CFortScreen(const CGTownInstance * town):
-    CWindowObject(PLAYER_COLORED | BORDERED, getBgName(town))
+	CWindowObject(PLAYER_COLORED | BORDERED, getBgName(town))
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 	ui32 fortSize = town->creatures.size();
@@ -1444,7 +1484,7 @@ CFortScreen::CFortScreen(const CGTownInstance * town):
 	title = new CLabel(400, 12, FONT_BIG, CENTER, Colors::WHITE, fortBuilding->Name());
 
 	std::string text = boost::str(boost::format(CGI->generaltexth->fcommands[6]) % fortBuilding->Name());
-	exit = new CButton(Point(748, 556), "TPMAGE1", CButton::tooltip(text), [&]{ close(); }, SDLK_RETURN);
+	exit = new CButton(Point(748, 556), "TPMAGE1", CButton::tooltip(text), [&](){ close(); }, SDLK_RETURN);
 	exit->assignedKeys.insert(SDLK_ESCAPE);
 
 	std::vector<Point> positions =
@@ -1460,7 +1500,7 @@ CFortScreen::CFortScreen(const CGTownInstance * town):
 	{
 		positions.push_back(Point(10, 421));
 		positions.push_back(Point(404,421));
-	}		
+	}
 
 	for (ui32 i=0; i<fortSize; i++)
 	{
@@ -1477,7 +1517,7 @@ CFortScreen::CFortScreen(const CGTownInstance * town):
 		recAreas.push_back(new RecruitArea(positions[i].x, positions[i].y, town, i));
 	}
 
-	resdatabar = new CMinorResDataBar;
+	resdatabar = new CMinorResDataBar();
 	resdatabar->pos.x += pos.x;
 	resdatabar->pos.y += pos.y;
 
@@ -1580,10 +1620,11 @@ CFortScreen::RecruitArea::RecruitArea(int posX, int posY, const CGTownInstance *
 		addUsedEvents(LCLICK | RCLICK | HOVER);//Activate only if dwelling is present
 
 	icons = new CPicture("TPCAINFO", 261, 3);
+
 	if (getMyBuilding() != nullptr)
 	{
-		buildingPic = new CAnimImage(town->town->clientInfo.buildingsIcons, getMyBuilding()->bid, 0, 4, 21);
-		dwellingName = new CLabel(78, 101, FONT_SMALL, CENTER, Colors::WHITE, getMyBuilding()->Name());
+		new CAnimImage(town->town->clientInfo.buildingsIcons, getMyBuilding()->bid, 0, 4, 21);
+		new CLabel(78, 101, FONT_SMALL, CENTER, Colors::WHITE, getMyBuilding()->Name());
 
 		if (vstd::contains(town->builtBuildings, getMyBuilding()->bid))
 		{
@@ -1596,15 +1637,15 @@ CFortScreen::RecruitArea::RecruitArea(int posX, int posY, const CGTownInstance *
 	if (getMyCreature() != nullptr)
 	{
 		hoverText = boost::str(boost::format(CGI->generaltexth->tcommands[21]) % getMyCreature()->namePl);
-		creatureAnim = new CCreaturePic(159, 4, getMyCreature(), false);
-		creatureName = new CLabel(78,  11, FONT_SMALL, CENTER, Colors::WHITE, getMyCreature()->namePl);
+		new CCreaturePic(159, 4, getMyCreature(), false);
+		new CLabel(78,  11, FONT_SMALL, CENTER, Colors::WHITE, getMyCreature()->namePl);
 
 		Rect sizes(287, 4, 96, 18);
-		values.push_back(new LabeledValue(sizes, CGI->generaltexth->allTexts[190], CGI->generaltexth->fcommands[0], getMyCreature()->Attack()));
+		values.push_back(new LabeledValue(sizes, CGI->generaltexth->allTexts[190], CGI->generaltexth->fcommands[0], getMyCreature()->getAttack(false)));
 		sizes.y+=20;
-		values.push_back(new LabeledValue(sizes, CGI->generaltexth->allTexts[191], CGI->generaltexth->fcommands[1], getMyCreature()->Defense()));
+		values.push_back(new LabeledValue(sizes, CGI->generaltexth->allTexts[191], CGI->generaltexth->fcommands[1], getMyCreature()->getDefence(false)));
 		sizes.y+=21;
-		values.push_back(new LabeledValue(sizes, CGI->generaltexth->allTexts[199], CGI->generaltexth->fcommands[2], getMyCreature()->getMinDamage(), getMyCreature()->getMaxDamage()));
+		values.push_back(new LabeledValue(sizes, CGI->generaltexth->allTexts[199], CGI->generaltexth->fcommands[2], getMyCreature()->getMinDamage(false), getMyCreature()->getMaxDamage(false)));
 		sizes.y+=20;
 		values.push_back(new LabeledValue(sizes, CGI->generaltexth->allTexts[388], CGI->generaltexth->fcommands[3], getMyCreature()->MaxHealth()));
 		sizes.y+=21;
@@ -1643,25 +1684,22 @@ void CFortScreen::RecruitArea::clickRight(tribool down, bool previousState)
 	clickLeft(down, false); //r-click does same as l-click - opens recr. window
 }
 
-
-
-
 CMageGuildScreen::CMageGuildScreen(CCastleInterface * owner,std::string imagem) :CWindowObject(BORDERED,imagem)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 
 	window = new CPicture(owner->town->town->clientInfo.guildWindow , 332, 76);
 
-	resdatabar = new CMinorResDataBar;
+	resdatabar = new CMinorResDataBar();
 	resdatabar->pos.x += pos.x;
 	resdatabar->pos.y += pos.y;
 	Rect barRect(7, 556, 737, 18);
 	statusBar = new CGStatusBar(new CPicture(*background, barRect, 7, 556, false));
 
-	exit = new CButton(Point(748, 556), "TPMAGE1.DEF", CButton::tooltip(CGI->generaltexth->allTexts[593]), [&]{ close(); }, SDLK_RETURN);
+	exit = new CButton(Point(748, 556), "TPMAGE1.DEF", CButton::tooltip(CGI->generaltexth->allTexts[593]), [&](){ close(); }, SDLK_RETURN);
 	exit->assignedKeys.insert(SDLK_ESCAPE);
 
-	static const std::vector<std::vector<Point> > positions = 
+	static const std::vector<std::vector<Point> > positions =
 	{
 		{Point(222,445), Point(312,445), Point(402,445), Point(520,445), Point(610,445), Point(700,445)},
 		{Point(48,53),   Point(48,147),  Point(48,241),  Point(48,335),  Point(48,429)},
@@ -1715,7 +1753,7 @@ void CMageGuildScreen::Scroll::hover(bool on)
 }
 
 CBlacksmithDialog::CBlacksmithDialog(bool possible, CreatureID creMachineID, ArtifactID aid, ObjectInstanceID hid):
-    CWindowObject(PLAYER_COLORED, "TPSMITH")
+	CWindowObject(PLAYER_COLORED, "TPSMITH")
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 
@@ -1735,13 +1773,13 @@ CBlacksmithDialog::CBlacksmithDialog(bool possible, CreatureID creMachineID, Art
 	                boost::lexical_cast<std::string>(CGI->arth->artifacts[aid]->price));
 
 	std::string text = boost::str(boost::format(CGI->generaltexth->allTexts[595]) % creature->nameSing);
-	buy = new CButton(Point(42, 312), "IBUY30.DEF", CButton::tooltip(text), [&]{ close(); }, SDLK_RETURN);
+	buy = new CButton(Point(42, 312), "IBUY30.DEF", CButton::tooltip(text), [&](){ close(); }, SDLK_RETURN);
 
 	text = boost::str(boost::format(CGI->generaltexth->allTexts[596]) % creature->nameSing);
-	cancel = new CButton(Point(224, 312), "ICANCEL.DEF", CButton::tooltip(text), [&]{ close(); }, SDLK_ESCAPE);
+	cancel = new CButton(Point(224, 312), "ICANCEL.DEF", CButton::tooltip(text), [&](){ close(); }, SDLK_ESCAPE);
 
 	if(possible)
-		buy->addCallback([=]{ LOCPLINT->cb->buyArtifact(LOCPLINT->cb->getHero(hid),aid); });
+		buy->addCallback([=](){ LOCPLINT->cb->buyArtifact(LOCPLINT->cb->getHero(hid),aid); });
 	else
 		buy->block(true);
 

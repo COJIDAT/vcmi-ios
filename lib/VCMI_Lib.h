@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * VCMI_Lib.h, part of VCMI engine
  *
@@ -9,11 +7,14 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
+class CConsoleHandler;
 class CArtHandler;
 class CHeroHandler;
 class CCreatureHandler;
 class CSpellHandler;
+class CSkillHandler;
 class CBuildingHandler;
 class CObjectHandler;
 class CObjectClassesHandler;
@@ -33,14 +34,15 @@ class DLL_LINKAGE LibClasses
 	void callWhenDeserializing(); //should be called only by serialize !!!
 	void makeNull(); //sets all handler pointers to null
 public:
-	bool IS_AI_ENABLED; //VLC is the only object visible from both CMT and GeniusAI
-	
+	bool IS_AI_ENABLED; //unused?
+
 	const IBonusTypeHandler * getBth() const;
 
 	CArtHandler * arth;
 	CHeroHandler * heroh;
 	CCreatureHandler * creh;
 	CSpellHandler * spellh;
+	CSkillHandler * skillh;
 	CObjectHandler * objh;
 	CObjectClassesHandler * objtypeh;
 	CTownHandler * townh;
@@ -51,16 +53,28 @@ public:
 
 	LibClasses(); //c-tor, loads .lods and NULLs handlers
 	~LibClasses();
-	void init(); //uses standard config file
+	void init(bool onlyEssential); //uses standard config file
 	void clear(); //deletes all handlers and its data
 
 
-	void loadFilesystem();// basic initialization. should be called before init()
+	void loadFilesystem(bool onlyEssential);// basic initialization. should be called before init()
 
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & heroh & arth & creh & townh & objh & objtypeh & spellh & modh & IS_AI_ENABLED;
+		h & heroh;
+		h & arth;
+		h & creh;
+		h & townh;
+		h & objh;
+		h & objtypeh;
+		h & spellh;
+		if(version >= 777)
+		{
+			h & skillh;
+		}
+		h & modh;
+		h & IS_AI_ENABLED;
 		h & bth;
 		if(!h.saving)
 		{
@@ -71,6 +85,6 @@ public:
 
 extern DLL_LINKAGE LibClasses * VLC;
 
-DLL_LINKAGE void preinitDLL(CConsoleHandler *Console);
-DLL_LINKAGE void loadDLLClasses();
+DLL_LINKAGE void preinitDLL(CConsoleHandler * Console, bool onlyEssential = false);
+DLL_LINKAGE void loadDLLClasses(bool onlyEssential = false);
 

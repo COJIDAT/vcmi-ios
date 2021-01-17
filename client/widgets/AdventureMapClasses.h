@@ -1,9 +1,20 @@
+/*
+ * AdventureMapClasses.h, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #pragma once
 
 #include "ObjectLists.h"
 #include "../../lib/FunctionList.h"
 
 class CArmedInstance;
+class CAnimation;
+class CAnimImage;
 class CShowableAnim;
 class CGGarrison;
 class CGObjectInstance;
@@ -14,16 +25,6 @@ struct Component;
 struct InfoAboutArmy;
 struct InfoAboutHero;
 struct InfoAboutTown;
-
-/*
- * CAdventureMapClasses.h, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
 
 /// Base UI Element for hero\town lists
 class CList : public CIntObject
@@ -37,9 +38,9 @@ protected:
 		CListItem(CList * parent);
 		~CListItem();
 
-		void clickRight(tribool down, bool previousState);
-		void clickLeft(tribool down, bool previousState);
-		void hover(bool on);
+		void clickRight(tribool down, bool previousState) override;
+		void clickLeft(tribool down, bool previousState) override;
+		void hover(bool on) override;
 		void onSelect(bool on);
 
 		/// create object with selection rectangle
@@ -71,7 +72,7 @@ protected:
 	 * @param destroy - function for deleting items in listbox
 	 */
 	CList(int size, Point position, std::string btnUp, std::string btnDown, size_t listAmount, int helpUp, int helpDown,
-	      CListBox::CreateFunc create, CListBox::DestroyFunc destroy = CListBox::DestroyFunc());
+		  CListBox::CreateFunc create, CListBox::DestroyFunc destroy = CListBox::DestroyFunc());
 
 	//for selection\deselection
 	CListItem *selected;
@@ -118,12 +119,12 @@ class CHeroList	: public CList
 
 		CHeroItem(CHeroList *parent, const CGHeroInstance * hero);
 
-		CIntObject * genSelection();
+		CIntObject * genSelection() override;
 		void update();
-		void select(bool on);
-		void open();
-		void showTooltip();
-		std::string getHoverText();
+		void select(bool on) override;
+		void open() override;
+		void showTooltip() override;
+		std::string getHoverText() override;
 	};
 
 	CIntObject * createHeroItem(size_t index);
@@ -152,12 +153,12 @@ class CTownList	: public CList
 
 		CTownItem(CTownList *parent, const CGTownInstance * town);
 
-		CIntObject * genSelection();
+		CIntObject * genSelection() override;
 		void update();
-		void select(bool on);
-		void open();
-		void showTooltip();
-		std::string getHoverText();
+		void select(bool on) override;
+		void open() override;
+		void showTooltip() override;
+		std::string getHoverText() override;
 	};
 
 	CIntObject * createTownItem(size_t index);
@@ -195,7 +196,7 @@ public:
 	CMinimapInstance(CMinimap * parent, int level);
 	~CMinimapInstance();
 
-	void showAll(SDL_Surface *to);
+	void showAll(SDL_Surface *to) override;
 	void tileToPixels (const int3 &tile, int &x, int &y,int toX = 0, int toY = 0);
 
 	void refreshTile(const int3 &pos);
@@ -213,10 +214,10 @@ protected:
 	//to initialize colors
 	std::map<int, std::pair<SDL_Color, SDL_Color> > loadColors(std::string from);
 
-	void clickLeft(tribool down, bool previousState);
-	void clickRight(tribool down, bool previousState);
-	void hover (bool on);
-	void mouseMoved (const SDL_MouseMotionEvent & sEvent);
+	void clickLeft(tribool down, bool previousState) override;
+	void clickRight(tribool down, bool previousState) override;
+	void hover (bool on) override;
+	void mouseMoved (const SDL_MouseMotionEvent & sEvent) override;
 
 	void moveAdvMapSelection();
 
@@ -232,7 +233,7 @@ public:
 	void setLevel(int level);
 	void setAIRadar(bool on);
 
-	void showAll(SDL_Surface * to);
+	void showAll(SDL_Surface * to) override;
 
 	void hideTile(const int3 &pos); //puts FoW
 	void showTile(const int3 &pos); //removes FoW
@@ -256,7 +257,7 @@ class CInfoBar : public CIntObject
 	public:
 		CVisibleInfo(Point position);
 
-		void show(SDL_Surface *to);
+		void show(SDL_Surface *to) override;
 
 		//functions that must be called only once
 		void loadHero(const CGHeroInstance * hero);
@@ -283,11 +284,11 @@ class CInfoBar : public CIntObject
 	//removes all information about current state, deactivates timer (if any)
 	void reset(EState newState);
 
-	void tick();
+	void tick() override;
 
-	void clickLeft(tribool down, bool previousState);
-	void clickRight(tribool down, bool previousState);
-	void hover(bool on);
+	void clickLeft(tribool down, bool previousState) override;
+	void clickRight(tribool down, bool previousState) override;
+	void hover(bool on) override;
 
 public:
 	CInfoBar(const Rect & pos);
@@ -315,6 +316,46 @@ public:
 	void showGameStatus();
 };
 
+/// simple panel that contains other displayable elements; used to separate groups of controls
+class CAdvMapPanel : public CIntObject
+{
+	/// ptrs to child-buttons that can be recolored with setPlayerColor()
+	std::vector<CButton *> buttons;
+	/// the surface passed to this obj will be freed in dtor
+	SDL_Surface * background;
+public:
+	CAdvMapPanel(SDL_Surface * bg, Point position);
+	virtual ~CAdvMapPanel();
+
+	void addChildToPanel(CIntObject * obj, ui8 actions = 0);
+	void addChildColorableButton(CButton * btn);
+	/// recolors all buttons to given player color
+	void setPlayerColor(const PlayerColor & clr);
+
+	void showAll(SDL_Surface * to) override;
+};
+
+/// specialized version of CAdvMapPanel that handles recolorable def-based pictures for world view info panel
+class CAdvMapWorldViewPanel : public CAdvMapPanel
+{
+	/// data that allows reconstruction of panel info icons
+	std::vector<std::pair<int, Point>> iconsData;
+	/// ptrs to child-pictures constructed from iconsData
+	std::vector<CAnimImage *> currentIcons;
+	/// temporary surface drawn below world view panel on higher resolutions (won't be needed when world view panel is configured for extraResolutions mod)
+	SDL_Surface * tmpBackgroundFiller;
+	int fillerHeight;
+	std::shared_ptr<CAnimation> icons;
+public:
+	CAdvMapWorldViewPanel(std::shared_ptr<CAnimation> _icons, SDL_Surface * bg, Point position, int spaceBottom, const PlayerColor &color);
+	virtual ~CAdvMapWorldViewPanel();
+
+	void addChildIcon(std::pair<int, Point> data, int indexOffset);
+	/// recreates all pictures from given def to recolor them according to current player color
+	void recolorIcons(const PlayerColor &color, int indexOffset);
+	void showAll(SDL_Surface * to) override;
+};
+
 class CInGameConsole : public CIntObject
 {
 private:
@@ -326,18 +367,16 @@ private:
 	int maxDisplayedTexts; //hiw many texts can be displayed simultaneously
 public:
 	std::string enteredText;
-	void show(SDL_Surface * to);
+	void show(SDL_Surface * to) override;
 	void print(const std::string &txt);
-	void keyPressed (const SDL_KeyboardEvent & key); //call-in
+	void keyPressed (const SDL_KeyboardEvent & key) override; //call-in
 
-#ifndef VCMI_SDL1
 	void textInputed(const SDL_TextInputEvent & event) override;
 	void textEdited(const SDL_TextEditingEvent & event) override;
-#endif // VCMI_SDL1
 
 	void startEnteringText();
 	void endEnteringText(bool printEnteredText);
 	void refreshEnteredText();
 
-	CInGameConsole(); //c-tor
+	CInGameConsole();
 };

@@ -1,9 +1,4 @@
-﻿#pragma once
-
-#include "CObjectHandler.h"
-#include "../CCreatureSet.h"
-
-/*
+﻿/*
  * CArmedInstance.h, part of VCMI engine
  *
  * Authors: listed in file AUTHORS in main folder
@@ -12,8 +7,12 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
-struct BattleInfo;
+#include "CObjectHandler.h"
+#include "../CCreatureSet.h"
+
+class BattleInfo;
 class CGameState;
 
 class DLL_LINKAGE CArmedInstance: public CGObjectInstance, public CBonusSystemNode, public CCreatureSet

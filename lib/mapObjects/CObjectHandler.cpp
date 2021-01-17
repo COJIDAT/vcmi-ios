@@ -1,4 +1,4 @@
-﻿/*
+/*
  * CObjectHandler.cpp, part of VCMI engine
  *
  * Authors: listed in file AUTHORS in main folder
@@ -18,8 +18,13 @@
 #include "../filesystem/ResourceID.h"
 #include "../IGameCallback.h"
 #include "../CGameState.h"
+#include "../StringConstants.h"
+#include "../mapping/CMap.h"
 
 #include "CObjectClassesHandler.h"
+#include "CGTownInstance.h"
+
+#include "../serializer/JsonSerializeFormat.h"
 
 IGameCallback * IObjectInterface::cb = nullptr;
 
@@ -48,7 +53,7 @@ static void showInfoDialog(const PlayerColor playerID, const ui32 txtID, const u
 	showInfoDialog(playerID,txtID,soundID);
 }*/
 
-static void showInfoDialog(const CGHeroInstance* h, const ui32 txtID, const ui16 soundID)
+static void showInfoDialog(const CGHeroInstance* h, const ui32 txtID, const ui16 soundID = 0)
 {
 	const PlayerColor playerID = h->getOwner();
 	showInfoDialog(playerID,txtID,soundID);
@@ -61,7 +66,7 @@ void IObjectInterface::onHeroVisit(const CGHeroInstance * h) const
 void IObjectInterface::onHeroLeave(const CGHeroInstance * h) const
 {}
 
-void IObjectInterface::newTurn () const
+void IObjectInterface::newTurn(CRandomGenerator & rand) const
 {}
 
 IObjectInterface::~IObjectInterface()
@@ -70,7 +75,7 @@ IObjectInterface::~IObjectInterface()
 IObjectInterface::IObjectInterface()
 {}
 
-void IObjectInterface::initObj()
+void IObjectInterface::initObj(CRandomGenerator & rand)
 {}
 
 void IObjectInterface::setProperty( ui8 what, ui32 val )
@@ -105,13 +110,13 @@ void IObjectInterface::heroLevelUpDone(const CGHeroInstance *hero) const
 
 CObjectHandler::CObjectHandler()
 {
-    logGlobal->traceStream() << "\t\tReading resources prices ";
+	logGlobal->trace("\t\tReading resources prices ");
 	const JsonNode config2(ResourceID("config/resources.json"));
 	for(const JsonNode &price : config2["resources_prices"].Vector())
 	{
 		resVals.push_back(price.Float());
 	}
-    logGlobal->traceStream() << "\t\tDone loading resource prices!";
+	logGlobal->trace("\t\tDone loading resource prices!");
 }
 
 PlayerColor CGObjectInstance::getOwner() const
@@ -167,7 +172,7 @@ std::set<int3> CGObjectInstance::getBlockedPos() const
 	{
 		for(int h=0; h<getHeight(); ++h)
 		{
-			if (appearance.isBlockedAt(w, h))
+			if(appearance.isBlockedAt(w, h))
 				ret.insert(int3(pos.x - w, pos.y - h, pos.z));
 		}
 	}
@@ -189,14 +194,19 @@ void CGObjectInstance::setType(si32 ID, si32 subID)
 	//recalculate blockvis tiles - new appearance might have different blockmap than before
 	cb->gameState()->map->removeBlockVisTiles(this, true);
 	auto handler = VLC->objtypeh->getHandlerFor(ID, subID);
-	if (!handler->getTemplates(tile.terType).empty())
+	if(!handler)
+	{
+		logGlobal->error("Unknown object type %d:%d at %s", ID, subID, visitablePos().toString());
+		return;
+	}
+	if(!handler->getTemplates(tile.terType).empty())
 		appearance = handler->getTemplates(tile.terType)[0];
 	else
 		appearance = handler->getTemplates()[0]; // get at least some appearance since alternative is crash
 	cb->gameState()->map->addBlockVisTiles(this);
 }
 
-void CGObjectInstance::initObj()
+void CGObjectInstance::initObj(CRandomGenerator & rand)
 {
 	switch(ID)
 	{
@@ -235,7 +245,7 @@ int3 CGObjectInstance::getSightCenter() const
 	return visitablePos();
 }
 
-int CGObjectInstance::getSightRadious() const
+int CGObjectInstance::getSightRadius() const
 {
 	return 3;
 }
@@ -261,6 +271,33 @@ std::string CGObjectInstance::getObjectName() const
 	return VLC->objtypeh->getObjectName(ID, subID);
 }
 
+boost::optional<std::string> CGObjectInstance::getAmbientSound() const
+{
+	const auto & sounds = VLC->objtypeh->getObjectSounds(ID, subID).ambient;
+	if(sounds.size())
+		return sounds.front(); // TODO: Support randomization of ambient sounds
+
+	return boost::none;
+}
+
+boost::optional<std::string> CGObjectInstance::getVisitSound() const
+{
+	const auto & sounds = VLC->objtypeh->getObjectSounds(ID, subID).visit;
+	if(sounds.size())
+		return *RandomGeneratorUtil::nextItem(sounds, CRandomGenerator::getDefault());
+
+	return boost::none;
+}
+
+boost::optional<std::string> CGObjectInstance::getRemovalSound() const
+{
+	const auto & sounds = VLC->objtypeh->getObjectSounds(ID, subID).removal;
+	if(sounds.size())
+		return *RandomGeneratorUtil::nextItem(sounds, CRandomGenerator::getDefault());
+
+	return boost::none;
+}
+
 std::string CGObjectInstance::getHoverText(PlayerColor player) const
 {
 	return getObjectName();
@@ -283,7 +320,7 @@ void CGObjectInstance::onHeroVisit( const CGHeroInstance * h ) const
 	case Obj::SANCTUARY:
 		{
 			//You enter the sanctuary and immediately feel as if a great weight has been lifted off your shoulders.  You feel safe here.
-			showInfoDialog(h,114,soundBase::GETPROTECTION);
+			showInfoDialog(h, 114);
 		}
 		break;
 	case Obj::TAVERN:
@@ -309,6 +346,48 @@ bool CGObjectInstance::passableFor(PlayerColor color) const
 	return false;
 }
 
+void CGObjectInstance::serializeJson(JsonSerializeFormat & handler)
+{
+	//only save here, loading is handled by map loader
+	if(handler.saving)
+	{
+		handler.serializeString("type", typeName);
+		handler.serializeString("subtype", subTypeName);
+
+		handler.serializeInt("x", pos.x);
+		handler.serializeInt("y", pos.y);
+		handler.serializeInt("l", pos.z);
+		JsonNode app;
+		appearance.writeJson(app, false);
+		handler.serializeRaw("template",app, boost::none);
+	}
+
+	{
+		auto options = handler.enterStruct("options");
+		serializeJsonOptions(handler);
+	}
+}
+
+void CGObjectInstance::afterAddToMap(CMap * map)
+{
+	//nothing here
+}
+
+void CGObjectInstance::serializeJsonOptions(JsonSerializeFormat & handler)
+{
+	//nothing here
+}
+
+void CGObjectInstance::serializeJsonOwner(JsonSerializeFormat & handler)
+{
+	ui8 temp = tempOwner.getNum();
+
+	handler.serializeEnum("owner", temp, PlayerColor::NEUTRAL.getNum(), GameConstants::PLAYER_COLOR_NAMES);
+
+	if(!handler.saving)
+		tempOwner = PlayerColor(temp);
+}
+
 CGObjectInstanceBySubIdFinder::CGObjectInstanceBySubIdFinder(CGObjectInstance * obj) : obj(obj)
 {
 
@@ -326,9 +405,9 @@ int3 IBoatGenerator::bestLocation() const
 
 	for (auto & offset : offsets)
 	{
-		if (const TerrainTile *tile = IObjectInterface::cb->getTile(o->pos + offset, false)) //tile is in the map
+		if(const TerrainTile *tile = IObjectInterface::cb->getTile(o->pos + offset, false)) //tile is in the map
 		{
-			if (tile->terType == ETerrainType::WATER  &&  (!tile->blocked || tile->blockingObjects.front()->ID == 8)) //and is water and is not blocked or is blocked by boat
+			if(tile->terType == ETerrainType::WATER  &&  (!tile->blocked || tile->blockingObjects.front()->ID == Obj::BOAT)) //and is water and is not blocked or is blocked by boat
 				return o->pos + offset;
 		}
 	}
@@ -378,7 +457,7 @@ void IBoatGenerator::getProblemText(MetaString &out, const CGHeroInstance *visit
 			out.addTxt(MetaString::ADVOB_TXT, 189);
 		break;
 	case NO_WATER:
-		logGlobal->errorStream() << "Shipyard without water!!! " << o->pos << "\t" << o->id;
+		logGlobal->error("Shipyard without water! %s \t %d", o->pos.toString(), o->id.getNum());
 		return;
 	}
 }

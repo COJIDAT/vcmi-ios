@@ -1,4 +1,3 @@
-
 /*
  * CLogger.h, part of VCMI engine
  *
@@ -8,27 +7,18 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
-
 #pragma once
 
 #include "../CConsoleHandler.h"
+#include "../filesystem/FileStream.h"
 
 class CLogger;
 struct LogRecord;
 class ILogTarget;
 
+
 namespace ELogLevel
 {
-	enum ELogLevel
-	{
-		NOT_SET = 0,
-		TRACE,
-		DEBUG,
-		INFO,
-		WARN,
-		ERROR
-	};
-
 	#ifdef VCMI_ANDROID
 		int toAndroid(ELogLevel logLevel);
 	#endif
@@ -52,36 +42,13 @@ private:
 	std::string name;
 };
 
-/// The class CLoggerStream provides a stream-like way of logging messages.
-class DLL_LINKAGE CLoggerStream
-{
-public:
-	CLoggerStream(const CLogger & logger, ELogLevel::ELogLevel level);
-	~CLoggerStream();
-
-	template<typename T>
-	CLoggerStream & operator<<(const T & data)
-	{
-		if(!sbuffer)
-			sbuffer = new std::stringstream(std::ios_base::out);
-
-		(*sbuffer) << data;
-
-		return *this;
-	}
-
-private:
-	const CLogger & logger;
-	ELogLevel::ELogLevel level;
-	std::stringstream * sbuffer;
-};
 
 /// The logger is used to log messages to certain targets of a specific domain/name.
 /// It is thread-safe and can be used concurrently by several threads.
-class DLL_LINKAGE CLogger
+class DLL_LINKAGE CLogger: public vstd::CLoggerBase
 {
 public:
-	inline ELogLevel::ELogLevel getLevel() const;
+	ELogLevel::ELogLevel getLevel() const;
 	void setLevel(ELogLevel::ELogLevel level);
 	const CLoggerDomain & getDomain() const;
 
@@ -89,29 +56,16 @@ public:
 	static CLogger * getLogger(const CLoggerDomain & domain);
 	static CLogger * getGlobalLogger();
 
-	/// Log methods for various log levels
-	void trace(const std::string & message) const;
-	void debug(const std::string & message) const;
-	void info(const std::string & message) const;
-	void warn(const std::string & message) const;
-	void error(const std::string & message) const;
+	void log(ELogLevel::ELogLevel level, const std::string & message) const override;
+	void log(ELogLevel::ELogLevel level, const boost::format & fmt) const override;
 
-	/// Log streams for various log levels
-	CLoggerStream traceStream() const;
-	CLoggerStream debugStream() const;
-	CLoggerStream infoStream() const;
-	CLoggerStream warnStream() const;
-	CLoggerStream errorStream() const;
-
-	inline void log(ELogLevel::ELogLevel level, const std::string & message) const;
-
-	void addTarget(unique_ptr<ILogTarget> && target);
+	void addTarget(std::unique_ptr<ILogTarget> && target);
 	void clearTargets();
 
 	/// Returns true if a debug/trace log message will be logged, false if not.
 	/// Useful if performance is important and concatenating the log message is a expensive task.
-	bool isDebugEnabled() const;
-	bool isTraceEnabled() const;
+	bool isDebugEnabled() const override;
+	bool isTraceEnabled() const override;
 
 private:
 	explicit CLogger(const CLoggerDomain & domain);
@@ -121,46 +75,10 @@ private:
 	CLoggerDomain domain;
 	CLogger * parent;
 	ELogLevel::ELogLevel level;
-	std::vector<unique_ptr<ILogTarget> > targets;
+	std::vector<std::unique_ptr<ILogTarget> > targets;
 	mutable boost::mutex mx;
 	static boost::recursive_mutex smx;
 };
-
-extern DLL_LINKAGE CLogger * logGlobal;
-extern DLL_LINKAGE CLogger * logBonus;
-extern DLL_LINKAGE CLogger * logNetwork;
-extern DLL_LINKAGE CLogger * logAi;
-extern DLL_LINKAGE CLogger * logAnim;
-
-/// RAII class for tracing the program execution.
-/// It prints "Leaving function XYZ" automatically when the object gets destructed.
-class DLL_LINKAGE CTraceLogger : boost::noncopyable
-{
-public:
-	CTraceLogger(const CLogger * logger, const std::string & beginMessage, const std::string & endMessage);
-	~CTraceLogger();
-
-private:
-	const CLogger * logger;
-	std::string endMessage;
-};
-
-/// Macros for tracing the control flow of the application conveniently. If the LOG_TRACE macro is used it should be
-/// the first statement in the function. Logging traces via this macro have almost no impact when the trace is disabled.
-/// 
-#define RAII_TRACE(logger, onEntry, onLeave)			\
-	unique_ptr<CTraceLogger> ctl00;						\
-	if(logger->isTraceEnabled())						\
-		ctl00 = make_unique<CTraceLogger>(logger, onEntry, onLeave);
-
-#define LOG_TRACE(logger) RAII_TRACE(logger,								\
-		boost::str(boost::format("Entering %s.") % BOOST_CURRENT_FUNCTION),	\
-		boost::str(boost::format("Leaving %s.") % BOOST_CURRENT_FUNCTION))
-
-
-#define LOG_TRACE_PARAMS(logger, formatStr, params) RAII_TRACE(logger,		\
-		boost::str(boost::format("Entering %s: " + std::string(formatStr) + ".") % BOOST_CURRENT_FUNCTION % params), \
-		boost::str(boost::format("Leaving %s.") % BOOST_CURRENT_FUNCTION))
 
 /* ---------------------------------------------------------------------------- */
 /* Implementation/Detail classes, Private API */
@@ -174,10 +92,11 @@ public:
 
 	void addLogger(CLogger * logger);
 	CLogger * getLogger(const CLoggerDomain & domain); /// Returns a logger or nullptr if no one is registered for the given domain.
+	std::vector<std::string> getRegisteredDomains() const;
 
 private:
 	CLogManager();
-	~CLogManager();
+	virtual ~CLogManager();
 
 	std::map<std::string, CLogger *> loggers;
 	mutable boost::mutex mx;
@@ -188,14 +107,17 @@ private:
 struct DLL_LINKAGE LogRecord
 {
 	LogRecord(const CLoggerDomain & domain, ELogLevel::ELogLevel level, const std::string & message)
-		: domain(domain), level(level), message(message), timeStamp(boost::posix_time::microsec_clock::local_time()),
-		  threadId(boost::this_thread::get_id()) { }
+		: domain(domain),
+		level(level),
+		message(message),
+		timeStamp(boost::posix_time::microsec_clock::local_time()),
+		threadId(boost::lexical_cast<std::string>(boost::this_thread::get_id())) { }
 
 	CLoggerDomain domain;
 	ELogLevel::ELogLevel level;
 	std::string message;
 	boost::posix_time::ptime timeStamp;
-	boost::thread::id threadId;
+	std::string threadId;
 };
 
 /// The class CLogFormatter formats log records.
@@ -214,7 +136,7 @@ public:
 	CLogFormatter(CLogFormatter && move);
 
 	CLogFormatter(const std::string & pattern);
-	
+
 	CLogFormatter & operator=(const CLogFormatter & copy);
 	CLogFormatter & operator=(CLogFormatter && move);
 
@@ -299,7 +221,7 @@ public:
 	void write(const LogRecord & record) override;
 
 private:
-	boost::filesystem::ofstream file;
+	FileStream file;
 	CLogFormatter formatter;
 	mutable boost::mutex mx;
 };

@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #ifndef FL_BELL_H
@@ -29,13 +21,24 @@
 
 namespace fl {
 
+    /**
+      The Bell class is an extended Term that represents the generalized bell
+      curve membership function.
+
+      @image html bell.svg
+
+      @author Juan Rada-Vilela, Ph.D.
+      @see Term
+      @see Variable
+      @since 4.0
+     */
     class FL_API Bell : public Term {
-    protected:
+    private:
         scalar _center;
         scalar _width;
         scalar _slope;
     public:
-        Bell(const std::string& name = "",
+        explicit Bell(const std::string& name = "",
                 scalar center = fl::nan,
                 scalar width = fl::nan,
                 scalar slope = fl::nan,
@@ -44,18 +47,62 @@ namespace fl {
         FL_DEFAULT_COPY_AND_MOVE(Bell)
 
         virtual std::string className() const FL_IOVERRIDE;
+        /**
+          Returns the parameters of the term
+          @return `"center width slope [height]"`
+         */
         virtual std::string parameters() const FL_IOVERRIDE;
+        /**
+          Configures the term with the parameters
+          @param parameters as `"center width slope [height]"`
+         */
         virtual void configure(const std::string& parameters) FL_IOVERRIDE;
 
+        virtual Complexity complexity() const FL_IOVERRIDE;
+
+        /**
+          Computes the membership function evaluated at @f$x@f$
+          @param x
+          @return @f$h / (1 + \left(|x-c|/w\right)^{2s}@f$
+
+          where @f$h@f$ is the height of the Term,
+                @f$c@f$ is the center of the Bell,
+                @f$w@f$ is the width of the Bell,
+                @f$s@f$ is the slope of the Bell
+         */
         virtual scalar membership(scalar x) const FL_IOVERRIDE;
 
+        /**
+          Sets the center of the bell curve
+          @param center is the center of the bell curve
+         */
         virtual void setCenter(scalar center);
+        /**
+          Gets the center of the bell curve
+          @return the center of the bell curve
+         */
         virtual scalar getCenter() const;
 
+        /**
+          Sets the width of the bell curve
+          @param width is the width of the bell curve
+         */
         virtual void setWidth(scalar width);
+        /**
+          Gets the width of the bell curve
+          @return the width of the bell curve
+         */
         virtual scalar getWidth() const;
 
+        /**
+          Sets the slope of the bell curve
+          @param slope is the slope of the bell curve
+         */
         virtual void setSlope(scalar slope);
+        /**
+          Gets the slope of the bell curve
+          @return the slope of the bell curve
+         */
         virtual scalar getSlope() const;
 
         virtual Bell* clone() const FL_IOVERRIDE;
@@ -63,6 +110,5 @@ namespace fl {
         static Term* constructor();
 
     };
-
 }
 #endif /* FL_BELL_H */

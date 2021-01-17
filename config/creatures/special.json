@@ -112,7 +112,14 @@
 		"index": 149,
 		"level": 0,
 		"faction": "neutral",
-		"abilities": { "shooter" : { "type" : "SHOOTER" } },
+		"abilities":
+		{
+			"shooter" : { "type" : "SHOOTER" },
+			"ignoreDefence" : { "type" : "ENEMY_DEFENCE_REDUCTION", "val" : 100 },
+			"noWallPenalty" : { "type" : "NO_WALL_PENALTY" },
+			"noDistancePenalty" : { "type" : "NO_DISTANCE_PENALTY" },
+			"noLuck" : { "type" : "NO_LUCK" }
+		},
 		"graphics" :
 		{
 			"animation": "CLCBOW.DEF" // needed to pass validation, never used

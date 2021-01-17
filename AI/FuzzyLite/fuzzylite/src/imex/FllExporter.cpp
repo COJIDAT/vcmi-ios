@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/imex/FllExporter.h"
@@ -29,11 +21,9 @@
 namespace fl {
 
     FllExporter::FllExporter(const std::string& indent, const std::string& separator)
-    : Exporter(), _indent(indent), _separator(separator) {
-    }
+    : Exporter(), _indent(indent), _separator(separator) { }
 
-    FllExporter::~FllExporter() {
-    }
+    FllExporter::~FllExporter() { }
 
     std::string FllExporter::name() const {
         return "FllExporter";
@@ -58,9 +48,17 @@ namespace fl {
     std::string FllExporter::toString(const Engine* engine) const {
         std::vector<std::string> result;
         result.push_back("Engine: " + engine->getName());
-        result.push_back(toString(engine->inputVariables()));
-        result.push_back(toString(engine->outputVariables()));
-        result.push_back(toString(engine->ruleBlocks()));
+        if (not engine->getDescription().empty())
+            result.push_back("description: " + engine->getDescription());
+        for (std::size_t i = 0 ; i < engine->numberOfInputVariables(); ++i){
+            result.push_back(toString(engine->getInputVariable(i)));
+        }
+        for (std::size_t i = 0 ; i < engine->numberOfOutputVariables(); ++i){
+            result.push_back(toString(engine->getOutputVariable(i)));
+        }
+        for (std::size_t i = 0 ; i < engine->numberOfRuleBlocks(); ++i){
+            result.push_back(toString(engine->getRuleBlock(i)));
+        }
         return Op::join(result, _separator);
     }
 
@@ -99,10 +97,15 @@ namespace fl {
     std::string FllExporter::toString(const Variable* variable) const {
         std::vector<std::string> result;
         result.push_back("Variable: " + Op::validName(variable->getName()));
+        if (not variable->getDescription().empty()) {
+            result.push_back(_indent + "description: " + variable->getDescription());
+        }
         result.push_back(_indent + "enabled: " + (variable->isEnabled() ? "true" : "false"));
         result.push_back(_indent + "range: " + Op::join(2, " ",
                 variable->getMinimum(), variable->getMaximum()));
-        for (int i = 0; i < variable->numberOfTerms(); ++i) {
+        result.push_back(_indent + "lock-range: " +
+                (variable->isLockValueInRange() ? "true" : "false"));
+        for (std::size_t i = 0; i < variable->numberOfTerms(); ++i) {
             result.push_back(_indent + toString(variable->getTerm(i)));
         }
         return Op::join(result, _separator);
@@ -111,10 +114,15 @@ namespace fl {
     std::string FllExporter::toString(const InputVariable* inputVariable) const {
         std::vector<std::string> result;
         result.push_back("InputVariable: " + Op::validName(inputVariable->getName()));
+        if (not inputVariable->getDescription().empty()) {
+            result.push_back(_indent + "description: " + inputVariable->getDescription());
+        }
         result.push_back(_indent + "enabled: " + (inputVariable->isEnabled() ? "true" : "false"));
         result.push_back(_indent + "range: " + Op::join(2, " ",
                 inputVariable->getMinimum(), inputVariable->getMaximum()));
-        for (int i = 0; i < inputVariable->numberOfTerms(); ++i) {
+        result.push_back(_indent + "lock-range: " +
+                (inputVariable->isLockValueInRange() ? "true" : "false"));
+        for (std::size_t i = 0; i < inputVariable->numberOfTerms(); ++i) {
             result.push_back(_indent + toString(inputVariable->getTerm(i)));
         }
         return Op::join(result, _separator);
@@ -123,19 +131,22 @@ namespace fl {
     std::string FllExporter::toString(const OutputVariable* outputVariable) const {
         std::vector<std::string> result;
         result.push_back("OutputVariable: " + Op::validName(outputVariable->getName()));
+        if (not outputVariable->getDescription().empty()) {
+            result.push_back(_indent + "description: " + outputVariable->getDescription());
+        }
         result.push_back(_indent + "enabled: " + (outputVariable->isEnabled() ? "true" : "false"));
         result.push_back(_indent + "range: " + Op::join(2, " ",
                 outputVariable->getMinimum(), outputVariable->getMaximum()));
-        result.push_back(_indent + "accumulation: " +
-                toString(outputVariable->fuzzyOutput()->getAccumulation()));
+        result.push_back(_indent + "lock-range: " +
+                (outputVariable->isLockValueInRange() ? "true" : "false"));
+        result.push_back(_indent + "aggregation: " +
+                toString(outputVariable->fuzzyOutput()->getAggregation()));
         result.push_back(_indent + "defuzzifier: " +
                 toString(outputVariable->getDefuzzifier()));
         result.push_back(_indent + "default: " + Op::str(outputVariable->getDefaultValue()));
         result.push_back(_indent + "lock-previous: " +
-                (outputVariable->isLockedPreviousOutputValue() ? "true" : "false"));
-        result.push_back(_indent + "lock-range: " +
-                (outputVariable->isLockedOutputValueInRange() ? "true" : "false"));
-        for (int i = 0; i < outputVariable->numberOfTerms(); ++i) {
+                (outputVariable->isLockPreviousValue() ? "true" : "false"));
+        for (std::size_t i = 0; i < outputVariable->numberOfTerms(); ++i) {
             result.push_back(_indent + toString(outputVariable->getTerm(i)));
         }
         return Op::join(result, _separator);
@@ -144,12 +155,16 @@ namespace fl {
     std::string FllExporter::toString(const RuleBlock* ruleBlock) const {
         std::vector<std::string> result;
         result.push_back("RuleBlock: " + ruleBlock->getName());
+        if (not ruleBlock->getDescription().empty()) {
+            result.push_back(_indent + "description: " + ruleBlock->getDescription());
+        }
         result.push_back(_indent + "enabled: " +
                 (ruleBlock->isEnabled() ? "true" : "false"));
         result.push_back(_indent + "conjunction: " + toString(ruleBlock->getConjunction()));
         result.push_back(_indent + "disjunction: " + toString(ruleBlock->getDisjunction()));
+        result.push_back(_indent + "implication: " + toString(ruleBlock->getImplication()));
         result.push_back(_indent + "activation: " + toString(ruleBlock->getActivation()));
-        for (int i = 0; i < ruleBlock->numberOfRules(); ++i) {
+        for (std::size_t i = 0; i < ruleBlock->numberOfRules(); ++i) {
             result.push_back(_indent + toString(ruleBlock->getRule(i)));
         }
         return Op::join(result, _separator);
@@ -169,11 +184,17 @@ namespace fl {
         return "none";
     }
 
+    std::string FllExporter::toString(const Activation* activation) const {
+        if (not activation) return "none";
+        if (activation->parameters().empty()) return activation->className();
+        return activation->className() + " " + activation->parameters();
+    }
+
     std::string FllExporter::toString(const Defuzzifier* defuzzifier) const {
         if (not defuzzifier) return "none";
         if (const IntegralDefuzzifier * integralDefuzzifier =
                 dynamic_cast<const IntegralDefuzzifier*> (defuzzifier)) {
-            return defuzzifier->className() + " " + Op::str<int>(integralDefuzzifier->getResolution());
+            return defuzzifier->className() + " " + Op::str(integralDefuzzifier->getResolution());
 
         } else if (const WeightedDefuzzifier * weightedDefuzzifier =
                 dynamic_cast<const WeightedDefuzzifier*> (defuzzifier)) {

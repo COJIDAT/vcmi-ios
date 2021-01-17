@@ -1,42 +1,29 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/term/Function.h"
 
 #include "fl/Engine.h"
 #include "fl/factory/FactoryManager.h"
-#include "fl/factory/FunctionFactory.h"
 #include "fl/rule/Rule.h"
 #include "fl/variable/InputVariable.h"
 #include "fl/variable/OutputVariable.h"
 
-#include <cctype>
-#include <functional>
 #include <queue>
-#include <signal.h>
 #include <stack>
-
 
 namespace fl {
 
@@ -46,33 +33,27 @@ namespace fl {
 
 
     Function::Element::Element(const std::string& name, const std::string& description, Type type)
-    : name(name), description(description), type(type), unary(NULL), binary(NULL), arity(0),
-    precedence(0), associativity(-1) {
-
-    }
+    : name(name), description(description), type(type), unary(fl::null), binary(fl::null), arity(0),
+    precedence(0), associativity(-1) { }
 
     Function::Element::Element(const std::string& name, const std::string& description,
             Type type, Unary unary, int precedence, int associativity)
-    : name(name), description(description), type(type), unary(unary), binary(NULL), arity(1),
-    precedence(precedence), associativity(associativity) {
-    }
+    : name(name), description(description), type(type), unary(unary), binary(fl::null), arity(1),
+    precedence(precedence), associativity(associativity) { }
 
     Function::Element::Element(const std::string& name, const std::string& description,
             Type type, Binary binary, int precedence, int associativity)
-    : name(name), description(description), type(type), unary(NULL), binary(binary), arity(2),
-    precedence(precedence), associativity(associativity) {
-    }
+    : name(name), description(description), type(type), unary(fl::null), binary(binary), arity(2),
+    precedence(precedence), associativity(associativity) { }
 
-    Function::Element::~Element() {
-
-    }
+    Function::Element::~Element() { }
 
     bool Function::Element::isOperator() const {
-        return type == OPERATOR;
+        return type == Operator;
     }
 
     bool Function::Element::isFunction() const {
-        return type == FUNCTION;
+        return type == Function;
     }
 
     Function::Element* Function::Element::clone() const {
@@ -82,7 +63,7 @@ namespace fl {
     std::string Function::Element::toString() const {
         std::ostringstream ss;
 
-        if (type == OPERATOR) {
+        if (type == Operator) {
             ss << "Operator (name=" << name << ", "
                     << "description=" << description << ", "
                     << "precedence=" << precedence << ", "
@@ -92,8 +73,8 @@ namespace fl {
             else if (arity == 2) ss << "pointer=" << binary;
             else ss << "pointer=error";
             ss << ")";
-        } else if (type == FUNCTION) {
-            ss << "MathFunction (name=" << name << ", "
+        } else if (type == Function) {
+            ss << "Function (name=" << name << ", "
                     << "description=" << description << ", "
                     << "arity=" << arity << ", "
                     << "associativity=" << associativity << ", ";
@@ -110,27 +91,24 @@ namespace fl {
      ******************************/
 
     Function::Node::Node(Element* element, Node* left, Node* right)
-    : element(element), left(left), right(right), variable(""), value(fl::nan) {
-    }
+    : element(element), left(left), right(right), variable(""), value(fl::nan) { }
 
     Function::Node::Node(const std::string& variable)
-    : element(NULL), left(NULL), right(NULL), variable(variable), value(fl::nan) {
-    }
+    : element(fl::null), left(fl::null), right(fl::null), variable(variable), value(fl::nan) { }
 
     Function::Node::Node(scalar value)
-    : element(NULL), left(NULL), right(NULL), variable(""), value(value) {
-    }
+    : element(fl::null), left(fl::null), right(fl::null), variable(""), value(value) { }
 
     Function::Node::Node(const Node& other)
-    : element(NULL), left(NULL), right(NULL), variable(""), value(fl::nan) {
+    : element(fl::null), left(fl::null), right(fl::null), variable(""), value(fl::nan) {
         copyFrom(other);
     }
 
     Function::Node& Function::Node::operator=(const Node& other) {
         if (this != &other) {
-            element.reset(NULL);
-            left.reset(NULL);
-            right.reset(NULL);
+            element.reset(fl::null);
+            left.reset(fl::null);
+            right.reset(fl::null);
 
             copyFrom(other);
         }
@@ -145,8 +123,7 @@ namespace fl {
         value = other.value;
     }
 
-    Function::Node::~Node() {
-    }
+    Function::Node::~Node() { }
 
     scalar Function::Node::evaluate(const std::map<std::string, scalar>* variables) const {
         scalar result = fl::nan;
@@ -159,21 +136,51 @@ namespace fl {
                 std::ostringstream ex;
                 ex << "[function error] arity <" << element->arity << "> of "
                         << (element->isOperator() ? "operator" : "function") <<
-                        " <" << element->name << "> is NULL";
-                throw fl::Exception(ex.str(), FL_AT);
+                        " <" << element->name << "> is fl::null";
+                throw Exception(ex.str(), FL_AT);
             }
 
         } else if (not variable.empty()) {
             if (not variables) {
-                throw fl::Exception("[function error] "
+                throw Exception("[function error] "
                         "expected a map of variables, but none was provided", FL_AT);
             }
             std::map<std::string, scalar>::const_iterator it = variables->find(variable);
             if (it != variables->end()) result = it->second;
-            else throw fl::Exception("[function error] "
+            else throw Exception("[function error] "
                     "unknown variable <" + variable + ">", FL_AT);
         } else {
             result = value;
+        }
+        return result;
+    }
+
+    std::size_t Function::Node::treeSize(const Node* root) const {
+        if (not root) root = this;
+        std::size_t result = 0;
+        if (root->left.get()) {
+            result += treeSize(root->left.get());
+        }
+        if (root->right.get()) {
+            result += treeSize(root->right.get());
+        }
+        if (root->element.get()) {
+            result += 1;
+        }
+        return result;
+    }
+
+    std::size_t Function::Node::treeSize(Element::Type type, const Node* root) const {
+        if (not root) root = this;
+        std::size_t result = 0;
+        if (root->left.get()) {
+            result += treeSize(type, root->left.get());
+        }
+        if (root->right.get()) {
+            result += treeSize(type, root->right.get());
+        }
+        if (root->element.get() and root->element->type == type) {
+            result += 1;
         }
         return result;
     }
@@ -186,14 +193,14 @@ namespace fl {
         std::ostringstream ss;
         if (element.get()) ss << element->name;
         else if (not variable.empty()) ss << variable;
-        else ss << fl::Op::str(value);
+        else ss << Op::str(value);
         return ss.str();
     }
 
     std::string Function::Node::toPrefix(const Node* node) const {
         if (not node) node = this;
-        if (not fl::Op::isNaN(node->value)) { //is terminal
-            return fl::Op::str(node->value);
+        if (not Op::isNaN(node->value)) { //is terminal
+            return Op::str(node->value);
         }
         if (not node->variable.empty()) {
             return node->variable;
@@ -210,8 +217,8 @@ namespace fl {
 
     std::string Function::Node::toInfix(const Node* node) const {
         if (not node) node = this;
-        if (not fl::Op::isNaN(node->value)) { //is proposition
-            return fl::Op::str(node->value);
+        if (not Op::isNaN(node->value)) { //is proposition
+            return Op::str(node->value);
         }
         if (not node->variable.empty()) {
             return node->variable;
@@ -228,8 +235,8 @@ namespace fl {
 
     std::string Function::Node::toPostfix(const Node* node) const {
         if (not node) node = this;
-        if (not fl::Op::isNaN(node->value)) { //is proposition
-            return fl::Op::str(node->value);
+        if (not Op::isNaN(node->value)) { //is proposition
+            return Op::str(node->value);
         }
         if (not node->variable.empty()) {
             return node->variable;
@@ -249,18 +256,17 @@ namespace fl {
      **********************************/
     Function::Function(const std::string& name,
             const std::string& formula, const Engine* engine)
-    : Term(name), _root(NULL), _formula(formula), _engine(engine) {
-    }
+    : Term(name), _root(fl::null), _formula(formula), _engine(engine) { }
 
     Function::Function(const Function& other) : Term(other),
-    _root(NULL), _formula(other._formula), _engine(other._engine) {
+    _root(fl::null), _formula(other._formula), _engine(other._engine) {
         if (other._root.get()) _root.reset(other._root->clone());
         variables = other.variables;
     }
 
     Function& Function::operator=(const Function& other) {
         if (this != &other) {
-            _root.reset(NULL);
+            _root.reset(fl::null);
 
             Term::operator=(other);
             _formula = other._formula;
@@ -271,25 +277,41 @@ namespace fl {
         return *this;
     }
 
-    Function::~Function() {
-    }
+    Function::~Function() { }
 
     std::string Function::className() const {
         return "Function";
     }
 
-    scalar Function::membership(scalar x) const {
-        if (not this->_root.get()) {
-            throw fl::Exception("[function error] function <" + _formula + "> not loaded.", FL_AT);
+    Complexity Function::complexity() const {
+        Complexity result;
+        result.comparison(2 + 2); //membership(scalar) + membership(std::map)
+        if (_engine) { //insert variables in map
+            const std::size_t engineVariables = _engine->variables().size();
+            result.function(engineVariables * std::log(scalar(variables.size() + engineVariables)));
+            result.function(1 * std::log(scalar(variables.size() + engineVariables)));
         }
-        if (this->_engine) {
-            for (int i = 0; i < this->_engine->numberOfInputVariables(); ++i) {
-                InputVariable* input = this->_engine->getInputVariable(i);
-                this->variables[input->getName()] = input->getInputValue();
+        if (_root.get()) {
+            //Node::evaluate multiplies by tree size
+            const scalar treeSize = scalar(_root->treeSize());
+            result.comparison(3 * treeSize); //if element, unary, binary
+            result.function(treeSize * std::log(treeSize)); //only operands in tree
+        }
+        return result;
+    }
+
+    scalar Function::membership(scalar x) const {
+        if (not _root.get()) {
+            throw Exception("[function error] function <" + _formula + "> not loaded.", FL_AT);
+        }
+        if (_engine) {
+            for (std::size_t i = 0; i < _engine->numberOfInputVariables(); ++i) {
+                InputVariable* input = _engine->getInputVariable(i);
+                this->variables[input->getName()] = input->getValue();
             }
-            for (int i = 0; i < this->_engine->numberOfOutputVariables(); ++i) {
-                OutputVariable* output = this->_engine->getOutputVariable(i);
-                this->variables[output->getName()] = output->getOutputValue();
+            for (std::size_t i = 0; i < _engine->numberOfOutputVariables(); ++i) {
+                OutputVariable* output = _engine->getOutputVariable(i);
+                this->variables[output->getName()] = output->getValue();
             }
         }
         this->variables["x"] = x;
@@ -297,15 +319,15 @@ namespace fl {
     }
 
     scalar Function::evaluate(const std::map<std::string, scalar>* localVariables) const {
-        if (not this->_root.get())
-            throw fl::Exception("[function error] evaluation failed because the function is not loaded", FL_AT);
+        if (not _root.get())
+            throw Exception("[function error] evaluation failed because the function is not loaded", FL_AT);
         if (localVariables)
-            return this->_root->evaluate(localVariables);
-        return this->_root->evaluate(&this->variables);
+            return _root->evaluate(localVariables);
+        return _root->evaluate(&this->variables);
     }
 
     std::string Function::parameters() const {
-        return _formula;
+        return getFormula();
     }
 
     void Function::configure(const std::string& parameters) {
@@ -320,27 +342,26 @@ namespace fl {
     }
 
     bool Function::isLoaded() const {
-        return this->_root.get() != NULL;
+        return this->_root.get() != fl::null;
     }
 
     void Function::unload() {
-        this->_root.reset(NULL);
+        this->_root.reset(fl::null);
         this->variables.clear();
     }
 
     void Function::load() {
-        load(this->_formula);
+        load(getFormula());
     }
 
     void Function::load(const std::string& formula) {
-        load(formula, this->_engine);
+        load(formula, getEngine());
     }
 
     void Function::load(const std::string& formula,
             const Engine* engine) {
-        unload();
-        this->_formula = formula;
-        this->_engine = engine;
+        setFormula(formula);
+        setEngine(engine);
         this->_root.reset(parse(formula));
         membership(0.0); //make sure function evaluates without throwing exception.
     }
@@ -373,23 +394,32 @@ namespace fl {
         return new Function;
     }
 
+    void Function::updateReference(const Engine* engine) {
+        setEngine(engine);
+        try {
+            load();
+        } catch (...) {
+            //ignore
+        }
+    }
+
     std::string Function::space(const std::string& formula) const {
         std::vector<std::string> chars;
         chars.push_back("(");
         chars.push_back(")");
         chars.push_back(",");
 
-        std::vector<std::string> operators = fl::FactoryManager::instance()->function()->availableOperators();
+        std::vector<std::string> operators = FactoryManager::instance()->function()->availableOperators();
         for (std::size_t i = 0; i < operators.size(); ++i) {
-            if (not (operators.at(i) == fl::Rule::andKeyword() or
-                    operators.at(i) == fl::Rule::orKeyword())) {
+            if (not (operators.at(i) == Rule::andKeyword() or
+                    operators.at(i) == Rule::orKeyword())) {
                 chars.push_back(operators.at(i));
             }
         }
 
         std::string result = formula;
         for (std::size_t i = 0; i < chars.size(); ++i) {
-            result = fl::Op::findReplace(result, chars.at(i), " " + chars.at(i) + " ");
+            result = Op::findReplace(result, chars.at(i), " " + chars.at(i) + " ");
         }
         return result;
     }
@@ -397,7 +427,7 @@ namespace fl {
     /****************************************
      * The Glorious Parser
      * Shunting-yard algorithm
-     * TODO: Maybe change it for http://en.wikipedia.org/wiki/Operator-precedence_parser
+     * @todo: maybe change it for http://en.wikipedia.org/wiki/Operator-precedence_parser
      ***************************************/
 
     std::string Function::toPostfix(const std::string& formula) const {
@@ -408,7 +438,7 @@ namespace fl {
 
         std::stringstream tokenizer(spacedFormula);
         std::string token;
-        FunctionFactory* factory = fl::FactoryManager::instance()->function();
+        FunctionFactory* factory = FactoryManager::instance()->function();
         while (tokenizer >> token) {
             Element* element = factory->getObject(token);
             bool isOperand = not element and token != "(" and token != ")" and token != ",";
@@ -427,13 +457,13 @@ namespace fl {
                 if (stack.empty() or stack.top() != "(") {
                     std::ostringstream ex;
                     ex << "[parsing error] mismatching parentheses in: " << formula;
-                    throw fl::Exception(ex.str(), FL_AT);
+                    throw Exception(ex.str(), FL_AT);
                 }
 
             } else if (element and element->isOperator()) {
                 Element* op1 = element;
                 for (;;) {
-                    Element* op2 = NULL;
+                    Element* op2 = fl::null;
                     if (not stack.empty()) op2 = factory->getObject(stack.top());
                     if (not op2) break;
 
@@ -457,11 +487,11 @@ namespace fl {
                 if (stack.empty() or stack.top() != "(") {
                     std::ostringstream ex;
                     ex << "[parsing error] mismatching parentheses in: " << formula;
-                    throw fl::Exception(ex.str(), FL_AT);
+                    throw Exception(ex.str(), FL_AT);
                 }
                 stack.pop(); //get rid of "("
 
-                Element* top = NULL;
+                Element* top = fl::null;
                 if (not stack.empty()) top = factory->getObject(stack.top());
                 if (top and top->isFunction()) {
                     queue.push(stack.top());
@@ -470,7 +500,7 @@ namespace fl {
             } else {
                 std::ostringstream ex;
                 ex << "[parsing error] unexpected error with token <" << token << ">";
-                throw fl::Exception(ex.str(), FL_AT);
+                throw Exception(ex.str(), FL_AT);
             }
         }
 
@@ -478,7 +508,7 @@ namespace fl {
             if (stack.top() == "(" or stack.top() == ")") {
                 std::ostringstream ex;
                 ex << "[parsing error] mismatching parentheses in: " << formula;
-                throw fl::Exception(ex.str(), FL_AT);
+                throw Exception(ex.str(), FL_AT);
             }
             queue.push(stack.top());
             stack.pop();
@@ -490,43 +520,31 @@ namespace fl {
             queue.pop();
             if (not queue.empty()) ssPostfix << " ";
         }
-        //        FL_DBG("postfix=" << ssPostfix.str());
         return ssPostfix.str();
     }
 
-    //    bool FunctionFactory::isOperand(const std::string& name) const {
-    //        //An operand is not a parenthesis...
-    //        if (name == "(" or name == ")" or name == ",") return false;
-    //        //nor an operator...
-    //        if (isOperator(name)) return false;
-    //        //nor a function...
-    //        if (isFunction(name)) return false;
-    //        //...it is everything else :)
-    //        return true;
-    //    }
-
     Function::Node* Function::parse(const std::string& formula) {
         if (formula.empty())
-            throw fl::Exception("[function error] formula is empty", FL_AT);
+            throw Exception("[function error] formula is empty", FL_AT);
         std::string postfix = toPostfix(formula);
 
         std::stack<Node*> stack;
 
         std::istringstream tokenizer(postfix);
         std::string token;
-        FunctionFactory* factory = fl::FactoryManager::instance()->function();
+        FunctionFactory* factory = FactoryManager::instance()->function();
         while (tokenizer >> token) {
             Element* element = factory->getObject(token);
             bool isOperand = not element and token != "(" and token != ")" and token != ",";
 
             if (element) {
-                if (element->arity > (int) stack.size()) {
+                if (element->arity > static_cast<int> (stack.size())) {
                     std::ostringstream ss;
                     ss << "[function error] " << (element->isOperator() ? "operator" : "function") <<
                             " <" << element->name << "> has arity <" << element->arity << ">, "
                             "but found <" << stack.size() << "> element" <<
                             (stack.size() == 1 ? "" : "s");
-                    throw fl::Exception(ss.str(), FL_AT);
+                    throw Exception(ss.str(), FL_AT);
                 }
 
                 Node* node = new Node(element->clone());
@@ -541,10 +559,10 @@ namespace fl {
             } else if (isOperand) {
                 Node* node;
                 try {
-                    scalar value = fl::Op::toScalar(token);
+                    scalar value = Op::toScalar(token);
                     node = new Node(value);
                 } catch (std::exception& ex) {
-                    (void) ex;
+                    FL_IUNUSED(ex);
                     node = new Node(token);
                 }
                 stack.push(node);
@@ -552,49 +570,9 @@ namespace fl {
         }
 
         if (stack.size() != 1)
-            throw fl::Exception("[function error] ill-formed formula <" + formula + ">", FL_AT);
+            throw Exception("[function error] ill-formed formula <" + formula + ">", FL_AT);
 
         return stack.top();
-    }
-
-    void Function::main() {
-        Function f;
-        std::string text = "3+4*2/(1-5)^2^3";
-        FL_LOG(f.toPostfix(text));
-        FL_LOG("P: " << f.parse(text)->toInfix());
-        FL_LOG(">" << f.parse(text)->evaluate());
-        //3 4 2 * 1 5 - 2 3 ^ ^ / +
-
-        f.variables["y"] = 1.0;
-        text = "sin(y*x)^2/x";
-        FL_LOG("pre: " << f.parse(text)->toPrefix());
-        FL_LOG("in: " << f.parse(text)->toInfix());
-        FL_LOG("pos: " << f.parse(text)->toPostfix());
-        f.load(text);
-        FL_LOG("Result: " << f.membership(1));
-        //y x * sin 2 ^ x /
-
-
-        text = "(Temperature is High and Oxygen is Low) or "
-                "(Temperature is Low and (Oxygen is Low or Oxygen is High))";
-        FL_LOG(f.toPostfix(text));
-
-        f.variables["pi"] = 3.14;
-        text = "-5 *4/sin(-pi/2)";
-        FL_LOG(f.toPostfix(text));
-        try {
-            FL_LOG(f.parse(text)->evaluate());
-        } catch (std::exception& e) {
-            FL_LOG(e.what());
-        }
-        f.variables["pi"] = 3.14;
-        text = "~5 *4/sin(~pi/2)";
-        FL_LOG(f.toPostfix(text));
-        try {
-            FL_LOG(f.parse(text)->evaluate(&f.variables));
-        } catch (std::exception& e) {
-            FL_LOG(e.what());
-        }
     }
 
 }

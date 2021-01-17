@@ -7,14 +7,11 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
- 
 #pragma once
 
 class JsonNode;
 typedef std::map <std::string, JsonNode> JsonMap;
 typedef std::vector <JsonNode> JsonVector;
-
-DLL_LINKAGE std::ostream & operator<<(std::ostream &out, const JsonNode &node);
 
 struct Bonus;
 class ResourceID;
@@ -22,14 +19,15 @@ class ResourceID;
 class DLL_LINKAGE JsonNode
 {
 public:
-	enum JsonType
+	enum class JsonType
 	{
 		DATA_NULL,
 		DATA_BOOL,
 		DATA_FLOAT,
 		DATA_STRING,
 		DATA_VECTOR,
-		DATA_STRUCT
+		DATA_STRUCT,
+		DATA_INTEGER
 	};
 
 private:
@@ -40,6 +38,7 @@ private:
 		std::string* String;
 		JsonVector* Vector;
 		JsonMap* Struct;
+		si64 Integer;
 	};
 
 	JsonType type;
@@ -50,11 +49,12 @@ public:
 	std::string meta;
 
 	//Create empty node
-	JsonNode(JsonType Type = DATA_NULL);
+	JsonNode(JsonType Type = JsonType::DATA_NULL);
 	//Create tree from Json-formatted input
 	explicit JsonNode(const char * data, size_t datasize);
 	//Create tree from JSON file
  	explicit JsonNode(ResourceID && fileURI);
+ 	explicit JsonNode(const ResourceID & fileURI);
 	explicit JsonNode(ResourceID && fileURI, bool & isValidSyntax);
 	//Copy c-tor
 	JsonNode(const JsonNode &copy);
@@ -74,19 +74,24 @@ public:
 	JsonType getType() const;
 
 	bool isNull() const;
+	bool isNumber() const;
 	/// removes all data from node and sets type to null
 	void clear();
 
 	/// non-const accessors, node will change type on type mismatch
 	bool & Bool();
 	double & Float();
+	si64 & Integer();
 	std::string & String();
 	JsonVector & Vector();
 	JsonMap & Struct();
 
 	/// const accessors, will cause assertion failure on type mismatch
-	const bool & Bool() const;
-	const double & Float() const;
+	bool Bool() const;
+	///float and integer allowed
+	double Float() const;
+	///only integer allowed
+	si64 Integer() const;
 	const std::string & String() const;
 	const JsonVector & Vector() const;
 	const JsonMap & Struct() const;
@@ -105,17 +110,24 @@ public:
 	JsonNode & operator[](std::string child);
 	const JsonNode & operator[](std::string child) const;
 
+	std::string toJson() const;
+
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
 		h & meta;
 		h & type;
 		switch (type) {
-			break; case DATA_NULL:
-			break; case DATA_BOOL:   h & data.Bool;
-			break; case DATA_FLOAT:  h & data.Float;
-			break; case DATA_STRING: h & data.String;
-			break; case DATA_VECTOR: h & data.Vector;
-			break; case DATA_STRUCT: h & data.Struct;
+			break; case JsonType::DATA_NULL:
+			break; case JsonType::DATA_BOOL:   h & data.Bool;
+			break; case JsonType::DATA_FLOAT:  h & data.Float;
+			break; case JsonType::DATA_STRING: h & data.String;
+			break; case JsonType::DATA_VECTOR: h & data.Vector;
+			break; case JsonType::DATA_STRUCT: h & data.Struct;
+		}
+		if(version >= 770)
+		{
+			if(type == JsonType::DATA_INTEGER)
+				h & data.Integer;
 		}
 	}
 };
@@ -125,15 +137,16 @@ namespace JsonUtils
 	/**
 	 * @brief parse short bonus format, excluding type
 	 * @note sets duration to Permament
-	 */	
-	DLL_LINKAGE void parseTypedBonusShort(const JsonVector &source, Bonus *dest);
-	
+	 */
+	DLL_LINKAGE void parseTypedBonusShort(const JsonVector &source, std::shared_ptr<Bonus> dest);
+
 	///
-	DLL_LINKAGE Bonus * parseBonus (const JsonVector &ability_vec);
-	DLL_LINKAGE Bonus * parseBonus (const JsonNode &bonus);
-	DLL_LINKAGE void unparseBonus (JsonNode &node, const Bonus * bonus);
-	DLL_LINKAGE void resolveIdentifier (si32 &var, const JsonNode &node, std::string name);
-	DLL_LINKAGE void resolveIdentifier (const JsonNode &node, si32 &var);
+	DLL_LINKAGE std::shared_ptr<Bonus> parseBonus(const JsonVector &ability_vec);
+	DLL_LINKAGE std::shared_ptr<Bonus> parseBonus(const JsonNode &ability);
+	DLL_LINKAGE bool parseBonus(const JsonNode &ability, Bonus *placement);
+	DLL_LINKAGE void unparseBonus (JsonNode &node, const std::shared_ptr<Bonus>& bonus);
+	DLL_LINKAGE void resolveIdentifier(si32 &var, const JsonNode &node, std::string name);
+	DLL_LINKAGE void resolveIdentifier(const JsonNode &node, si32 &var);
 
 	/**
 	 * @brief recursively merges source into dest, replacing identical fields
@@ -144,7 +157,7 @@ namespace JsonUtils
 	 * @note this function will destroy data in source
 	 */
 	DLL_LINKAGE void merge(JsonNode & dest, JsonNode & source);
-	
+
 	/**
 	 * @brief recursively merges source into dest, replacing identical fields
 	 * struct : recursively calls this function
@@ -152,12 +165,12 @@ namespace JsonUtils
 	 * values : value in source will replace value in dest
 	 * null   : if value in source is present but set to null it will delete entry in dest
 	 * @note this function will preserve data stored in source by creating copy
-	 */ 
+	 */
 	DLL_LINKAGE void mergeCopy(JsonNode & dest, JsonNode source);
-	
+
     /** @brief recursively merges descendant into copy of base node
      * Result emulates inheritance semantic
-     * 
+     *
      *
      */
 	DLL_LINKAGE void inherit(JsonNode & descendant, const JsonNode & base);
@@ -200,7 +213,7 @@ namespace JsonDetail
 {
 	// conversion helpers for JsonNode::convertTo (partial template function instantiation is illegal in c++)
 
-	template <typename T, int arithm> 
+	template <typename T, int arithm>
 	struct JsonConvImpl;
 
 	template <typename T>
@@ -229,7 +242,7 @@ namespace JsonDetail
 			///this should be triggered only for numeric types and enums
 			static_assert(boost::mpl::or_<std::is_arithmetic<Type>, std::is_enum<Type>, boost::is_class<Type> >::value, "Unsupported type for JsonNode::convertTo()!");
 			return JsonConvImpl<Type, boost::mpl::or_<std::is_enum<Type>, boost::is_class<Type> >::value >::convertImpl(node);
-				
+
 		}
 	};
 
@@ -292,7 +305,7 @@ namespace JsonDetail
 			return node.Bool();
 		}
 	};
-} // namespace JsonDetail
+}
 
 template<typename Type>
 Type JsonNode::convertTo() const

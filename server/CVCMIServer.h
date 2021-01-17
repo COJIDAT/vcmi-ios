@@ -1,7 +1,3 @@
-#pragma once
-
-
-
 /*
  * CVCMIServer.h, part of VCMI engine
  *
@@ -11,12 +7,16 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include <boost/program_options.hpp>
 
 class CMapInfo;
 
 class CConnection;
 struct CPackForSelectionScreen;
 class CGameHandler;
+struct SharedMemory;
 
 namespace boost
 {
@@ -43,22 +43,29 @@ typedef boost::asio::basic_stream_socket < boost::asio::ip::tcp , boost::asio::s
 
 class CVCMIServer
 {
+	ui16 port;
 	boost::asio::io_service *io;
 	TAcceptor * acceptor;
+	SharedMemory * shared;
 
 	CConnection *firstConnection;
 public:
-	CVCMIServer(); //c-tor
-	~CVCMIServer(); //d-tor
+	CVCMIServer();
+	~CVCMIServer();
 
 	void start();
-	CGameHandler *initGhFromHostingConnection(CConnection &c);
+	std::shared_ptr<CGameHandler> initGhFromHostingConnection(CConnection &c);
 
 	void newGame();
 	void loadGame();
 	void newPregame();
+
+#ifdef VCMI_ANDROID
+    static void create();
+#endif
 };
 
+struct StartInfo;
 class CPregameServer
 {
 public:
@@ -68,7 +75,6 @@ public:
 	std::list<CPackForSelectionScreen*> toAnnounce;
 	boost::recursive_mutex mx;
 
-	//std::vector<CMapInfo> maps;
 	TAcceptor *acceptor;
 	TSocket *upcomingConnection;
 
@@ -96,6 +102,7 @@ public:
 	void sendPack(CConnection * pc, const CPackForSelectionScreen & pack);
 	void startListeningThread(CConnection * pc);
 };
+
 #ifndef VCMI_IOS
 extern boost::program_options::variables_map cmdLineOptions;
 #endif

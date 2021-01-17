@@ -1,44 +1,35 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/rule/RuleBlock.h"
 
+#include "fl/activation/General.h"
 #include "fl/imex/FllExporter.h"
 #include "fl/norm/TNorm.h"
 #include "fl/norm/SNorm.h"
 #include "fl/rule/Rule.h"
-
-#include <sstream>
+#include "fl/Operation.h"
 
 namespace fl {
 
     RuleBlock::RuleBlock(const std::string& name)
-    : _name(name), _enabled(true) {
-    }
+    : _enabled(true), _name(name), _description("") { }
 
-    RuleBlock::RuleBlock(const RuleBlock& other) : _name(other._name),
-    _enabled(true) {
+    RuleBlock::RuleBlock(const RuleBlock& other) : _enabled(true), _name(other._name),
+    _description(other._description) {
         copyFrom(other);
     }
 
@@ -48,9 +39,10 @@ namespace fl {
                 delete _rules.at(i);
             }
             _rules.clear();
-            _conjunction.reset(NULL);
-            _disjunction.reset(NULL);
-            _activation.reset(NULL);
+            _conjunction.reset(fl::null);
+            _disjunction.reset(fl::null);
+            _implication.reset(fl::null);
+            _activation.reset(fl::null);
 
             copyFrom(other);
         }
@@ -58,13 +50,15 @@ namespace fl {
     }
 
     void RuleBlock::copyFrom(const RuleBlock& source) {
-        _name = source._name;
         _enabled = source._enabled;
-        if (source._activation.get()) _activation.reset(source._activation->clone());
+        _name = source._name;
+        _description = source._description;
         if (source._conjunction.get()) _conjunction.reset(source._conjunction->clone());
         if (source._disjunction.get()) _disjunction.reset(source._disjunction->clone());
+        if (source._implication.get()) _implication.reset(source._implication->clone());
+        if (source._activation.get()) _activation.reset(source._activation->clone());
         for (std::size_t i = 0; i < source._rules.size(); ++i) {
-            _rules.push_back(new Rule(*source._rules.at(i)));
+            _rules.push_back(source._rules.at(i)->clone());
         }
     }
 
@@ -75,21 +69,25 @@ namespace fl {
         _rules.clear();
     }
 
-    void RuleBlock::activate() {
-        FL_DBG("===================");
-        FL_DBG("ACTIVATING RULEBLOCK " << _name);
-        for (std::size_t i = 0; i < _rules.size(); ++i) {
-            Rule* rule = _rules.at(i);
-            if (rule->isLoaded()) {
-                scalar activationDegree = rule->activationDegree(_conjunction.get(), _disjunction.get());
-                FL_DBG(rule->toString() << " [activationDegree=" << activationDegree << "]");
-                if (Op::isGt(activationDegree, 0.0)) {
-                    rule->activate(activationDegree, _activation.get());
-                }
-            } else {
-                FL_DBG("Rule not loaded: " << rule->toString());
+    Complexity RuleBlock::complexity() const {
+        Complexity result;
+        result.comparison(1);
+        if (_activation.get()) {
+            result += _activation->complexity(this);
+        } else {
+            for (std::size_t i = 0; i < _rules.size(); ++i) {
+                result += _rules.at(i)->complexity(
+                        _conjunction.get(), _disjunction.get(), _implication.get());
             }
         }
+        return result;
+    }
+
+    void RuleBlock::activate() {
+        if (not _activation.get()) {
+            _activation.reset(new General);
+        }
+        _activation->activate(this);
     }
 
     void RuleBlock::unloadRules() const {
@@ -114,7 +112,7 @@ namespace fl {
             }
         }
         if (throwException) {
-            fl::Exception exception("[ruleblock error] the following "
+            Exception exception("[ruleblock error] the following "
                     "rules could not be loaded:\n" + exceptions.str(), FL_AT);
             throw exception;
         }
@@ -133,6 +131,14 @@ namespace fl {
         return this->_name;
     }
 
+    void RuleBlock::setDescription(const std::string& description) {
+        this->_description = description;
+    }
+
+    std::string RuleBlock::getDescription() const {
+        return this->_description;
+    }
+
     void RuleBlock::setConjunction(TNorm* tnorm) {
         this->_conjunction.reset(tnorm);
     }
@@ -149,11 +155,19 @@ namespace fl {
         return this->_disjunction.get();
     }
 
-    void RuleBlock::setActivation(TNorm* activation) {
+    void RuleBlock::setImplication(TNorm* implication) {
+        this->_implication.reset(implication);
+    }
+
+    TNorm* RuleBlock::getImplication() const {
+        return this->_implication.get();
+    }
+
+    void RuleBlock::setActivation(Activation* activation) {
         this->_activation.reset(activation);
     }
 
-    TNorm* RuleBlock::getActivation() const {
+    Activation* RuleBlock::getActivation() const {
         return this->_activation.get();
     }
 
@@ -173,25 +187,25 @@ namespace fl {
      * Operations for std::vector _rules
      */
     void RuleBlock::addRule(Rule* rule) {
-        this->_rules.push_back(rule);
+        _rules.push_back(rule);
     }
 
-    void RuleBlock::insertRule(Rule* rule, int index) {
-        this->_rules.insert(this->_rules.begin() + index, rule);
+    void RuleBlock::insertRule(Rule* rule, std::size_t index) {
+        _rules.insert(_rules.begin() + index, rule);
     }
 
-    Rule* RuleBlock::getRule(int index) const {
-        return this->_rules.at(index);
+    Rule* RuleBlock::getRule(std::size_t index) const {
+        return _rules.at(index);
     }
 
-    Rule* RuleBlock::removeRule(int index) {
-        Rule* result = this->_rules.at(index);
-        this->_rules.erase(this->_rules.begin() + index);
+    Rule* RuleBlock::removeRule(std::size_t index) {
+        Rule* result = _rules.at(index);
+        _rules.erase(_rules.begin() + index);
         return result;
     }
 
-    int RuleBlock::numberOfRules() const {
-        return this->_rules.size();
+    std::size_t RuleBlock::numberOfRules() const {
+        return _rules.size();
     }
 
     const std::vector<Rule*>& RuleBlock::rules() const {
@@ -206,5 +220,8 @@ namespace fl {
         return this->_rules;
     }
 
+    RuleBlock* RuleBlock::clone() const {
+        return new RuleBlock(*this);
+    }
 
 }

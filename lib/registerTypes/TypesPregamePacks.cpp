@@ -1,9 +1,17 @@
+/*
+ * TypesPregamePacks.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "RegisterTypes.h"
 
 #include "../mapping/CMapInfo.h"
 #include "../StartInfo.h"
-#include "../BattleState.h"
 #include "../CGameState.h"
 #include "../mapping/CMap.h"
 #include "../CModHandler.h"
@@ -12,17 +20,18 @@
 #include "../VCMI_Lib.h"
 #include "../CArtHandler.h"
 #include "../CHeroHandler.h"
-#include "../CSpellHandler.h"
+#include "../spells/CSpellHandler.h"
 #include "../CTownHandler.h"
 #include "../mapping/CCampaignHandler.h"
 #include "../NetPacks.h"
 #include "../mapObjects/CObjectClassesHandler.h"
+#include "../rmg/CMapGenOptions.h"
 
-template void registerTypesPregamePacks<CISer<CConnection>>(CISer<CConnection>& s);
-template void registerTypesPregamePacks<COSer<CConnection>>(COSer<CConnection>& s);
-template void registerTypesPregamePacks<CISer<CMemorySerializer>>(CISer<CMemorySerializer>& s);
-template void registerTypesPregamePacks<COSer<CMemorySerializer>>(COSer<CMemorySerializer>& s);
-template void registerTypesPregamePacks<CSaveFile>(CSaveFile & s);
-template void registerTypesPregamePacks<CLoadFile>(CLoadFile & s);
+#include "../serializer/BinaryDeserializer.h"
+#include "../serializer/BinarySerializer.h"
+#include "../serializer/CTypeList.h"
+
+template void registerTypesPregamePacks<BinaryDeserializer>(BinaryDeserializer & s);
+template void registerTypesPregamePacks<BinarySerializer>(BinarySerializer & s);
 template void registerTypesPregamePacks<CTypeList>(CTypeList & s);
-template void registerTypesPregamePacks<CLoadIntegrityValidator>(CLoadIntegrityValidator & s);
+

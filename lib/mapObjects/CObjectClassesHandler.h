@@ -1,12 +1,3 @@
-﻿#pragma once
-
-#include "ObjectTemplate.h"
-
-#include "../GameConstants.h"
-#include "../ConstTransitivePtr.h"
-#include "../IHandlerBase.h"
-#include "../JsonNode.h"
-
 /*
  * CObjectClassesHandler.h, part of VCMI engine
  *
@@ -16,9 +7,32 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "ObjectTemplate.h"
+
+#include "../GameConstants.h"
+#include "../ConstTransitivePtr.h"
+#include "../IHandlerBase.h"
+#include "../JsonNode.h"
 
 class JsonNode;
 class CRandomGenerator;
+
+
+struct SObjectSounds
+{
+	std::vector<std::string> ambient;
+	std::vector<std::string> visit;
+	std::vector<std::string> removal;
+
+	template <typename Handler> void serialize(Handler &h, const int version)
+	{
+		h & ambient;
+		h & visit;
+		h & removal;
+	}
+};
 
 /// Structure that describes placement rules for this object in random map
 struct DLL_LINKAGE RandomMapInfo
@@ -44,7 +58,10 @@ struct DLL_LINKAGE RandomMapInfo
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & value & mapLimit & zoneLimit & rarity;
+		h & value;
+		h & mapLimit;
+		h & zoneLimit;
+		h & rarity;
 	}
 };
 
@@ -90,6 +107,8 @@ public:
 	virtual bool givesSpells() const { return false; }
 
 	virtual bool givesBonuses() const { return false; }
+
+	virtual ~IObjectInfo() = default;
 };
 
 class CGObjectInstance;
@@ -101,30 +120,37 @@ class DLL_LINKAGE AObjectTypeHandler : public boost::noncopyable
 	/// Human-readable name of this object, used for objects like banks and dwellings, if set
 	boost::optional<std::string> objectName;
 
-	si32 type;
-	si32 subtype;
-
 	JsonNode base; /// describes base template
 
 	std::vector<ObjectTemplate> templates;
-protected:
 
+	SObjectSounds sounds;
+protected:
+	void preInitObject(CGObjectInstance * obj) const;
 	virtual bool objectFilter(const CGObjectInstance *, const ObjectTemplate &) const;
 
 	/// initialization for classes that inherit this one
 	virtual void initTypeData(const JsonNode & input);
 public:
-	virtual ~AObjectTypeHandler(){}
+	std::string typeName;
+	std::string subTypeName;
+
+	si32 type;
+	si32 subtype;
+	AObjectTypeHandler();
+	virtual ~AObjectTypeHandler();
 
 	void setType(si32 type, si32 subtype);
+	void setTypeName(std::string type, std::string subtype);
 
 	/// loads generic data from Json structure and passes it towards type-specific constructors
 	void init(const JsonNode & input, boost::optional<std::string> name = boost::optional<std::string>());
 
 	/// Returns object-specific name, if set
 	boost::optional<std::string> getCustomName() const;
+	SObjectSounds getSounds() const;
 
-	void addTemplate(ObjectTemplate templ);
+	void addTemplate(const ObjectTemplate & templ);
 	void addTemplate(JsonNode config);
 
 	/// returns all templates matching parameters
@@ -143,18 +169,31 @@ public:
 
 	/// Creates object and set up core properties (like ID/subID). Object is NOT initialized
 	/// to allow creating objects before game start (e.g. map loading)
-	virtual CGObjectInstance * create(ObjectTemplate tmpl) const = 0;
+	virtual CGObjectInstance * create(const ObjectTemplate & tmpl) const = 0;
 
 	/// Configures object properties. Should be re-entrable, resetting state of the object if necessarily
 	/// This should set remaining properties, including randomized or depending on map
 	virtual void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const = 0;
 
-	/// Returns object configuration, if available. Othervice returns NULL
-	virtual std::unique_ptr<IObjectInfo> getObjectInfo(ObjectTemplate tmpl) const = 0;
+	/// Returns object configuration, if available. Otherwise returns NULL
+	virtual std::unique_ptr<IObjectInfo> getObjectInfo(const ObjectTemplate & tmpl) const = 0;
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & type & subtype & templates & rmgInfo & objectName;
+		h & type;
+		h & subtype;
+		h & templates;
+		h & rmgInfo;
+		h & objectName;
+		if(version >= 759)
+		{
+			h & typeName;
+			h & subTypeName;
+		}
+		if(version >= 778)
+		{
+			h & sounds;
+		}
 	}
 };
 
@@ -167,16 +206,31 @@ class DLL_LINKAGE CObjectClassesHandler : public IHandlerBase
 	struct ObjectContainter
 	{
 		si32 id;
-
+		std::string identifier;
 		std::string name; // human-readable name
-		std::string handlerName; // ID of handler that controls this object, shoul be determined using hadlerConstructor map
+		std::string handlerName; // ID of handler that controls this object, should be determined using handlerConstructor map
 
 		JsonNode base;
-		std::map<si32, TObjectTypeHandler> objects;
+		std::map<si32, TObjectTypeHandler> subObjects;
+		std::map<std::string, si32> subIds;//full id from core scope -> subtype
+
+		SObjectSounds sounds;
 
 		template <typename Handler> void serialize(Handler &h, const int version)
 		{
-			h & name & handlerName & base & objects;
+			h & name;
+			h & handlerName;
+			h & base;
+			h & subObjects;
+			if(version >= 759)
+			{
+				h & identifier;
+				h & subIds;
+			}
+			if(version >= 778)
+			{
+				h & sounds;
+			}
 		}
 	};
 
@@ -194,17 +248,18 @@ class DLL_LINKAGE CObjectClassesHandler : public IHandlerBase
 	/// format: customNames[primaryID][secondaryID] -> name
 	std::map<si32, std::vector<std::string>> customNames;
 
-	void loadObjectEntry(const JsonNode & entry, ObjectContainter * obj);
-	ObjectContainter * loadFromJson(const JsonNode & json);
+	void loadObjectEntry(const std::string & identifier, const JsonNode & entry, ObjectContainter * obj);
+	ObjectContainter * loadFromJson(const JsonNode & json, const std::string & name);
 public:
 	CObjectClassesHandler();
+	~CObjectClassesHandler();
 
 	std::vector<JsonNode> loadLegacyData(size_t dataSize) override;
 
 	void loadObject(std::string scope, std::string name, const JsonNode & data) override;
 	void loadObject(std::string scope, std::string name, const JsonNode & data, size_t index) override;
 
-	void loadSubObject(std::string name, JsonNode config, si32 ID, boost::optional<si32> subID = boost::optional<si32>());
+	void loadSubObject(const std::string & identifier, JsonNode config, si32 ID, boost::optional<si32> subID = boost::optional<si32>());
 	void removeSubObject(si32 ID, si32 subID);
 
 	void beforeValidate(JsonNode & object) override;
@@ -218,12 +273,18 @@ public:
 
 	/// returns handler for specified object (ID-based). ObjectHandler keeps ownership
 	TObjectTypeHandler getHandlerFor(si32 type, si32 subtype) const;
+	TObjectTypeHandler getHandlerFor(std::string type, std::string subtype) const;
 
 	std::string getObjectName(si32 type) const;
 	std::string getObjectName(si32 type, si32 subtype) const;
-	
+
+	SObjectSounds getObjectSounds(si32 type) const;
+	SObjectSounds getObjectSounds(si32 type, si32 subtype) const;
+
 	/// Returns handler string describing the handler (for use in client)
 	std::string getObjectHandlerName(si32 type) const;
+
+
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{

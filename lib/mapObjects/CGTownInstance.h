@@ -1,11 +1,3 @@
-﻿#pragma once
-
-#include "CObjectHandler.h"
-#include "CGMarket.h" // For IMarket interface
-#include "CArmedInstance.h"
-
-#include "../CTownHandler.h" // For CTown
-
 /*
  * CGTownInstance.h, part of VCMI engine
  *
@@ -15,33 +7,56 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "CObjectHandler.h"
+#include "CGMarket.h" // For IMarket interface
+#include "CArmedInstance.h"
+
+#include "../CTownHandler.h" // For CTown
 
 class CCastleEvent;
 class CGTownInstance;
+class CGDwelling;
 
 class DLL_LINKAGE CSpecObjInfo
 {
 public:
-	virtual ~CSpecObjInfo(){};
-	PlayerColor player; //owner
+	CSpecObjInfo();
+	virtual ~CSpecObjInfo() = default;
+
+	virtual void serializeJson(JsonSerializeFormat & handler) = 0;
+
+	const CGDwelling * owner;
 };
 
 class DLL_LINKAGE CCreGenAsCastleInfo : public virtual CSpecObjInfo
 {
 public:
+	CCreGenAsCastleInfo();
 	bool asCastle;
-	ui32 identifier;
-	ui8 castles[2]; //allowed castles
+	ui32 identifier;//h3m internal identifier
+
+	std::vector<bool> allowedFactions;
+
+	std::string instanceId;//vcmi map instance identifier
+	void serializeJson(JsonSerializeFormat & handler) override;
 };
 
 class DLL_LINKAGE CCreGenLeveledInfo : public virtual CSpecObjInfo
 {
 public:
-	ui8 minLevel, maxLevel; //minimal and maximal level of creature in dwelling: <0, 6>
+	CCreGenLeveledInfo();
+	ui8 minLevel, maxLevel; //minimal and maximal level of creature in dwelling: <1, 7>
+
+	void serializeJson(JsonSerializeFormat & handler) override;
 };
 
 class DLL_LINKAGE CCreGenLeveledCastleInfo : public CCreGenAsCastleInfo, public CCreGenLeveledInfo
 {
+public:
+	CCreGenLeveledCastleInfo() = default;
+	void serializeJson(JsonSerializeFormat & handler) override;
 };
 
 class DLL_LINKAGE CGDwelling : public CArmedInstance
@@ -49,23 +64,33 @@ class DLL_LINKAGE CGDwelling : public CArmedInstance
 public:
 	typedef std::vector<std::pair<ui32, std::vector<CreatureID> > > TCreaturesSet;
 
-	CSpecObjInfo * info; //h3m info about dewlling
+	CSpecObjInfo * info; //random dwelling options; not serialized
 	TCreaturesSet creatures; //creatures[level] -> <vector of alternative ids (base creature and upgrades, creatures amount>
 
-	template <typename Handler> void serialize(Handler &h, const int version)
-	{
-		h & static_cast<CArmedInstance&>(*this) & creatures;
-	}
+	CGDwelling();
+	virtual ~CGDwelling();
 
-	void initObj() override;
+	void initRandomObjectInfo();
+protected:
+	void serializeJsonOptions(JsonSerializeFormat & handler) override;
+
+private:
+	void initObj(CRandomGenerator & rand) override;
 	void onHeroVisit(const CGHeroInstance * h) const override;
-	void newTurn() const override;
+	void newTurn(CRandomGenerator & rand) const override;
 	void setPropertyDer(ui8 what, ui32 val) override;
 	void battleFinished(const CGHeroInstance *hero, const BattleResult &result) const override;
 	void blockingDialogAnswered(const CGHeroInstance *hero, ui32 answer) const override;
 
-private:
+	void updateGuards() const;
 	void heroAcceptsCreatures(const CGHeroInstance *h) const;
+
+public:
+	template <typename Handler> void serialize(Handler &h, const int version)
+	{
+		h & static_cast<CArmedInstance&>(*this);
+		h & creatures;
+	}
 };
 
 class DLL_LINKAGE CGTownBuilding : public IObjectInterface
@@ -78,7 +103,8 @@ public:
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & ID & id;
+		h & ID;
+		h & id;
 	}
 };
 class DLL_LINKAGE COPWBonus : public CGTownBuilding
@@ -129,6 +155,7 @@ struct DLL_LINKAGE GrowthInfo
 		std::string description;
 		Entry(const std::string &format, int _count);
 		Entry(int subID, BuildingID building, int _count);
+		Entry(int _count, const std::string &fullDescription);
 	};
 
 	std::vector<Entry> entries;
@@ -164,23 +191,34 @@ public:
 		h & static_cast<CGDwelling&>(*this);
 		h & static_cast<IShipyard&>(*this);
 		h & static_cast<IMarket&>(*this);
-		h & name & builded & destroyed & identifier;
-		h & garrisonHero & visitingHero;
-		h & alignment & forbiddenBuildings & builtBuildings & bonusValue
-			& possibleSpells & obligatorySpells & spells & /*strInfo & */events & bonusingBuildings;
+		h & name;
+		h & builded;
+		h & destroyed;
+		h & identifier;
+		h & garrisonHero;
+		h & visitingHero;
+		h & alignment;
+		h & forbiddenBuildings;
+		h & builtBuildings;
+		h & bonusValue;
+		h & possibleSpells;
+		h & obligatorySpells;
+		h & spells;
+		h & events;
+		h & bonusingBuildings;
 
 		for (std::vector<CGTownBuilding*>::iterator i = bonusingBuildings.begin(); i!=bonusingBuildings.end(); i++)
 			(*i)->town = this;
 
-		h & town & townAndVis;
+		h & town;
+		h & townAndVis;
 		BONUS_TREE_DESERIALIZATION_FIX
 
 		vstd::erase_if(builtBuildings, [this](BuildingID building) -> bool
 		{
 			if(!town->buildings.count(building) ||  !town->buildings.at(building))
 			{
-				logGlobal->errorStream() << boost::format("#1444-like issue in CGTownInstance::serialize. From town %s at %s removing the bogus builtBuildings item %s")
-					% name % pos % building;
+				logGlobal->error("#1444-like issue in CGTownInstance::serialize. From town %s at %s removing the bogus builtBuildings item %s", name, pos.toString(), building);
 				return true;
 			}
 			return false;
@@ -201,21 +239,21 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////
 
-	bool passableFor(PlayerColor color) const;
+	bool passableFor(PlayerColor color) const override;
 	//int3 getSightCenter() const override; //"center" tile from which the sight distance is calculated
-	int getSightRadious() const override; //returns sight distance
-	int getBoatType() const; //0 - evil (if a ship can be evil...?), 1 - good, 2 - neutral
-	void getOutOffsets(std::vector<int3> &offsets) const; //offsets to obj pos when we boat can be placed. Parameter will be cleared
+	int getSightRadius() const override; //returns sight distance
+	int getBoatType() const override; //0 - evil (if a ship can be evil...?), 1 - good, 2 - neutral
+	void getOutOffsets(std::vector<int3> &offsets) const override; //offsets to obj pos when we boat can be placed. Parameter will be cleared
 	int getMarketEfficiency() const override; //=market count
-	bool allowsTrade(EMarketMode::EMarketMode mode) const;
-	std::vector<int> availableItemsIds(EMarketMode::EMarketMode mode) const;
+	bool allowsTrade(EMarketMode::EMarketMode mode) const override;
+	std::vector<int> availableItemsIds(EMarketMode::EMarketMode mode) const override;
 
-	void setType(si32 ID, si32 subID);
+	void setType(si32 ID, si32 subID) override;
 	void updateAppearance();
 
 	//////////////////////////////////////////////////////////////////////////
 
-	bool needsLastStack() const;
+	bool needsLastStack() const override;
 	CGTownInstance::EFortLevel fortLevel() const;
 	int hallLevel() const; // -1 - none, 0 - village, 1 - town, 2 - city, 3 - capitol
 	int mageGuildLevel() const; // -1 - none, 0 - village, 1 - town, 2 - city, 3 - capitol
@@ -232,21 +270,30 @@ public:
 	bool armedGarrison() const; //true if town has creatures in garrison or garrisoned hero
 	int getTownLevel() const;
 
-	CBuilding::TRequired genBuildingRequirements(BuildingID build) const;
+	CBuilding::TRequired genBuildingRequirements(BuildingID build, bool deep = false) const;
 
+	void mergeGarrisonOnSiege() const; // merge garrison into army of visiting hero
 	void removeCapitols (PlayerColor owner) const;
+	void clearArmy() const;
 	void addHeroToStructureVisitors(const CGHeroInstance *h, si32 structureInstanceID) const; //hero must be visiting or garrisoned in town
+
+	const CTown * getTown() const ;
 
 	CGTownInstance();
 	virtual ~CGTownInstance();
 
 	///IObjectInterface overrides
-	void newTurn() const override;
+	void newTurn(CRandomGenerator & rand) const override;
 	void onHeroVisit(const CGHeroInstance * h) const override;
 	void onHeroLeave(const CGHeroInstance * h) const override;
-	void initObj() override;
+	void initObj(CRandomGenerator & rand) override;
 	void battleFinished(const CGHeroInstance *hero, const BattleResult &result) const override;
 	std::string getObjectName() const override;
+
+	void afterAddToMap(CMap * map) override;
 protected:
 	void setPropertyDer(ui8 what, ui32 val) override;
+	void serializeJsonOptions(JsonSerializeFormat & handler) override;
+private:
+	int getDwellingBonus(const std::vector<CreatureID>& creatureIds, const std::vector<ConstTransitivePtr<CGDwelling> >& dwellings) const;
 };

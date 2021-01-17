@@ -1,6 +1,3 @@
-#include "StdInc.h"
-#include "ERMParser.h"
-
 /*
  * ERMParser.cpp, part of VCMI engine
  *
@@ -10,6 +7,22 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "ERMParser.h"
+
+
+#include <boost/spirit/include/qi.hpp>
+#include <boost/spirit/include/phoenix_core.hpp>
+#include <boost/spirit/include/phoenix_operator.hpp>
+#include <boost/spirit/include/phoenix_fusion.hpp>
+#include <boost/spirit/include/phoenix_stl.hpp>
+#include <boost/spirit/include/phoenix_object.hpp>
+#include <boost/fusion/include/adapt_struct.hpp>
+
+
+namespace qi = boost::spirit::qi;
+namespace ascii = spirit::ascii;
+namespace phoenix = boost::phoenix;
 
 
 //Greenspun's Tenth Rule of Programming:
@@ -22,7 +35,7 @@ CERMPreprocessor::CERMPreprocessor(const std::string &Fname) : fname(Fname), fil
 {
 	if(!file.is_open())
 	{
-		logGlobal->errorStream() << "File " << Fname << " not found or unable to open";
+		logGlobal->error("File %s not found or unable to open", Fname);
 		return;
 	}
 
@@ -36,7 +49,7 @@ CERMPreprocessor::CERMPreprocessor(const std::string &Fname) : fname(Fname), fil
 		version = VERM;
 	else
 	{
-		logGlobal->errorStream() << "File " << fname << " has wrong header";
+		logGlobal->error("File %s has wrong header", fname);
 		return;
 	}
 }
@@ -46,7 +59,7 @@ class ParseErrorException : public std::exception
 
 };
 
-std::string CERMPreprocessor::retreiveCommandLine()
+std::string CERMPreprocessor::retrieveCommandLine()
 {
 	std::string wholeCommand;
 
@@ -135,7 +148,7 @@ std::string CERMPreprocessor::retreiveCommandLine()
 	}
 
 	if(openedBraces || openedString)
-		logGlobal->errorStream() << "Ill-formed file: " << fname;
+		logGlobal->error("Ill-formed file: %s", fname);
 	return "";
 }
 
@@ -158,7 +171,7 @@ std::vector<LineInfo> ERMParser::parseFile()
 	{
 		while(1)
 		{
-			std::string command = preproc.retreiveCommandLine();
+			std::string command = preproc.retrieveCommandLine();
 			if(command.length() == 0)
 				break;
 
@@ -171,7 +184,7 @@ std::vector<LineInfo> ERMParser::parseFile()
 	}
 	catch (ParseErrorException & e)
 	{
-		logGlobal->errorStream() << "stopped parsing file";
+		logGlobal->error("Stopped parsing file.");
 	}
 	return ret;
 }
@@ -340,7 +353,7 @@ namespace ERM
 
 			trigger %= cmdName >> -identifier >> -condition > qi::lit(";"); /////
 			string %= qi::lexeme['^' >> *(qi::char_ - '^') >> '^'];
-			
+
 			VRLogic %= qi::char_("&|X") >> iexp;
 			VRarithmetic %= qi::char_("+*:/%-") >> iexp;
 			semiCompare %= +qi::char_("<=>") >> iexp;
@@ -360,7 +373,7 @@ namespace ERM
 					(
 						(qi::lit("?") >> trigger) |
 						(qi::lit("!") >> receiver) |
-						(qi::lit("#") >> instruction) | 
+						(qi::lit("#") >> instruction) |
 						(qi::lit("$") >> postTrigger)
 					) >> comment
 				);
@@ -456,7 +469,7 @@ namespace ERM
 		qi::rule<Iterator, TVExp(), ascii::space_type> vexp;
 		qi::rule<Iterator, TLine(), ascii::space_type> vline;
 	};
-};
+}
 
 ERM::TLine ERMParser::parseLine( const std::string & line, int realLineNo )
 {
@@ -466,7 +479,7 @@ ERM::TLine ERMParser::parseLine( const std::string & line, int realLineNo )
 	}
 	catch(...)
 	{
-		logGlobal->errorStream() << "Parse error occurred in file " << srcFile << " (line " << realLineNo << ") :" << line;
+		logGlobal->error("Parse error occurred in file %s (line %d): %s", srcFile, realLineNo, line);
 		throw;
 	}
 }
@@ -482,7 +495,7 @@ ERM::TLine ERMParser::parseLine(const std::string & line)
 	bool r = qi::phrase_parse(beg, end, ERMgrammar, ascii::space, AST);
 	if(!r || beg != end)
 	{
-		logGlobal->errorStream() << "Parse error: cannot parse: " << std::string(beg, end);
+		logGlobal->error("Parse error: cannot parse: %s", std::string(beg, end));
 		throw ParseErrorException();
 	}
 	return AST;
@@ -490,7 +503,7 @@ ERM::TLine ERMParser::parseLine(const std::string & line)
 
 int ERMParser::countHatsBeforeSemicolon( const std::string & line ) const
 {
-	//CHECK: omit macros? or anything else? 
+	//CHECK: omit macros? or anything else?
 	int numOfHats = 0; //num of '^' before ';'
 	//check for unmatched ^
 	for (char c : line)

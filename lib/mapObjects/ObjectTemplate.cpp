@@ -1,3 +1,12 @@
+/*
+ * ObjectTemplate.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CObjectClassesHandler.h"
 
@@ -12,16 +21,6 @@
 #include "../JsonNode.h"
 
 #include "CRewardableConstructor.h"
-
-/*
- * ObjectTemplate.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
 
 static bool isOnVisitableFromTopList(int identifier, int type)
 {
@@ -54,8 +53,56 @@ ObjectTemplate::ObjectTemplate():
 	visitDir(8|16|32|64|128), // all but top
 	id(Obj::NO_OBJ),
 	subid(0),
-	printPriority(0)
+	printPriority(0),
+	stringID("")
 {
+}
+
+ObjectTemplate::ObjectTemplate(const ObjectTemplate& other):
+	visitDir(other.visitDir),
+	allowedTerrains(other.allowedTerrains),
+	id(other.id),
+	subid(other.subid),
+	printPriority(other.printPriority),
+	animationFile(other.animationFile),
+	editorAnimationFile(other.editorAnimationFile),
+	stringID(other.stringID)
+{
+	//default copy constructor is failing with usedTiles this for unknown reason
+
+	usedTiles.resize(other.usedTiles.size());
+	for(size_t i = 0; i < usedTiles.size(); i++)
+		std::copy(other.usedTiles[i].begin(), other.usedTiles[i].end(), std::back_inserter(usedTiles[i]));
+}
+
+ObjectTemplate & ObjectTemplate::operator=(const ObjectTemplate & rhs)
+{
+	visitDir = rhs.visitDir;
+	allowedTerrains = rhs.allowedTerrains;
+	id = rhs.id;
+	subid = rhs.subid;
+	printPriority = rhs.printPriority;
+	animationFile = rhs.animationFile;
+	editorAnimationFile = rhs.editorAnimationFile;
+	stringID = rhs.stringID;
+
+	usedTiles.clear();
+	usedTiles.resize(rhs.usedTiles.size());
+	for(size_t i = 0; i < usedTiles.size(); i++)
+		std::copy(rhs.usedTiles[i].begin(), rhs.usedTiles[i].end(), std::back_inserter(usedTiles[i]));
+	return *this;
+}
+
+void ObjectTemplate::afterLoadFixup()
+{
+	if(id == Obj::EVENT)
+	{
+		setSize(1,1);
+		usedTiles[0][0] = VISITABLE;
+		visitDir = 0xFF;
+	}
+	boost::algorithm::replace_all(animationFile, "\\", "/");
+	boost::algorithm::replace_all(editorAnimationFile, "\\", "/");
 }
 
 void ObjectTemplate::readTxt(CLegacyConfigParser & parser)
@@ -176,16 +223,13 @@ void ObjectTemplate::readMap(CBinaryReader & reader)
 	reader.skip(16);
 	readMsk();
 
-	if (id == Obj::EVENT)
-	{
-		setSize(1,1);
-		usedTiles[0][0] = VISITABLE;
-	}
+	afterLoadFixup();
 }
 
-void ObjectTemplate::readJson(const JsonNode &node)
+void ObjectTemplate::readJson(const JsonNode &node, const bool withTerrain)
 {
 	animationFile = node["animation"].String();
+	editorAnimationFile = node["editorAnimation"].String();
 
 	const JsonVector & visitDirs = node["visitableFrom"].Vector();
 	if (!visitDirs.empty())
@@ -202,7 +246,7 @@ void ObjectTemplate::readJson(const JsonNode &node)
 	else
 		visitDir = 0x00;
 
-	if (!node["allowedTerrains"].isNull())
+	if(withTerrain && !node["allowedTerrains"].isNull())
 	{
 		for (auto & entry : node["allowedTerrains"].Vector())
 			allowedTerrains.insert(ETerrainType(vstd::find_pos(GameConstants::TERRAIN_NAMES, entry.String())));
@@ -211,10 +255,13 @@ void ObjectTemplate::readJson(const JsonNode &node)
 	{
 		for (size_t i=0; i< GameConstants::TERRAIN_TYPES; i++)
 			allowedTerrains.insert(ETerrainType(i));
+
+		allowedTerrains.erase(ETerrainType::ROCK);
 	}
 
-	if (allowedTerrains.empty())
-		logGlobal->warnStream() << "Loaded template without allowed terrains!";
+	if(withTerrain && allowedTerrains.empty())
+		logGlobal->warn("Loaded template without allowed terrains!");
+
 
 	auto charToTile = [&](const char & ch) -> ui8
 	{
@@ -228,7 +275,7 @@ void ObjectTemplate::readJson(const JsonNode &node)
 			case 'A' : return VISIBLE | BLOCKED | VISITABLE;
 			case 'T' : return BLOCKED | VISITABLE;
 			default:
-				logGlobal->errorStream() << "Unrecognized char " << ch << " in template mask";
+				logGlobal->error("Unrecognized char %s in template mask", ch);
 				return 0;
 		}
 	};
@@ -250,15 +297,116 @@ void ObjectTemplate::readJson(const JsonNode &node)
 	}
 
 	printPriority = node["zIndex"].Float();
+
+	afterLoadFixup();
+}
+
+void ObjectTemplate::writeJson(JsonNode & node, const bool withTerrain) const
+{
+	node["animation"].String() = animationFile;
+	node["editorAnimation"].String() = editorAnimationFile;
+
+	if(visitDir != 0x0 && isVisitable())
+	{
+		JsonVector & visitDirs = node["visitableFrom"].Vector();
+		visitDirs.resize(3);
+
+		visitDirs[0].String().resize(3);
+		visitDirs[1].String().resize(3);
+		visitDirs[2].String().resize(3);
+
+		visitDirs[0].String()[0] = (visitDir & 1)   ? '+' : '-';
+		visitDirs[0].String()[1] = (visitDir & 2)   ? '+' : '-';
+		visitDirs[0].String()[2] = (visitDir & 4)   ? '+' : '-';
+		visitDirs[1].String()[2] = (visitDir & 8)   ? '+' : '-';
+		visitDirs[2].String()[2] = (visitDir & 16)  ? '+' : '-';
+		visitDirs[2].String()[1] = (visitDir & 32)  ? '+' : '-';
+		visitDirs[2].String()[0] = (visitDir & 64)  ? '+' : '-';
+		visitDirs[1].String()[0] = (visitDir & 128) ? '+' : '-';
+
+		visitDirs[1].String()[1] = '-';
+	}
+
+	if(withTerrain)
+	{
+		//assumed that ROCK terrain not included
+		if(allowedTerrains.size() < (GameConstants::TERRAIN_TYPES - 1))
+		{
+			JsonVector & data = node["allowedTerrains"].Vector();
+
+			for(auto type : allowedTerrains)
+			{
+				JsonNode value(JsonNode::JsonType::DATA_STRING);
+				value.String() = GameConstants::TERRAIN_NAMES[type.num];
+				data.push_back(value);
+			}
+		}
+	}
+
+	auto tileToChar = [&](const ui8 & tile) -> char
+	{
+		if(tile & VISIBLE)
+		{
+			if(tile & BLOCKED)
+			{
+				if(tile & VISITABLE)
+					return 'A';
+				else
+					return 'B';
+			}
+			else
+				return 'V';
+		}
+		else
+		{
+			if(tile & BLOCKED)
+			{
+				if(tile & VISITABLE)
+					return 'T';
+				else
+					return 'H';
+			}
+			else
+				return '0';
+		}
+	};
+
+	size_t height = getHeight();
+	size_t width  = getWidth();
+
+	JsonVector & mask = node["mask"].Vector();
+
+
+	for(size_t i=0; i < height; i++)
+	{
+		JsonNode lineNode(JsonNode::JsonType::DATA_STRING);
+
+		std::string & line = lineNode.String();
+		line.resize(width);
+		for(size_t j=0; j < width; j++)
+			line[j] = tileToChar(usedTiles[height - 1 - i][width - 1 - j]);
+		mask.push_back(lineNode);
+	}
+
+	if(printPriority != 0)
+		node["zIndex"].Float() = printPriority;
 }
 
 ui32 ObjectTemplate::getWidth() const
 {
-	return usedTiles.empty() ? 0 : usedTiles.front().size();
+	//TODO: Use 2D array
+	//TODO: better precalculate and store constant value
+	ui32 ret = 0;
+	for (const auto &row : usedTiles) //copy is expensive
+	{
+		ret = std::max<ui32>(ret, row.size());
+	}
+	return ret;
 }
 
 ui32 ObjectTemplate::getHeight() const
 {
+	//TODO: Use 2D array
 	return usedTiles.size();
 }
 
@@ -329,10 +477,10 @@ int3 ObjectTemplate::getBlockMapOffset() const
 		for(int h = 0; h < getHeight(); ++h)
 		{
 			if (isBlockedAt(w, h))
-				return int3(-w, -h, 0);
+				return int3(w, h, 0);
 		}
 	}
-	return int3(-1,-1,-1);
+	return int3(0,0,0);
 }
 
 bool ObjectTemplate::isVisitableFrom(si8 X, si8 Y) const
@@ -361,7 +509,7 @@ int3 ObjectTemplate::getVisitableOffset() const
 			if (isVisitableAt(x, y))
 				return int3(x,y,0);
 
-    //logGlobal->warnStream() << "Warning: getVisitableOffset called on non-visitable obj!";
+    //logGlobal->warn("Warning: getVisitableOffset called on non-visitable obj!");
 	return int3(0,0,0);
 }
 

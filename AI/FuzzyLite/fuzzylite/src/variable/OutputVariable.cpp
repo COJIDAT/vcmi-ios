@@ -1,44 +1,31 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/variable/OutputVariable.h"
 
-#include "fl/defuzzifier/Defuzzifier.h"
 #include "fl/imex/FllExporter.h"
-#include "fl/norm/SNorm.h"
-#include "fl/term/Accumulated.h"
-#include "fl/term/Activated.h"
 
 namespace fl {
 
     OutputVariable::OutputVariable(const std::string& name,
             scalar minimum, scalar maximum)
     : Variable(name, minimum, maximum),
-    _fuzzyOutput(new Accumulated(name, minimum, maximum)), _outputValue(fl::nan),
-    _previousOutputValue(fl::nan), _defaultValue(fl::nan),
-    _lockOutputValueInRange(false), _lockPreviousOutputValue(false) {
-    }
+    _fuzzyOutput(new Aggregated(name, minimum, maximum)),
+    _previousValue(fl::nan), _defaultValue(fl::nan),
+    _lockPreviousValue(false) { }
 
     OutputVariable::OutputVariable(const OutputVariable& other) : Variable(other) {
         copyFrom(other);
@@ -46,8 +33,8 @@ namespace fl {
 
     OutputVariable& OutputVariable::operator=(const OutputVariable& other) {
         if (this != &other) {
-            _fuzzyOutput.reset(NULL);
-            _defuzzifier.reset(NULL);
+            _fuzzyOutput.reset(fl::null);
+            _defuzzifier.reset(fl::null);
 
             Variable::operator=(other);
             copyFrom(other);
@@ -55,36 +42,33 @@ namespace fl {
         return *this;
     }
 
-    OutputVariable::~OutputVariable() {
-    }
+    OutputVariable::~OutputVariable() { }
 
     void OutputVariable::copyFrom(const OutputVariable& other) {
         _fuzzyOutput.reset(other._fuzzyOutput->clone());
         if (other._defuzzifier.get()) _defuzzifier.reset(other._defuzzifier->clone());
-        _outputValue = other._outputValue;
-        _previousOutputValue = other._previousOutputValue;
+        _previousValue = other._previousValue;
         _defaultValue = other._defaultValue;
-        _lockOutputValueInRange = other._lockOutputValueInRange;
-        _lockPreviousOutputValue = other._lockPreviousOutputValue;
+        _lockPreviousValue = other._lockPreviousValue;
     }
 
     void OutputVariable::setName(const std::string& name) {
         Variable::setName(name);
-        this->_fuzzyOutput->setName(name);
+        _fuzzyOutput->setName(name);
     }
 
-    Accumulated* OutputVariable::fuzzyOutput() const {
+    Aggregated* OutputVariable::fuzzyOutput() const {
         return this->_fuzzyOutput.get();
     }
 
     void OutputVariable::setMinimum(scalar minimum) {
         Variable::setMinimum(minimum);
-        this->_fuzzyOutput->setMinimum(minimum);
+        _fuzzyOutput->setMinimum(minimum);
     }
 
     void OutputVariable::setMaximum(scalar maximum) {
         Variable::setMaximum(maximum);
-        this->_fuzzyOutput->setMaximum(maximum);
+        _fuzzyOutput->setMaximum(maximum);
     }
 
     void OutputVariable::setDefuzzifier(Defuzzifier* defuzzifier) {
@@ -95,20 +79,20 @@ namespace fl {
         return this->_defuzzifier.get();
     }
 
-    void OutputVariable::setOutputValue(scalar outputValue) {
-        this->_outputValue = outputValue;
+    void OutputVariable::setAggregation(SNorm* aggregation) {
+        this->_fuzzyOutput->setAggregation(aggregation);
     }
 
-    scalar OutputVariable::getOutputValue() const {
-        return this->_outputValue;
+    SNorm* OutputVariable::getAggregation() const {
+        return this->_fuzzyOutput->getAggregation();
     }
 
-    void OutputVariable::setPreviousOutputValue(scalar previousOutputValue) {
-        this->_previousOutputValue = previousOutputValue;
+    void OutputVariable::setPreviousValue(scalar previousOutputValue) {
+        this->_previousValue = previousOutputValue;
     }
 
-    scalar OutputVariable::getPreviousOutputValue() const {
-        return this->_previousOutputValue;
+    scalar OutputVariable::getPreviousValue() const {
+        return this->_previousValue;
     }
 
     void OutputVariable::setDefaultValue(scalar defaultValue) {
@@ -119,77 +103,124 @@ namespace fl {
         return this->_defaultValue;
     }
 
-    void OutputVariable::setLockOutputValueInRange(bool lockOutputValueInRange) {
-        this->_lockOutputValueInRange = lockOutputValueInRange;
+    void OutputVariable::setLockPreviousValue(bool lockPreviousValue) {
+        this->_lockPreviousValue = lockPreviousValue;
     }
 
-    bool OutputVariable::isLockedOutputValueInRange() const {
-        return this->_lockOutputValueInRange;
+    bool OutputVariable::isLockPreviousValue() const {
+        return this->_lockPreviousValue;
     }
 
-    void OutputVariable::setLockPreviousOutputValue(bool lockPreviousOutputValue) {
-        this->_lockPreviousOutputValue = lockPreviousOutputValue;
+    Variable::Type OutputVariable::type() const {
+        return Variable::Output;
     }
 
-    bool OutputVariable::isLockedPreviousOutputValue() const {
-        return this->_lockPreviousOutputValue;
+    Complexity OutputVariable::complexity(const Activated& term) const {
+        Aggregated aggregated;
+        if (_fuzzyOutput->getAggregation()) {
+            aggregated.setAggregation(_fuzzyOutput->getAggregation()->clone());
+        }
+        aggregated.addTerm(term);
+        if (_defuzzifier.get()) {
+            return _defuzzifier->complexity(&aggregated);
+        }
+        return aggregated.complexityOfMembership();
+    }
+
+    Complexity OutputVariable::complexityOfDefuzzification() const {
+        Aggregated term;
+        for (std::size_t i = 0; i < _terms.size(); ++i) {
+            term.addTerm(_terms.at(i), fl::nan, fl::null);
+        }
+        if (_defuzzifier.get()) {
+            return _defuzzifier->complexity(&term);
+        }
+        return term.complexityOfMembership();
+    }
+
+    Complexity OutputVariable::currentComplexity() const {
+        if (_defuzzifier.get())
+            return _defuzzifier->complexity(_fuzzyOutput.get());
+        return _fuzzyOutput->complexity();
     }
 
     void OutputVariable::defuzzify() {
-        if (fl::Op::isFinite(this->_outputValue)) {
-            this->_previousOutputValue = this->_outputValue;
+        if (not _enabled) return;
+
+        if (Op::isFinite(_value)) {
+            _previousValue = _value;
         }
 
+        std::string exception;
         scalar result = fl::nan;
-        bool isValid = this->_enabled and not this->_fuzzyOutput->isEmpty();
+        bool isValid = not _fuzzyOutput->isEmpty();
         if (isValid) {
-            if (not _defuzzifier.get()) {
-                throw fl::Exception("[defuzzifier error] "
-                        "defuzzifier needed to defuzzify output variable <" + _name + ">", FL_AT);
+            /* Checks whether the variable can be defuzzified without exceptions.
+             * If it cannot be defuzzified, be that due to a missing defuzzifier
+             * or aggregation operator, the expected behaviour is to leave the
+             * variable in a state that reflects an invalid defuzzification,
+             * that is, apply logic of default values and previous values.*/
+            isValid = false;
+            if (_defuzzifier.get()) {
+                try {
+                    result = _defuzzifier->defuzzify(_fuzzyOutput.get(), _minimum, _maximum);
+                    isValid = true;
+                } catch (std::exception& ex) {
+                    exception = ex.what();
+                }
+            } else {
+                exception = "[defuzzifier error] "
+                        "defuzzifier needed to defuzzify output variable <" + getName() + ">";
             }
-            result = this->_defuzzifier->defuzzify(this->_fuzzyOutput.get(), _minimum, _maximum);
-        } else {
+        }
+
+        if (not isValid) {
             //if a previous defuzzification was successfully performed and
             //and the output value is supposed not to change when the output is empty
-            if (_lockPreviousOutputValue and not Op::isNaN(_previousOutputValue)) {
-                result = _previousOutputValue;
+            if (_lockPreviousValue and not Op::isNaN(_previousValue)) {
+                result = _previousValue;
             } else {
                 result = _defaultValue;
             }
         }
 
-        if (_lockOutputValueInRange) {
-            result = fl::Op::bound(result, _minimum, _maximum);
-        }
+        setValue(result);
 
-        this->_outputValue = result;
+        if (not exception.empty()) {
+            throw Exception(exception, FL_AT);
+        }
     }
 
     std::string OutputVariable::fuzzyOutputValue() const {
         std::ostringstream ss;
-        for (std::size_t i = 0; i < _terms.size(); ++i) {
-            scalar degree = _fuzzyOutput->activationDegree(_terms.at(i));
-            if (i == 0) {
-                ss << fl::Op::str(degree);
-            } else {
-                if (fl::Op::isNaN(degree) or fl::Op::isGE(degree, 0.0))
-                    ss << " + " << fl::Op::str(degree);
-                else
-                    ss << " - " << fl::Op::str(std::fabs(degree));
-            }
-            ss << "/" << _terms.at(i)->getName();
+        if (not _terms.empty()) {
+            Term* first = _terms.front();
+            ss << Op::str(fuzzyOutput()->activationDegree(first))
+                    << "/" << first->getName();
+        }
+        for (std::size_t i = 1; i < _terms.size(); ++i) {
+            scalar degree = fuzzyOutput()->activationDegree(_terms.at(i));
+            if (Op::isNaN(degree) or Op::isGE(degree, 0.0))
+                ss << " + " << Op::str(degree);
+            else
+                ss << " - " << Op::str(std::abs(degree));
+            ss << "/" << terms().at(i)->getName();
         }
         return ss.str();
     }
 
     void OutputVariable::clear() {
-        _fuzzyOutput->clear();
-        setPreviousOutputValue(fl::nan);
-        setOutputValue(fl::nan);
+        fuzzyOutput()->clear();
+        setValue(fl::nan);
+        setPreviousValue(fl::nan);
     }
 
     std::string OutputVariable::toString() const {
         return FllExporter().toString(this);
+    }
+
+    OutputVariable* OutputVariable::clone() const {
+        return new OutputVariable(*this);
     }
 
 }

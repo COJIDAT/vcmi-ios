@@ -1,11 +1,3 @@
-#include "StdInc.h"
-#include "CThreadHelper.h"
-
-#ifdef VCMI_WINDOWS
-	#include <windows.h>
-#elif !defined(VCMI_APPLE) && !defined(VCMI_FREEBSD) && !defined(VCMI_HURD)
-	#include <sys/prctl.h>
-#endif
 /*
  * CThreadHelper.cpp, part of VCMI engine
  *
@@ -15,6 +7,14 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "CThreadHelper.h"
+
+#ifdef VCMI_WINDOWS
+	#include <windows.h>
+#elif !defined(VCMI_APPLE) && !defined(VCMI_FREEBSD) && !defined(VCMI_HURD)
+	#include <sys/prctl.h>
+#endif
 
 CThreadHelper::CThreadHelper(std::vector<std::function<void()> > *Tasks, int Threads)
 {
@@ -28,6 +28,8 @@ void CThreadHelper::run()
 	for(int i=0;i<threads;i++)
 		grupa.create_thread(std::bind(&CThreadHelper::processTasks,this));
 	grupa.join_all();
+
+	//thread group deletes threads, do not free manually
 }
 void CThreadHelper::processTasks()
 {

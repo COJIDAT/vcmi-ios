@@ -1,25 +1,34 @@
+/*
+ * StupidAI.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "../../lib/AI_Base.h"
 #include "StupidAI.h"
-#include "../../lib/BattleState.h"
+#include "../../lib/CStack.h"
 #include "../../CCallback.h"
 #include "../../lib/CCreatureHandler.h"
 
-static shared_ptr<CBattleCallback> cbc;
+static std::shared_ptr<CBattleCallback> cbc;
 
-CStupidAI::CStupidAI(void)
+CStupidAI::CStupidAI()
 	: side(-1)
 {
 	print("created");
 }
 
 
-CStupidAI::~CStupidAI(void)
+CStupidAI::~CStupidAI()
 {
 	print("destroyed");
 }
 
-void CStupidAI::init(shared_ptr<CBattleCallback> CB)
+void CStupidAI::init(std::shared_ptr<CBattleCallback> CB)
 {
 	print("init called, saving ptr to IBattleCallback");
 	cbc = cb = CB;
@@ -40,7 +49,7 @@ struct EnemyInfo
 	const CStack * s;
 	int adi, adr;
 	std::vector<BattleHex> attackFrom; //for melee fight
-	EnemyInfo(const CStack * _s) : s(_s)
+	EnemyInfo(const CStack * _s) : s(_s), adi(0), adr(0)
 	{}
 	void calcDmg(const CStack * ourStack)
 	{
@@ -80,7 +89,7 @@ int distToNearestNeighbour(BattleHex hex, const ReachabilityInfo::TDistances& di
 
 bool isCloser(const EnemyInfo & ei1, const EnemyInfo & ei2, const ReachabilityInfo::TDistances & dists)
 {
-	return distToNearestNeighbour(ei1.s->position, dists) < distToNearestNeighbour(ei2.s->position, dists);
+	return distToNearestNeighbour(ei1.s->getPosition(), dists) < distToNearestNeighbour(ei2.s->getPosition(), dists);
 }
 
 }
@@ -102,17 +111,16 @@ BattleAction CStupidAI::activeStack( const CStack * stack )
 {
 	//boost::this_thread::sleep(boost::posix_time::seconds(2));
 	print("activeStack called for " + stack->nodeName());
-	auto dists = cb->battleGetDistances(stack);
+	auto dists = cb->battleGetDistances(stack, stack->getPosition());
 	std::vector<EnemyInfo> enemiesShootable, enemiesReachable, enemiesUnreachable;
 
 	if(stack->type->idNumber == CreatureID::CATAPULT)
 	{
 		BattleAction attack;
-        static const std::vector<int> wallHexes = {50,183,182,130,62,29,12,95};
-
-		attack.destinationTile = *RandomGeneratorUtil::nextItem(wallHexes, CRandomGenerator::getDefault());
-		attack.actionType = Battle::CATAPULT;
-		attack.additionalInfo = 0;
+		static const std::vector<int> wallHexes = {50, 183, 182, 130, 78, 29, 12, 95};
+		auto seletectedHex = *RandomGeneratorUtil::nextItem(wallHexes, CRandomGenerator::getDefault());
+		attack.aimToHex(seletectedHex);
+		attack.actionType = EActionType::CATAPULT;
 		attack.side = side;
 		attack.stackNumber = stack->ID;
 
@@ -125,13 +133,13 @@ BattleAction CStupidAI::activeStack( const CStack * stack )
 
 	for (const CStack *s : cb->battleGetStacks(CBattleCallback::ONLY_ENEMY))
 	{
-		if(cb->battleCanShoot(stack, s->position))
+		if(cb->battleCanShoot(stack, s->getPosition()))
 		{
 			enemiesShootable.push_back(s);
 		}
 		else
 		{
-			std::vector<BattleHex> avHexes = cb->battleGetAvailableHexes(stack, false);
+			std::vector<BattleHex> avHexes = cb->battleGetAvailableHexes(stack);
 
 			for (BattleHex hex : avHexes)
 			{
@@ -148,10 +156,16 @@ BattleAction CStupidAI::activeStack( const CStack * stack )
 				}
 			}
 
-			if(!vstd::contains(enemiesReachable, s) && s->position.isValid())
+			if(!vstd::contains(enemiesReachable, s) && s->getPosition().isValid())
 				enemiesUnreachable.push_back(s);
 		}
 	}
+
+	for ( auto & enemy : enemiesReachable )
+		enemy.calcDmg( stack );
+
+	for ( auto & enemy : enemiesShootable )
+		enemy.calcDmg( stack );
 
 	if(enemiesShootable.size())
 	{
@@ -161,16 +175,16 @@ BattleAction CStupidAI::activeStack( const CStack * stack )
 	else if(enemiesReachable.size())
 	{
 		const EnemyInfo &ei= *std::max_element(enemiesReachable.begin(), enemiesReachable.end(), &isMoreProfitable);
-		return BattleAction::makeMeleeAttack(stack, ei.s, *std::max_element(ei.attackFrom.begin(), ei.attackFrom.end(), &willSecondHexBlockMoreEnemyShooters));
+		return BattleAction::makeMeleeAttack(stack, ei.s->getPosition(), *std::max_element(ei.attackFrom.begin(), ei.attackFrom.end(), &willSecondHexBlockMoreEnemyShooters));
 	}
 	else if(enemiesUnreachable.size()) //due to #955 - a buggy battle may occur when there are no enemies
 	{
 		assert(enemiesUnreachable.size());
 		const EnemyInfo &ei= *std::min_element(enemiesUnreachable.begin(), enemiesUnreachable.end(), std::bind(isCloser, _1, _2, std::ref(dists)));
 		assert(ei.s);
-		if(distToNearestNeighbour(ei.s->position, dists) < GameConstants::BFIELD_SIZE)
+		if(distToNearestNeighbour(ei.s->getPosition(), dists) < GameConstants::BFIELD_SIZE)
 		{
-			return goTowards(stack, ei.s->position);
+			return goTowards(stack, ei.s->getPosition());
 		}
 	}
 
@@ -182,7 +196,7 @@ void CStupidAI::battleAttack(const BattleAttack *ba)
 	print("battleAttack called");
 }
 
-void CStupidAI::battleStacksAttacked(const std::vector<BattleStackAttacked> & bsa)
+void CStupidAI::battleStacksAttacked(const std::vector<BattleStackAttacked> & bsa, const std::vector<MetaString> & battleLog)
 {
 	print("battleStacksAttacked called");
 }
@@ -209,7 +223,7 @@ void CStupidAI::battleNewRound(int round)
 
 void CStupidAI::battleStackMoved(const CStack * stack, std::vector<BattleHex> dest, int distance)
 {
-	print("battleStackMoved called");;
+	print("battleStackMoved called");
 }
 
 void CStupidAI::battleSpellCast(const BattleSpellCast *sc)
@@ -228,41 +242,21 @@ void CStupidAI::battleStart(const CCreatureSet *army1, const CCreatureSet *army2
 	side = Side;
 }
 
-void CStupidAI::battleStacksHealedRes(const std::vector<std::pair<ui32, ui32> > & healedStacks, bool lifeDrain, bool tentHeal, si32 lifeDrainFrom)
-{
-	print("battleStacksHealedRes called");
-}
-
-void CStupidAI::battleNewStackAppeared(const CStack * stack)
-{
-	print("battleNewStackAppeared called");
-}
-
-void CStupidAI::battleObstaclesRemoved(const std::set<si32> & removedObstacles)
-{
-	print("battleObstaclesRemoved called");
-}
-
 void CStupidAI::battleCatapultAttacked(const CatapultAttack & ca)
 {
 	print("battleCatapultAttacked called");
 }
 
-void CStupidAI::battleStacksRemoved(const BattleStacksRemoved & bsr)
-{
-	print("battleStacksRemoved called");
-}
-
 void CStupidAI::print(const std::string &text) const
 {
-    logAi->traceStream() << "CStupidAI [" << this <<"]: " << text;
+	logAi->trace("CStupidAI  [%p]: %s", this, text);
 }
 
 BattleAction CStupidAI::goTowards(const CStack * stack, BattleHex destination)
 {
 	assert(destination.isValid());
-	auto avHexes = cb->battleGetAvailableHexes(stack, false);
 	auto reachability = cb->getReachability(stack);
+	auto avHexes = cb->battleGetAvailableHexes(reachability, stack);
 
 	if(vstd::contains(avHexes, destination))
 		return BattleAction::makeMove(stack, destination);
@@ -270,7 +264,7 @@ BattleAction CStupidAI::goTowards(const CStack * stack, BattleHex destination)
 	auto destNeighbours = destination.neighbouringTiles();
 	if(vstd::contains_if(destNeighbours, [&](BattleHex n) { return stack->coversPos(destination); }))
 	{
-        logAi->warnStream() << "Warning: already standing on neighbouring tile!";
+		logAi->warn("Warning: already standing on neighbouring tile!");
 		//We shouldn't even be here...
 		return BattleAction::makeDefend(stack);
 	}
@@ -321,13 +315,13 @@ BattleAction CStupidAI::goTowards(const CStack * stack, BattleHex destination)
 	}
 }
 
-void CStupidAI::saveGame(COSer<CSaveFile> &h, const int version)
+void CStupidAI::saveGame(BinarySerializer & h, const int version)
 {
 	//TODO to be implemented with saving/loading during the battles
 	assert(0);
 }
 
-void CStupidAI::loadGame(CISer<CLoadFile> &h, const int version)
+void CStupidAI::loadGame(BinaryDeserializer & h, const int version)
 {
 	//TODO to be implemented with saving/loading during the battles
 	assert(0);

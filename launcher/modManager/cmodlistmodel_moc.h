@@ -1,3 +1,12 @@
+/*
+ * cmodlistmodel_moc.h, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #pragma once
 
 #include "cmodlist.h"
@@ -52,7 +61,7 @@ public:
 	/// CModListContainer overrides
 	void resetRepositories() override;
 	void addRepository(QVariantMap data) override;
-	void modChanged(QString modID);
+	void modChanged(QString modID) override;
 
 	QVariant data(const QModelIndex &index, int role) const override;
 	QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
@@ -78,7 +87,7 @@ class CModFilterModel : public QSortFilterProxyModel
 
 	bool filterMatchesThis(const QModelIndex & source) const;
 
-	bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const;
+	bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
 public:
 	void setTypeFilter(int filteredType, int filterMask);
 

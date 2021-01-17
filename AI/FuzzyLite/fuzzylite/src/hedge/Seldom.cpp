@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/hedge/Seldom.h"
@@ -32,10 +24,14 @@ namespace fl {
         return "seldom";
     }
 
+    Complexity Seldom::complexity() const {
+        return Complexity().comparison(1).function(1).arithmetic(3);
+    }
+
     scalar Seldom::hedge(scalar x) const {
         return Op::isLE(x, 0.5)
-                ? std::sqrt(x / 2.0)
-                : 1.0 - std::sqrt((1.0 - x) / 2.0);
+                ? std::sqrt(0.5 * x)
+                : (1.0 - std::sqrt(0.5 * (1.0 - x)));
     }
 
     Seldom* Seldom::clone() const {
@@ -45,6 +41,5 @@ namespace fl {
     Hedge* Seldom::constructor() {
         return new Seldom;
     }
-
 
 }

@@ -1,3 +1,12 @@
+/*
+ * CCampaignHandler.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CCampaignHandler.h"
 
@@ -17,16 +26,29 @@
 
 namespace fs = boost::filesystem;
 
-/*
- * CCampaignHandler.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
+CCampaignHeader::CCampaignHeader()
+	: version(0), mapVersion(0), difficultyChoosenByPlayer(0), music(0), filename(), loadFromLod(0)
+{
 
+}
+
+CScenarioTravel::STravelBonus::STravelBonus()
+	:type(SPELL), info1(0), info2(0), info3(0)
+{
+
+}
+
+bool CScenarioTravel::STravelBonus::isBonusForHero() const
+{
+	return type == SPELL || type == MONSTER || type == ARTIFACT || type == SPELL_SCROLL || type == PRIMARY_SKILL
+		|| type == SECONDARY_SKILL;
+}
+
+CScenarioTravel::CScenarioTravel()
+	:whatHeroKeeps(0), startOptions(0), playerColor(0)
+{
+
+}
 
 CCampaignHeader CCampaignHandler::getHeader( const std::string & name)
 {
@@ -40,7 +62,7 @@ CCampaignHeader CCampaignHandler::getHeader( const std::string & name)
 	return ret;
 }
 
-unique_ptr<CCampaign> CCampaignHandler::getCampaign( const std::string & name )
+std::unique_ptr<CCampaign> CCampaignHandler::getCampaign( const std::string & name )
 {
 	auto ret = make_unique<CCampaign>();
 
@@ -74,7 +96,8 @@ unique_ptr<CCampaign> CCampaignHandler::getCampaign( const std::string & name )
 
 		//set map piece appropriately, convert vector to string
 		ret->mapPieces[scenarioID].assign(reinterpret_cast< const char* >(file[g].data()), file[g].size());
-		ret->scenarios[scenarioID].scenarioName = CMapService::loadMapHeader((const ui8*)ret->mapPieces[scenarioID].c_str(), ret->mapPieces[scenarioID].size(), scenarioName)->name;
+		CMapService mapService;
+		ret->scenarios[scenarioID].scenarioName = mapService.loadMapHeader((const ui8*)ret->mapPieces[scenarioID].c_str(), ret->mapPieces[scenarioID].size(), scenarioName)->name;
 		scenarioID++;
 	}
 
@@ -169,7 +192,7 @@ CScenarioTravel CCampaignHandler::readScenarioTravelFromMemory(CBinaryReader & r
 	{
 		ret.artifsKeptByHero.fill(0);
 		reader.getStream()->read(ret.artifsKeptByHero.data(), ret.artifsKeptByHero.size() - 1);
-	} 
+	}
 	else
 	{
 		reader.getStream()->read(ret.artifsKeptByHero.data(), ret.artifsKeptByHero.size());
@@ -245,7 +268,7 @@ CScenarioTravel CCampaignHandler::readScenarioTravelFromMemory(CBinaryReader & r
 						break;
 					}
 				default:
-                    logGlobal->warnStream() << "Corrupted h3c file";
+					logGlobal->warn("Corrupted h3c file");
 					break;
 				}
 				ret.bonusesToChoose.push_back(bonus);
@@ -282,8 +305,8 @@ CScenarioTravel CCampaignHandler::readScenarioTravelFromMemory(CBinaryReader & r
 		}
 	default:
 		{
-            logGlobal->warnStream() << "Corrupted h3c file";
-            break;
+			logGlobal->warn("Corrupted h3c file");
+			break;
 		}
 	}
 
@@ -292,7 +315,7 @@ CScenarioTravel CCampaignHandler::readScenarioTravelFromMemory(CBinaryReader & r
 
 std::vector< std::vector<ui8> > CCampaignHandler::getFile(const std::string & name, bool headerOnly)
 {
-	CCompressedStream stream(std::move(CResourceHandler::get()->load(ResourceID(name, EResType::CAMPAIGN))), true);
+	CCompressedStream stream(CResourceHandler::get()->load(ResourceID(name, EResType::CAMPAIGN)), true);
 
 	std::vector< std::vector<ui8> > ret;
 	do
@@ -323,12 +346,24 @@ bool CCampaign::conquerable( int whichScenario ) const
 	{
 		if( vstd::contains(scenarios[whichScenario].preconditionRegions, g) && !scenarios[g].conquered)
 			return false; //prerequisite does not met
-			
+
 	}
 	return true;
 }
 
 CCampaign::CCampaign()
+{
+
+}
+
+CCampaignScenario::SScenarioPrologEpilog::SScenarioPrologEpilog()
+	: hasPrologEpilog(false), prologVideo(0), prologMusic(0), prologText()
+{
+
+}
+
+CCampaignScenario::CCampaignScenario()
+	: mapName(), scenarioName(), packedMapSize(0), regionColor(0), difficulty(0), conquered(false)
 {
 
 }
@@ -363,13 +398,7 @@ std::vector<CGHeroInstance *> CCampaignScenario::getLostCrossoverHeroes() const
 			}
 		}
 	}
-	return std::move(lostCrossoverHeroes);
-}
-
-bool CScenarioTravel::STravelBonus::isBonusForHero() const
-{
-	return type == SPELL || type == MONSTER || type == ARTIFACT || type == SPELL_SCROLL || type == PRIMARY_SKILL
-		|| type == SECONDARY_SKILL;
+	return lostCrossoverHeroes;
 }
 
 void CCampaignState::setCurrentMapAsConquered( const std::vector<CGHeroInstance*> & heroes )
@@ -411,7 +440,7 @@ CCampaignState::CCampaignState()
 
 }
 
-CCampaignState::CCampaignState( unique_ptr<CCampaign> _camp ) : camp(std::move(_camp))
+CCampaignState::CCampaignState( std::unique_ptr<CCampaign> _camp ) : camp(std::move(_camp))
 {
 	for(int i = 0; i < camp->scenarios.size(); i++)
 	{

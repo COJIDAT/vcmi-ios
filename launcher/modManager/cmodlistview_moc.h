@@ -1,6 +1,15 @@
+/*
+ * cmodlistview_moc.h, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #pragma once
 
-#include "../../Global.h"
+#include "../StdInc.h"
 #include "../../lib/CConfigHandler.h"
 
 namespace Ui {
@@ -27,9 +36,9 @@ class CModListView : public QWidget
 	SettingsListener settingsListener;
 	bool repositoriesChanged;
 
-	void showEvent(QShowEvent * event);
+	void showEvent(QShowEvent * event) override;
 
-	void keyPressEvent(QKeyEvent * event);
+	void keyPressEvent(QKeyEvent * event) override;
 
 	void setupModModel();
 	void setupFilterModel();
@@ -55,7 +64,7 @@ class CModListView : public QWidget
 public:
 	explicit CModListView(QWidget *parent = 0);
 	~CModListView();
-	
+
 	void showModInfo();
 	void hideModInfo();
 	void loadScreenshots();

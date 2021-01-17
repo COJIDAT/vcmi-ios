@@ -1,3 +1,12 @@
+/*
+ * CGeneralTextHandler.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CGeneralTextHandler.h"
 
@@ -8,6 +17,7 @@
 #include "CModHandler.h"
 #include "GameConstants.h"
 #include "VCMI_Lib.h"
+
 
 #ifdef VCMI_IOS
 #include <iconv.h>
@@ -39,15 +49,6 @@ char* convert(const char* s, const char* from_cp, const char* to_cp)
     return out_buf;
 }
 #endif
-/*
- * CGeneralTextHandler.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
 
 size_t Unicode::getCharacterSize(char firstByte)
 {
@@ -146,7 +147,7 @@ std::string Unicode::toUnicode(const std::string &text, const std::string &encod
 #ifdef VCMI_IOS
     return std::string(convert(text.c_str(), encoding.c_str(), "utf-8"));
 #else
-    return boost::locale::conv::to_utf<char>(text, encoding);
+	return boost::locale::conv::to_utf<char>(text, encoding);
 #endif
 }
 
@@ -160,17 +161,17 @@ std::string Unicode::fromUnicode(const std::string &text, const std::string &enc
 #ifdef VCMI_IOS
     return std::string(convert(text.c_str(), "utf-8",encoding.c_str()));
 #else
-    return boost::locale::conv::from_utf<char>(text, encoding);
+	return boost::locale::conv::from_utf<char>(text, encoding);
 #endif
 }
 
-void Unicode::trimRight(std::string & text, const size_t amount/* =1 */)
+void Unicode::trimRight(std::string & text, const size_t amount)
 {
 	if(text.empty())
 		return;
 	//todo: more efficient algorithm
 	for(int i = 0; i< amount; i++){
-		auto b = text.begin(); 
+		auto b = text.begin();
 		auto e = text.end();
 		size_t lastLen = 0;
 		size_t len = 0;
@@ -179,14 +180,14 @@ void Unicode::trimRight(std::string & text, const size_t amount/* =1 */)
 			size_t n = getCharacterSize(*b);
 
 			if(!isValidCharacter(&(*b),e-b))
-			{				
-				logGlobal->errorStream() << "Invalid UTF8 sequence";
+			{
+				logGlobal->error("Invalid UTF8 sequence");
 				break;//invalid sequence will be trimmed
 			}
 
 			len += n;
 			b += n;
-		}		
+		}
 
 		text.resize(lastLen);
 	}
@@ -197,7 +198,7 @@ void Unicode::trimRight(std::string & text, const size_t amount/* =1 */)
 class LocaleWithComma: public std::numpunct<char>
 {
 protected:
-	char do_decimal_point() const
+	char do_decimal_point() const override
 	{
 		return ',';
 	}
@@ -244,11 +245,23 @@ std::string CLegacyConfigParser::extractQuotedString()
 	{
 		ret += extractQuotedPart();
 
-		// double quote - add it to string and continue unless
-		// line terminated using tabulation
-		if (curr < end && *curr == '\"' && *curr != '\t')
+		// double quote - add it to string and continue quoted part
+		if (curr < end && *curr == '\"')
 		{
 			ret += '\"';
+		}
+		//extract normal part
+		else if(curr < end && *curr != '\t' && *curr != '\r')
+		{
+			char * begin = curr;
+
+			while (curr < end && *curr != '\t' && *curr != '\r' && *curr != '\"')//find end of string or next quoted part start
+				curr++;
+
+			ret += std::string(begin, curr);
+
+			if(curr>=end || *curr != '\"')
+				return ret;
 		}
 		else // end of string
 			return ret;
@@ -296,8 +309,8 @@ float CLegacyConfigParser::readNumber()
 
 	std::istringstream stream(input);
 
-	if (input.find(',') != std::string::npos) // code to handle conversion with comma as decimal separator
-		stream.imbue(std::locale(std::locale(), new LocaleWithComma));
+	if(input.find(',') != std::string::npos) // code to handle conversion with comma as decimal separator
+		stream.imbue(std::locale(std::locale(), new LocaleWithComma()));
 
 	float result;
 	if ( !(stream >> result) )
@@ -324,7 +337,7 @@ bool CLegacyConfigParser::endLine()
 	return curr < end;
 }
 
-void CGeneralTextHandler::readToVector(std::string sourceName, std::vector<std::string> & dest)
+void CGeneralTextHandler::readToVector(std::string sourceName, std::vector<std::string> &dest)
 {
 	CLegacyConfigParser parser(sourceName);
 	do
@@ -353,6 +366,7 @@ CGeneralTextHandler::CGeneralTextHandler()
 	readToVector("DATA/PRISKILL.TXT", primarySkillNames);
 	readToVector("DATA/JKTEXT.TXT",   jktexts);
 	readToVector("DATA/TVRNINFO.TXT", tavernInfo);
+	readToVector("DATA/RANDTVRN.TXT", tavernRumors);
 	readToVector("DATA/TURNDUR.TXT",  turnDurations);
 	readToVector("DATA/HEROSCRN.TXT", heroscrn);
 	readToVector("DATA/TENTCOLR.TXT", tentColors);
@@ -400,23 +414,6 @@ CGeneralTextHandler::CGeneralTextHandler()
 
 			color[0] = toupper(color[0]);
 			capColors.push_back(color);
-		}
-		while (parser.endLine());
-	}
-	{
-		CLegacyConfigParser parser("DATA/SSTRAITS.TXT");
-
-		//skip header
-		parser.endLine();
-		parser.endLine();
-
-		do
-		{
-			skillName.push_back(parser.readString());
-
-			skillInfoTexts.push_back(std::vector<std::string>());
-			for(int j = 0; j < 3; j++)
-				skillInfoTexts.back().push_back(parser.readString());
 		}
 		while (parser.endLine());
 	}
@@ -515,4 +512,33 @@ CGeneralTextHandler::CGeneralTextHandler()
 		}
 		while (parser.endLine());
 	}
+	if (VLC->modh->modules.COMMANDERS)
+	{
+		try
+		{
+			CLegacyConfigParser parser("DATA/ZNPC00.TXT");
+			parser.endLine();//header
+
+			do
+			{
+				znpc00.push_back(parser.readString());
+			} while (parser.endLine());
+		}
+		catch (std::runtime_error)
+		{
+			logGlobal->warn("WoG file ZNPC00.TXT containing commander texts was not found");
+		}
+	}
+}
+
+int32_t CGeneralTextHandler::pluralText(const int32_t textIndex, const int32_t count) const
+{
+	if(textIndex == 0)
+		return 0;
+	else if(textIndex < 0)
+		return -textIndex;
+	else if(count == 1)
+		return textIndex;
+	else
+		return textIndex + 1;
 }

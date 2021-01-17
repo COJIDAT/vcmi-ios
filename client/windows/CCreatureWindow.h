@@ -1,9 +1,3 @@
-#pragma once
-
-#include "../../lib/HeroBonus.h"
-#include "../widgets/MiscWidgets.h"
-#include "CWindowObject.h"
-
 /*
  * CCreatureWindow.h, part of VCMI engine
  *
@@ -13,8 +7,13 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
-class StackWindowInfo;
+#include "../../lib/HeroBonus.h"
+#include "../widgets/MiscWidgets.h"
+#include "CWindowObject.h"
+
+struct StackWindowInfo;
 class CCommanderInstance;
 class CStackInstance;
 class CStack;
@@ -22,16 +21,16 @@ struct UpgradeInfo;
 class CTabbedInt;
 class CButton;
 
-class CClickableObject : public LRClickableAreaWText
+class CCommanderSkillIcon : public LRClickableAreaWText //TODO: maybe bring commander skill button initialization logic inside?
 {
 	CIntObject * object; // passive object that will be used to determine clickable area
 public:
-	CClickableObject(CIntObject * object, std::function<void()> callback);
+	CCommanderSkillIcon(CIntObject * object, std::function<void()> callback);
 
-	std::function<void()> callback; //TODO: create more generic clickable class than AdvMapButton?
+	std::function<void()> callback;
 
 	void clickLeft(tribool down, bool previousState) override;
-	//void clickRight(tribool down, bool previousState){};
+	void clickRight(tribool down, bool previousState) override;
 
 	void setObject(CIntObject * object);
 };
@@ -47,9 +46,7 @@ class CStackWindow : public CWindowObject
 
 	class CWindowSection : public CIntObject
 	{
-		CStackWindow * parent;
-
-		CPicture * background;
+		CStackWindow *parent;
 
 		void createBackground(std::string path);
 		void createBonusItem(size_t index, Point position);
@@ -71,26 +68,28 @@ class CStackWindow : public CWindowObject
 		CWindowSection(CStackWindow * parent);
 	};
 
-	CAnimImage * stackArtifactIcon;
-	LRClickableAreaWTextComp * stackArtifactHelp;
-	CButton * stackArtifactButton;
+	std::unique_ptr<CAnimImage> stackArtifactIcon;
+	std::unique_ptr<LRClickableAreaWTextComp> stackArtifactHelp;
+	std::unique_ptr<CButton> stackArtifactButton;
+	CAnimImage *expRankIcon;
+	LRClickableAreaWText *expArea;
+	CLabel *expLabel;
 
 	std::unique_ptr<StackWindowInfo> info;
 	std::vector<BonusInfo> activeBonuses;
 	size_t activeTab;
-	CTabbedInt * commanderTab;
+	CTabbedInt *commanderTab;
 
 	std::map<int, CButton *> switchButtons;
 
-	void setSelection(si32 newSkill, CClickableObject * newIcon);
-	CClickableObject * selectedIcon;
+	void setSelection(si32 newSkill, CCommanderSkillIcon * newIcon);
+	CCommanderSkillIcon * selectedIcon;
 	si32 selectedSkill;
 
 	CIntObject * createBonusEntry(size_t index);
 	CIntObject * switchTab(size_t index);
 
 	void removeStackArtifact(ArtifactPosition pos);
-	void setStackArtifact(const CArtifactInstance * art, Point artPos);
 
 	void initSections();
 	void initBonusesList();

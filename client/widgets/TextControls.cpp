@@ -1,3 +1,12 @@
+/*
+ * TextControls.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "TextControls.h"
 
@@ -9,15 +18,9 @@
 
 #include "../../lib/CGeneralTextHandler.h" //for Unicode related stuff
 
-/*
- * TextControls.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
+#ifdef VCMI_ANDROID
+#include "lib/CAndroidVMHelper.h"
+#endif
 
 std::string CLabel::visibleText()
 {
@@ -33,7 +36,7 @@ void CLabel::showAll(SDL_Surface * to)
 
 }
 
-CLabel::CLabel(int x, int y, EFonts Font /*= FONT_SMALL*/, EAlignment Align, const SDL_Color &Color /*= Colors::WHITE*/, const std::string &Text /*= ""*/)
+CLabel::CLabel(int x, int y, EFonts Font, EAlignment Align, const SDL_Color &Color, const std::string &Text)
 :CTextContainer(Align, Font, Color), text(Text)
 {
 	type |= REDRAW_PARENT;
@@ -73,8 +76,8 @@ void CLabel::setText(const std::string &Txt)
 }
 
 CMultiLineLabel::CMultiLineLabel(Rect position, EFonts Font, EAlignment Align, const SDL_Color &Color, const std::string &Text):
-    CLabel(position.x, position.y, Font, Align, Color, Text),
-    visibleSize(0, 0, position.w, position.h)
+	CLabel(position.x, position.y, Font, Align, Color, Text),
+	visibleSize(0, 0, position.w, position.h)
 {
 	pos.w = position.w;
 	pos.h = position.h;
@@ -107,7 +110,7 @@ void CMultiLineLabel::setText(const std::string &Txt)
 
 void CTextContainer::blitLine(SDL_Surface *to, Rect destRect, std::string what)
 {
-	const IFont * f = graphics->fonts[font];
+	const auto f = graphics->fonts[font];
 	Point where = destRect.topLeft();
 
 	// input is rect in which given text should be placed
@@ -164,7 +167,7 @@ void CMultiLineLabel::showAll(SDL_Surface * to)
 {
 	CIntObject::showAll(to);
 
-	const IFont * f = graphics->fonts[font];
+	const auto f = graphics->fonts[font];
 
 	// calculate which lines should be visible
 	int totalLines = lines.size();
@@ -201,7 +204,7 @@ void CMultiLineLabel::splitText(const std::string &Txt)
 {
 	lines.clear();
 
-	const IFont * f = graphics->fonts[font];
+	const auto f = graphics->fonts[font];
 	int lineHeight =  f->getLineHeight();
 
 	lines = CMessage::breakText(Txt, pos.w, font);
@@ -244,9 +247,9 @@ void CLabelGroup::add(int x, int y, const std::string &text)
 	new CLabel(x, y, font, align, color, text);
 }
 
-CTextBox::CTextBox(std::string Text, const Rect &rect, int SliderStyle, EFonts Font /*= FONT_SMALL*/, EAlignment Align /*= TOPLEFT*/, const SDL_Color &Color /*= Colors::WHITE*/):
-    sliderStyle(SliderStyle),
-    slider(nullptr)
+CTextBox::CTextBox(std::string Text, const Rect &rect, int SliderStyle, EFonts Font, EAlignment Align, const SDL_Color &Color):
+	sliderStyle(SliderStyle),
+	slider(nullptr)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 	label = new CMultiLineLabel(rect, Font, Align, Color);
@@ -292,6 +295,7 @@ void CTextBox::setText(const std::string &text)
 		// decrease width again if slider still used
 		label->pos.w = pos.w - 32;
 		label->setText(text);
+		slider->setAmount(label->textSize.y);
 	}
 	else if(label->textSize.y > label->pos.h)
 	{
@@ -317,7 +321,7 @@ void CGStatusBar::clear()
 	setText("");
 }
 
-CGStatusBar::CGStatusBar(CPicture *BG, EFonts Font /*= FONT_SMALL*/, EAlignment Align /*= CENTER*/, const SDL_Color &Color /*= Colors::WHITE*/)
+CGStatusBar::CGStatusBar(CPicture *BG, EFonts Font, EAlignment Align, const SDL_Color &Color)
 : CLabel(BG->pos.x, BG->pos.y, Font, Align, Color, "")
 {
 	init();
@@ -325,10 +329,10 @@ CGStatusBar::CGStatusBar(CPicture *BG, EFonts Font /*= FONT_SMALL*/, EAlignment 
 	addChild(bg);
 	pos = bg->pos;
 	getBorderSize();
-    textLock = false;
+	textLock = false;
 }
 
-CGStatusBar::CGStatusBar(int x, int y, std::string name/*="ADROLLVR.bmp"*/, int maxw/*=-1*/)
+CGStatusBar::CGStatusBar(int x, int y, std::string name, int maxw)
 : CLabel(x, y, FONT_SMALL, CENTER)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
@@ -340,7 +344,7 @@ CGStatusBar::CGStatusBar(int x, int y, std::string name/*="ADROLLVR.bmp"*/, int 
 		vstd::amin(pos.w, maxw);
 		bg->srcRect = new Rect(0, 0, maxw, pos.h);
 	}
-    textLock = false;
+	textLock = false;
 }
 
 CGStatusBar::~CGStatusBar()
@@ -350,7 +354,7 @@ CGStatusBar::~CGStatusBar()
 
 void CGStatusBar::show(SDL_Surface * to)
 {
-    showAll(to);
+	showAll(to);
 }
 
 void CGStatusBar::init()
@@ -376,12 +380,12 @@ Point CGStatusBar::getBorderSize()
 
 void CGStatusBar::lock(bool shouldLock)
 {
-    textLock = shouldLock;
+	textLock = shouldLock;
 }
 
 CTextInput::CTextInput(const Rect &Pos, EFonts font, const CFunctionList<void(const std::string &)> &CB):
-    CLabel(Pos.x, Pos.y, font, CENTER),
-    cb(CB)
+	CLabel(Pos.x, Pos.y, font, CENTER),
+	cb(CB)
 {
 	type |= REDRAW_PARENT;
 	focus = false;
@@ -426,7 +430,10 @@ CTextInput::CTextInput(const Rect &Pos, SDL_Surface *srf)
 
 void CTextInput::focusGot()
 {
-	CSDL_Ext::startTextInput(&pos);	
+	CSDL_Ext::startTextInput(&pos);
+#ifdef VCMI_ANDROID
+	notifyAndroidTextInputChanged(text);
+#endif
 }
 
 void CTextInput::focusLost()
@@ -460,9 +467,7 @@ void CTextInput::keyPressed( const SDL_KeyboardEvent & key )
 	}
 
 	bool redrawNeeded = false;
-	#ifdef VCMI_SDL1
-	std::string oldText = text;
-	#endif // 0	
+
 	switch(key.keysym.sym)
 	{
 	case SDLK_DELETE: // have index > ' ' so it won't be filtered out by default section
@@ -477,28 +482,20 @@ void CTextInput::keyPressed( const SDL_KeyboardEvent & key )
 		{
 			Unicode::trimRight(text);
 			redrawNeeded = true;
-		}			
+		}
 		break;
 	default:
-		#ifdef VCMI_SDL1
-		if (key.keysym.unicode < ' ')
-			return;
-		else
-		{
-			text += key.keysym.unicode; //TODO 16-/>8
-			redrawNeeded = true;
-		}			
-		#endif // 0
 		break;
 	}
-	#ifdef VCMI_SDL1
-	filters(text, oldText);
-	#endif // 0
+
 	if (redrawNeeded)
 	{
 		redraw();
 		cb(text);
-	}	
+#ifdef VCMI_ANDROID
+		notifyAndroidTextInputChanged(text);
+#endif
+	}
 }
 
 void CTextInput::setText( const std::string &nText, bool callCb )
@@ -506,54 +503,55 @@ void CTextInput::setText( const std::string &nText, bool callCb )
 	CLabel::setText(nText);
 	if(callCb)
 		cb(text);
+
+#ifdef VCMI_ANDROID
+	notifyAndroidTextInputChanged(text);
+#endif
 }
 
 bool CTextInput::captureThisEvent(const SDL_KeyboardEvent & key)
 {
-	if(key.keysym.sym == SDLK_RETURN || key.keysym.sym == SDLK_KP_ENTER)
-		return false;
-	
-	#ifdef VCMI_SDL1
-	//this should allow all non-printable keys to go through (for example arrows)
-	if (key.keysym.unicode < ' ')
+	if(key.keysym.sym == SDLK_RETURN || key.keysym.sym == SDLK_KP_ENTER || key.keysym.sym == SDLK_ESCAPE)
 		return false;
 
 	return true;
-	#else
-	return false;
-	#endif
 }
 
-#ifndef VCMI_SDL1
 void CTextInput::textInputed(const SDL_TextInputEvent & event)
 {
 	if(!focus)
 		return;
 	std::string oldText = text;
-	
-	text += event.text;	
-	
+
+	text += event.text;
+
 	filters(text,oldText);
 	if (text != oldText)
 	{
 		redraw();
 		cb(text);
-	}	
+	}
 	newText = "";
+
+#ifdef VCMI_ANDROID
+	notifyAndroidTextInputChanged(text);
+#endif
 }
 
 void CTextInput::textEdited(const SDL_TextEditingEvent & event)
 {
 	if(!focus)
 		return;
-		
+
 	newText = event.text;
 	redraw();
-	cb(text+newText);	
-}
+	cb(text+newText);
 
+#ifdef VCMI_ANDROID
+	auto editedText = text + newText;
+	notifyAndroidTextInputChanged(editedText);
 #endif
-
+}
 
 void CTextInput::filenameFilter(std::string & text, const std::string &)
 {
@@ -594,13 +592,32 @@ void CTextInput::numberFilter(std::string & text, const std::string & oldText, i
 	catch(boost::bad_lexical_cast &)
 	{
 		//Should never happen. Unless I missed some cases
-        logGlobal->warnStream() << "Warning: failed to convert "<< text << " to number!";
+		logGlobal->warn("Warning: failed to convert %s to number!", text);
 		text = oldText;
 	}
 }
 
+#ifdef VCMI_ANDROID
+void CTextInput::notifyAndroidTextInputChanged(std::string & text)
+{
+	if (!focus)
+		return;
+
+	auto fun = [&text](JNIEnv * env, jclass cls, jmethodID method)
+	{
+		auto jtext = env->NewStringUTF(text.c_str());
+		env->CallStaticObjectMethod(cls, method, jtext);
+		env->DeleteLocalRef(jtext);
+	};
+	CAndroidVMHelper vmHelper;
+	vmHelper.callCustomMethod(CAndroidVMHelper::NATIVE_METHODS_DEFAULT_CLASS, "notifyTextInputChanged",
+		"(Ljava/lang/String;)V", fun);
+}
+#endif //VCMI_ANDROID
+
 CFocusable::CFocusable()
 {
+	focus = false;
 	focusables.push_back(this);
 }
 
@@ -610,7 +627,7 @@ CFocusable::~CFocusable()
 	{
 		focusLost();
 		inputWithFocus = nullptr;
-	}	
+	}
 
 	focusables -= this;
 }
@@ -626,7 +643,7 @@ void CFocusable::giveFocus()
 	focus = true;
 	inputWithFocus = this;
 	focusGot();
-	redraw();	
+	redraw();
 }
 
 void CFocusable::moveFocus()
@@ -641,7 +658,7 @@ void CFocusable::moveFocus()
 		if((*i)->active)
 		{
 			(*i)->giveFocus();
-			break;;
+			break;
 		}
 	}
 }

@@ -1,3 +1,12 @@
+/*
+ * CSoundBase.h, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #pragma once
 
 // Use some magic to keep the list of files and their code name in sync.
@@ -1034,5 +1043,20 @@ public:
 		sound_after_last
 	};
 #undef VCMI_SOUND_NAME
+#define VCMI_SOUND_NAME(sequence) sounds.push_back("" #sequence "");
+
+	static std::vector<std::string> & stringsList()
+	{
+		static std::vector<std::string> sounds;
+		if(!sounds.size())
+		{
+			sounds.push_back("invalid");
+			sounds.push_back("sound_todo");
+			VCMI_SOUND_LIST
+			sounds.push_back("sound_after_last");
+		}
+		return sounds;
+	}
 #undef VCMI_SOUND_FILE
+#undef VCMI_SOUND_NAME
 };

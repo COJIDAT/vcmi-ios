@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * CGeneralTextHandler.h, part of VCMI engine
  *
@@ -9,6 +7,7 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 #include "JsonNode.h"
 
@@ -38,7 +37,7 @@ namespace Unicode
 	/// NOTE: usage of these functions should be avoided if possible
 	std::string DLL_LINKAGE fromUnicode(const std::string & text);
 	std::string DLL_LINKAGE fromUnicode(const std::string & text, const std::string & encoding);
-	
+
 	///delete (amount) UTF characters from right
 	DLL_LINKAGE void trimRight(std::string & text, const size_t amount = 1);
 };
@@ -104,13 +103,14 @@ public:
 	std::vector<std::string> overview;//text for Kingdom Overview window
 	std::vector<std::string> colors; //names of player colors ("red",...)
 	std::vector<std::string> capColors; //names of player colors with first letter capitalized ("Red",...)
-	std::vector<std::string> turnDurations; //turn durations for pregame (1 Minute ... Unlimited) 
+	std::vector<std::string> turnDurations; //turn durations for pregame (1 Minute ... Unlimited)
 
 	//towns
 	std::vector<std::string> tcommands, hcommands, fcommands; //texts for town screen, town hall screen and fort screen
 	std::vector<std::string> tavernInfo;
+	std::vector<std::string> tavernRumors;
 
-	std::vector<std::pair<std::string,std::string> > zelp;
+	std::vector<std::pair<std::string,std::string>> zelp;
 	std::vector<std::string> lossCondtions;
 	std::vector<std::string> victoryConditions;
 
@@ -122,23 +122,28 @@ public:
 	std::vector<std::string> restypes; //names of resources
 	std::vector<std::string> terrainNames;
 	std::vector<std::string> randsign;
-	std::vector<std::pair<std::string,std::string> > mines; //first - name; second - event description
+	std::vector<std::pair<std::string,std::string>> mines; //first - name; second - event description
 	std::vector<std::string> seerEmpty;
-	std::vector <std::vector <std::vector <std::string> > >  quests; //[quest][type][index]
+	std::vector<std::vector<std::vector<std::string>>>  quests; //[quest][type][index]
 	//type: quest, progress, complete, rollover, log OR time limit //index: 0-2 seer hut, 3-5 border guard
 	std::vector<std::string> seerNames;
 	std::vector<std::string> tentColors;
 
 	//sec skills
-	std::vector <std::string>  skillName;
-	std::vector <std::vector <std::string> > skillInfoTexts; //[id][level] : level 0 - basic; 2 - advanced
 	std::vector<std::string> levels;
 	std::vector<std::string> zcrexp; //more or less useful content of that file
+	//commanders
+	std::vector<std::string> znpc00; //more or less useful content of that file
 
 	//campaigns
-	std::vector <std::string> campaignMapNames;
-	std::vector < std::vector <std::string> > campaignRegionNames;
+	std::vector<std::string> campaignMapNames;
+	std::vector<std::vector<std::string>> campaignRegionNames;
 
-	void readToVector(std::string sourceName, std::vector<std::string> & dest);
+	static void readToVector(std::string sourceName, std::vector<std::string> &dest);
+
+	int32_t pluralText(const int32_t textIndex, const int32_t count) const;
+
 	CGeneralTextHandler();
+	CGeneralTextHandler(const CGeneralTextHandler&) = delete;
+	CGeneralTextHandler operator=(const CGeneralTextHandler&) = delete;
 };

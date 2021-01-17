@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/term/ZShape.h"
@@ -27,36 +19,58 @@
 namespace fl {
 
     ZShape::ZShape(const std::string& name, scalar start, scalar end, scalar height)
-    : Term(name, height), _start(start), _end(end) {
-    }
+    : Term(name, height), _start(start), _end(end) { }
 
-    ZShape::~ZShape() {
-    }
+    ZShape::~ZShape() { }
 
     std::string ZShape::className() const {
         return "ZShape";
     }
 
+    Complexity ZShape::complexity() const {
+        return Complexity().comparison(1 + 3).arithmetic(3 + 4).function(1);
+    }
+
     scalar ZShape::membership(scalar x) const {
-        if (fl::Op::isNaN(x)) return fl::nan;
-        //from Octave zmf.m
-        scalar average = (_start + _end) / 2;
-        scalar difference = _end - _start;
+        if (Op::isNaN(x)) return fl::nan;
 
-        if (Op::isLE(x, _start)) return _height * 1.0;
+        if (Op::isLE(x, _start))
+            return Term::_height * 1.0;
 
-        if (Op::isLE(x, average))
-            return _height * (1.0 - 2.0 * std::pow((x - _start) / difference, 2));
+        if (Op::isLE(x, 0.5 * (_start + _end)))
+            return Term::_height * (1.0 - 2.0 * std::pow((x - _start) / (_end - _start), 2));
 
         if (Op::isLt(x, _end))
-            return _height * (2.0 * std::pow((x - _end) / difference, 2));
+            return Term::_height * (2.0 * std::pow((x - _end) / (_end - _start), 2));
 
-        return _height * 0.0;
+        return Term::_height * 0.0;
+    }
+
+    scalar ZShape::tsukamoto(scalar activationDegree, scalar minimum, scalar maximum) const {
+        FL_IUNUSED(minimum);
+        FL_IUNUSED(maximum);
+
+        scalar w = activationDegree;
+        scalar z = fl::nan;
+
+        scalar difference = _end - _start;
+        scalar a = _start + std::sqrt(-0.5 * (w - 1.0) * difference * difference);
+        scalar b = _end + std::sqrt(0.5 * w * difference * difference);
+        if (std::abs(w - membership(a)) < std::abs(w - membership(b))) {
+            z = a;
+        } else {
+            z = b;
+        }
+        return z;
+    }
+
+    bool ZShape::isMonotonic() const {
+        return true;
     }
 
     std::string ZShape::parameters() const {
         return Op::join(2, " ", _start, _end) +
-                (not Op::isEq(_height, 1.0) ? " " + Op::str(_height) : "");
+                (not Op::isEq(getHeight(), 1.0) ? " " + Op::str(getHeight()) : "");
     }
 
     void ZShape::configure(const std::string& parameters) {
@@ -67,7 +81,7 @@ namespace fl {
             std::ostringstream ex;
             ex << "[configuration error] term <" << className() << ">"
                     << " requires <" << required << "> parameters";
-            throw fl::Exception(ex.str(), FL_AT);
+            throw Exception(ex.str(), FL_AT);
         }
         setStart(Op::toScalar(values.at(0)));
         setEnd(Op::toScalar(values.at(1)));

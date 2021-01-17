@@ -1,10 +1,3 @@
-#pragma once
-
-#include "filesystem/Filesystem.h"
-
-#include "VCMI_Lib.h"
-#include "JsonNode.h"
-
 /*
  * CModHandler.h, part of VCMI engine
  *
@@ -14,6 +7,12 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "filesystem/Filesystem.h"
+
+#include "VCMI_Lib.h"
+#include "JsonNode.h"
 
 class CModHandler;
 class CModIndentifier;
@@ -41,7 +40,10 @@ class CIdentifierStorage
 		std::function<void(si32)> callback;
 		bool optional;
 
-		ObjectCallback(std::string localScope, std::string remoteScope, std::string type, std::string name, const std::function<void(si32)> & callback, bool optional);
+		ObjectCallback(std::string localScope, std::string remoteScope,
+		               std::string type, std::string name,
+		               const std::function<void(si32)> & callback,
+		               bool optional);
 	};
 
 	struct ObjectData // entry created on ID registration
@@ -49,14 +51,19 @@ class CIdentifierStorage
 		si32 id;
 		std::string scope; /// scope in which this ID located
 
+		bool operator==(const ObjectData & other) const
+		{
+			return id == other.id && scope == other.scope;
+		}
 
 		template <typename Handler> void serialize(Handler &h, const int version)
 		{
-			h & id & scope;
+			h & id;
+			h & scope;
 		}
 	};
 
-	std::multimap<std::string, ObjectData > registeredObjects;
+	std::multimap<std::string, ObjectData> registeredObjects;
 	std::vector<ObjectCallback> scheduledRequests;
 
 	ELoadingState state;
@@ -69,9 +76,12 @@ class CIdentifierStorage
 	std::vector<ObjectData> getPossibleIdentifiers(const ObjectCallback & callback);
 public:
 	CIdentifierStorage();
+	virtual ~CIdentifierStorage();
 	/// request identifier for specific object name.
 	/// Function callback will be called during ID resolution phase of loading
 	void requestIdentifier(std::string scope, std::string type, std::string name, const std::function<void(si32)> & callback);
+	///fullName = [remoteScope:]type.name
+	void requestIdentifier(std::string scope, std::string fullName, const std::function<void(si32)> & callback);
 	void requestIdentifier(std::string type, const JsonNode & name, const std::function<void(si32)> & callback);
 	void requestIdentifier(const JsonNode & name, const std::function<void(si32)> & callback);
 
@@ -83,6 +93,7 @@ public:
 	boost::optional<si32> getIdentifier(std::string scope, std::string type, std::string name, bool silent = false);
 	boost::optional<si32> getIdentifier(std::string type, const JsonNode & name, bool silent = false);
 	boost::optional<si32> getIdentifier(const JsonNode & name, bool silent = false);
+	boost::optional<si32> getIdentifier(std::string scope, std::string fullName, bool silent = false);
 
 	/// registers new object
 	void registerObject(std::string scope, std::string type, std::string name, si32 identifier);
@@ -92,43 +103,43 @@ public:
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & registeredObjects & state;
+		h & registeredObjects;
+		h & state;
 	}
 };
 
-/// class used to load all game data into handlers. Used only during loading
-class CContentHandler
+/// internal type to handle loading of one data type (e.g. artifacts, creatures)
+class DLL_LINKAGE ContentTypeHandler
 {
-	/// internal type to handle loading of one data type (e.g. artifacts, creatures)
-	class ContentTypeHandler
+public:
+	struct ModInfo
 	{
-		struct ModInfo
-		{
-			/// mod data from this mod and for this mod
-			JsonNode modData;
-			/// mod data for this mod from other mods (patches)
-			JsonNode patches;
-		};
-
-		/// handler to which all data will be loaded
-		IHandlerBase * handler;
-
-		std::string objectName;
-
-		/// contains all loaded H3 data
-		std::vector<JsonNode> originalData;
-		std::map<std::string, ModInfo> modData;
-
-	public:
-		ContentTypeHandler(IHandlerBase * handler, std::string objectName);
-
-		/// local version of methods in ContentHandler
-		/// returns true if loading was successful
-		bool preloadModData(std::string modName, std::vector<std::string> fileList, bool validate);
-		bool loadMod(std::string modName, bool validate);
-		void afterLoadFinalization();
+		/// mod data from this mod and for this mod
+		JsonNode modData;
+		/// mod data for this mod from other mods (patches)
+		JsonNode patches;
 	};
+	/// handler to which all data will be loaded
+	IHandlerBase * handler;
+	std::string objectName;
 
+	/// contains all loaded H3 data
+	std::vector<JsonNode> originalData;
+	std::map<std::string, ModInfo> modData;
+
+	ContentTypeHandler(IHandlerBase * handler, std::string objectName);
+
+	/// local version of methods in ContentHandler
+	/// returns true if loading was successful
+	bool preloadModData(std::string modName, std::vector<std::string> fileList, bool validate);
+	bool loadMod(std::string modName, bool validate);
+	void loadCustom();
+	void afterLoadFinalization();
+};
+
+/// class used to load all game data into handlers. Used only during loading
+class DLL_LINKAGE CContentHandler
+{
 	/// preloads all data from fileList as data from modName.
 	bool preloadModData(std::string modName, JsonNode modConfig, bool validate);
 
@@ -137,8 +148,9 @@ class CContentHandler
 
 	std::map<std::string, ContentTypeHandler> handlers;
 public:
-	/// fully initialize object. Will cause reading of H3 config files
 	CContentHandler();
+
+	void init();
 
 	/// preloads all data from fileList as data from modName.
 	void preloadData(CModInfo & mod);
@@ -146,8 +158,12 @@ public:
 	/// actually loads data in mod
 	void load(CModInfo & mod);
 
+	void loadCustom();
+
 	/// all data was loaded, time for final validation / integration
 	void afterLoadFinalization();
+
+	const ContentTypeHandler & operator[] (const std::string & name) const;
 };
 
 typedef std::string TModID;
@@ -185,7 +201,7 @@ public:
 
 	JsonNode config;
 
-	CModInfo(){}
+	CModInfo();
 	CModInfo(std::string identifier, const JsonNode & local, const JsonNode & config);
 
 	JsonNode saveLocalData() const;
@@ -196,9 +212,15 @@ public:
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & identifier & description & name;
-		h & dependencies & conflicts & config;
-		h & checksum & validation & enabled;
+		h & identifier;
+		h & description;
+		h & name;
+		h & dependencies;
+		h & conflicts;
+		h & config;
+		h & checksum;
+		h & validation;
+		h & enabled;
 	}
 private:
 	void loadLocalData(const JsonNode & data);
@@ -225,14 +247,17 @@ class DLL_LINKAGE CModHandler
 	std::vector <TModID> resolveDependencies(std::vector<TModID> input) const;
 
 	std::vector<std::string> getModList(std::string path);
-	void loadMods(std::string path, std::string namePrefix, const JsonNode & modSettings, bool enableMods);
+	void loadMods(std::string path, std::string parent, const JsonNode & modSettings, bool enableMods);
+	void loadOneMod(std::string modName, std::string parent, const JsonNode & modSettings, bool enableMods);
 public:
 
 	CIdentifierStorage identifiers;
 
+	CContentHandler content; //(!)Do not serialize
+
 	/// receives list of available mods and trying to load mod.json from all of them
 	void initializeConfig();
-	void loadMods();
+	void loadMods(bool onlyEssential = false);
 	void loadModFilesystems();
 
 	CModInfo & getModData(TModID modId);
@@ -243,7 +268,7 @@ public:
 
 	/// load content from all available mods
 	void load();
-	void afterLoad();
+	void afterLoad(bool onlyEssential);
 
 	struct DLL_LINKAGE hardcodedFeatures
 	{
@@ -251,17 +276,43 @@ public:
 
 		int CREEP_SIZE; // neutral stacks won't grow beyond this number
 		int WEEKLY_GROWTH; //percent
-		int NEUTRAL_STACK_EXP; 
+		int NEUTRAL_STACK_EXP;
 		int MAX_BUILDING_PER_TURN;
 		bool DWELLINGS_ACCUMULATE_CREATURES;
 		bool ALL_CREATURES_GET_DOUBLE_MONTHS;
 		int MAX_HEROES_AVAILABLE_PER_PLAYER;
 		int MAX_HEROES_ON_MAP_PER_PLAYER;
+		bool WINNING_HERO_WITH_NO_TROOPS_RETREATS;
+		bool BLACK_MARKET_MONTHLY_ARTIFACTS_CHANGE;
 
 		template <typename Handler> void serialize(Handler &h, const int version)
 		{
-			h & data & CREEP_SIZE & WEEKLY_GROWTH & NEUTRAL_STACK_EXP & MAX_BUILDING_PER_TURN;
-			h & DWELLINGS_ACCUMULATE_CREATURES & ALL_CREATURES_GET_DOUBLE_MONTHS & MAX_HEROES_AVAILABLE_PER_PLAYER & MAX_HEROES_ON_MAP_PER_PLAYER;
+			h & data;
+			h & CREEP_SIZE;
+			h & WEEKLY_GROWTH;
+			h & NEUTRAL_STACK_EXP;
+			h & MAX_BUILDING_PER_TURN;
+			h & DWELLINGS_ACCUMULATE_CREATURES;
+			h & ALL_CREATURES_GET_DOUBLE_MONTHS;
+			h & MAX_HEROES_AVAILABLE_PER_PLAYER;
+			h & MAX_HEROES_ON_MAP_PER_PLAYER;
+			if(version >= 756)
+			{
+				h & WINNING_HERO_WITH_NO_TROOPS_RETREATS;
+			}
+			else if(!h.saving)
+			{
+				WINNING_HERO_WITH_NO_TROOPS_RETREATS = true;
+			}
+
+			if(version >= 776)
+			{
+				h & BLACK_MARKET_MONTHLY_ARTIFACTS_CHANGE;
+			}
+			else if(!h.saving)
+			{
+				BLACK_MARKET_MONTHLY_ARTIFACTS_CHANGE = true;
+			}
 		}
 	} settings;
 
@@ -274,14 +325,28 @@ public:
 
 		template <typename Handler> void serialize(Handler &h, const int version)
 		{
-			h & STACK_EXP & STACK_ARTIFACT & COMMANDERS & MITHRIL;
+			h & STACK_EXP;
+			h & STACK_ARTIFACT;
+			h & COMMANDERS;
+			h & MITHRIL;
 		}
 	} modules;
 
 	CModHandler();
+	virtual ~CModHandler();
+
+	static std::string normalizeIdentifier(const std::string & scope, const std::string & remoteScope, const std::string & identifier);
+
+	static void parseIdentifier(const std::string & fullIdentifier, std::string & scope, std::string & type, std::string & identifier);
+
+	static std::string makeFullIdentifier(const std::string & scope, const std::string & type, const std::string & identifier);
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & allMods & activeMods & settings & modules & identifiers;
+		h & allMods;
+		h & activeMods;
+		h & settings;
+		h & modules;
+		h & identifiers;
 	}
 };

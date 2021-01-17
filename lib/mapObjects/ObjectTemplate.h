@@ -1,7 +1,3 @@
-#pragma once
-
-#include "../GameConstants.h"
-
 /*
  * ObjectTemplate.h, part of VCMI engine
  *
@@ -11,6 +7,9 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "../GameConstants.h"
 
 class CBinaryReader;
 class CLegacyConfigParser;
@@ -33,6 +32,8 @@ class DLL_LINKAGE ObjectTemplate
 	/// list of terrains on which this object can be placed
 	std::set<ETerrainType> allowedTerrains;
 
+	void afterLoadFixup();
+
 public:
 	/// H3 ID/subID of this object
 	Obj id;
@@ -41,6 +42,9 @@ public:
 	si32 printPriority;
 	/// animation file that should be used to display object
 	std::string animationFile;
+
+	/// map editor only animation file
+	std::string editorAnimationFile;
 
 	/// string ID, equals to def base name for h3m files (lower case, no extension) or specified in mod data
 	std::string stringID;
@@ -69,18 +73,33 @@ public:
 	bool canBePlacedAt(ETerrainType terrain) const;
 
 	ObjectTemplate();
+	//custom copy constructor is required
+	ObjectTemplate(const ObjectTemplate & other);
+
+	ObjectTemplate& operator=(const ObjectTemplate & rhs);
 
 	void readTxt(CLegacyConfigParser & parser);
 	void readMsk();
 	void readMap(CBinaryReader & reader);
-	void readJson(const JsonNode & node);
+	void readJson(const JsonNode & node, const bool withTerrain = true);
+	void writeJson(JsonNode & node, const bool withTerrain = true) const;
 
 	bool operator==(const ObjectTemplate& ot) const { return (id == ot.id && subid == ot.subid); }
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & usedTiles & allowedTerrains & animationFile & stringID;
-		h & id & subid & printPriority & visitDir;
+		h & usedTiles;
+		h & allowedTerrains;
+		h & animationFile;
+		h & stringID;
+		h & id;
+		h & subid;
+		h & printPriority;
+		h & visitDir;
+		if(version >= 770)
+		{
+			h & editorAnimationFile;
+		}
 	}
 };
 

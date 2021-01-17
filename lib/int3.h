@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * int3.h, part of VCMI engine
  *
@@ -9,6 +7,7 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 /// Class which consists of three integer values. Represents position on adventure map.
 class int3
@@ -55,7 +54,7 @@ public:
 		z -= i.z;
 		return *this;
 	}
-	
+
 	//increases all coordinates by given number
 	int3 & operator+=(const si32 i)
 	{
@@ -93,6 +92,31 @@ public:
 		return false;
 	}
 
+	enum EDistanceFormula
+	{
+		DIST_2D = 0,
+		DIST_MANHATTAN, // patrol distance
+		DIST_CHEBYSHEV, // ambient sound distance
+		DIST_2DSQ
+	};
+
+	ui32 dist(const int3 & o, EDistanceFormula formula) const
+	{
+		switch(formula)
+		{
+		case DIST_2D:
+			return dist2d(o);
+		case DIST_MANHATTAN:
+			return mandist2d(o);
+		case DIST_CHEBYSHEV:
+			return chebdist2d(o);
+		case DIST_2DSQ:
+			return dist2dSQ(o);
+		default:
+			return 0;
+		}
+	}
+
 	//returns squared distance on Oxy plane (z coord is not used)
 	ui32 dist2dSQ(const int3 & o) const
 	{
@@ -105,6 +129,16 @@ public:
 	{
 		return std::sqrt((double)dist2dSQ(o));
 	}
+	//manhattan distance used for patrol radius (z coord is not used)
+	double mandist2d(const int3 & o) const
+	{
+		return abs(o.x - x) + abs(o.y - y);
+	}
+	//chebyshev distance used for ambient sounds (z coord is not used)
+	double chebdist2d(const int3 & o) const
+	{
+		return std::max(std::abs(o.x - x), std::abs(o.y - y));
+	}
 
 	bool areNeighbours(const int3 & o) const
 	{
@@ -112,7 +146,7 @@ public:
 	}
 
 	//returns "(x y z)" string
-	std::string operator ()() const //Change to int3::toString()?
+	std::string toString() const
 	{
 		std::string result("(");
 		result += boost::lexical_cast<std::string>(x); result += ' ';
@@ -129,18 +163,17 @@ public:
 	template <typename Handler>
 	void serialize(Handler &h, const int version)
 	{
-		h & x & y & z;
+		h & x;
+		h & y;
+		h & z;
+	}
+
+	static std::array<int3, 8> getDirs()
+	{
+		return { { int3(0,1,0),int3(0,-1,0),int3(-1,0,0),int3(+1,0,0),
+			int3(1,1,0),int3(-1,1,0),int3(1,-1,0),int3(-1,-1,0) } };
 	}
 };
-
-inline std::ostream & operator<<(std::ostream & str, const int3 & sth)
-{
-	return str << sth.x << ' ' << sth.y << ' ' << sth.z;
-}
-inline std::istream & operator>>(std::istream & str, int3 & dest)
-{
-	return str >> dest.x >> dest.y >> dest.z;
-}
 
 //Why not normal function?
 struct ShashInt3
@@ -153,9 +186,6 @@ struct ShashInt3
 		return ret;
 	}
 };
-
-static const int3 dirs[] = { int3(0,1,0),int3(0,-1,0),int3(-1,0,0),int3(+1,0,0),
-	int3(1,1,0),int3(-1,1,0),int3(1,-1,0),int3(-1,-1,0) };
 
 template<typename Container>
 int3 findClosestTile (Container & container, int3 dest)

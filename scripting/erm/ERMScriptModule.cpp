@@ -1,10 +1,5 @@
-#include "StdInc.h"
-#include "ERMScriptModule.h"
-
-#include "ERMInterpreter.h"
-
 /*
- * ERMScriptingModule.cpp, part of VCMI engine
+ * ERMScriptModule.cpp, part of VCMI engine
  *
  * Authors: listed in file AUTHORS in main folder
  *
@@ -12,9 +7,13 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "ERMScriptModule.h"
+
+#include "ERMInterpreter.h"
 
 IGameEventRealizer *acb;
-CPrivilagedInfoCallback *icb;
+CPrivilegedInfoCallback *icb;
 
 
 #ifdef __GNUC__
@@ -28,7 +27,7 @@ extern "C" DLL_EXPORT void GetAiName(char* name)
 	strcpy_s(name, strlen(g_cszAiName) + 1, g_cszAiName);
 }
 
-extern "C" DLL_EXPORT void GetNewModule(shared_ptr<CScriptingModule> &out)
+extern "C" DLL_EXPORT void GetNewModule(std::shared_ptr<CScriptingModule> &out)
 {
-	out = make_shared<ERMInterpreter>();
+	out = std::make_shared<ERMInterpreter>();
 }

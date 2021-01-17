@@ -1,3 +1,12 @@
+/*
+ * InfoWindows.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "InfoWindows.h"
 
@@ -29,16 +38,6 @@
 #include "../../lib/mapObjects/CGHeroInstance.h"
 #include "../../lib/mapObjects/CGTownInstance.h"
 #include "../../lib/mapObjects/MiscObjects.h"
-
-/*
- * InfoWindows.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
 
 void CSimpleWindow::show(SDL_Surface * to)
 {
@@ -127,7 +126,7 @@ CInfoWindow::CInfoWindow(std::string Text, PlayerColor player, const TCompsInfo 
 	for(auto & Button : Buttons)
 	{
 		CButton *button = new CButton(Point(0,0), Button.first, CButton::tooltip(), std::bind(&CInfoWindow::close,this));
-		button->borderColor = Colors::METALLIC_GOLD;
+		button->borderColor = boost::make_optional(Colors::METALLIC_GOLD);
 		button->addCallback(Button.second); //each button will close the window apart from call-defined actions
 		buttons.push_back(button);
 	}
@@ -219,7 +218,7 @@ void CInfoWindow::showOkDialog(const std::string & text, const std::vector<CComp
 	GH.pushInt(temp);
 }
 
-CInfoWindow * CInfoWindow::create(const std::string &text, PlayerColor playerID /*= 1*/, const std::vector<CComponent*> *components /*= nullptr*/, bool DelComps)
+CInfoWindow * CInfoWindow::create(const std::string &text, PlayerColor playerID, const std::vector<CComponent*> *components, bool DelComps)
 {
 	std::vector<std::pair<std::string,CFunctionList<void()> > > pom;
 	pom.push_back(std::pair<std::string,CFunctionList<void()> >("IOKAY.DEF",0));
@@ -251,7 +250,7 @@ CInfoPopup::CInfoPopup(SDL_Surface * Bitmap, int x, int y, bool Free)
 }
 
 
-CInfoPopup::CInfoPopup(SDL_Surface * Bitmap, const Point &p, EAlignment alignment, bool Free/*=false*/)
+CInfoPopup::CInfoPopup(SDL_Surface * Bitmap, const Point &p, EAlignment alignment, bool Free)
  : free(Free),bitmap(Bitmap)
 {
 	switch(alignment)
@@ -335,6 +334,8 @@ void CRClickPopup::close()
 void CRClickPopup::createAndPush(const std::string &txt, const CInfoWindow::TCompsInfo &comps)
 {
 	PlayerColor player = LOCPLINT ? LOCPLINT->playerID : PlayerColor(1); //if no player, then use blue
+	if(settings["session"]["spectate"].Bool())//TODO: there must be better way to implement this
+		player = PlayerColor(1);
 
 	CSimpleWindow * temp = new CInfoWindow(txt, player, comps);
 	temp->center(Point(GH.current->motion)); //center on mouse
@@ -351,7 +352,7 @@ void CRClickPopup::createAndPush(const std::string &txt, CComponent * component)
 	createAndPush(txt, intComps);
 }
 
-void CRClickPopup::createAndPush(const CGObjectInstance *obj, const Point &p, EAlignment alignment /*= BOTTOMRIGHT*/)
+void CRClickPopup::createAndPush(const CGObjectInstance *obj, const Point &p, EAlignment alignment)
 {
 	CIntObject *iWin = createInfoWin(p, obj); //try get custom infowindow for this obj
 	if(iWin)
@@ -411,7 +412,7 @@ CInfoBoxPopup::CInfoBoxPopup(Point position, const CGTownInstance * town):
 	CWindowObject(RCLICK_POPUP | PLAYER_COLORED, "TOWNQVBK", toScreen(position))
 {
 	InfoAboutTown iah;
-	LOCPLINT->cb->getTownInfo(town, iah);
+	LOCPLINT->cb->getTownInfo(town, iah, adventureInt->selection); //todo: should this be nearest hero?
 
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 	new CTownTooltip(Point(9, 10), iah);
@@ -421,7 +422,7 @@ CInfoBoxPopup::CInfoBoxPopup(Point position, const CGHeroInstance * hero):
 	CWindowObject(RCLICK_POPUP | PLAYER_COLORED, "HEROQVBK", toScreen(position))
 {
 	InfoAboutHero iah;
-	LOCPLINT->cb->getHeroInfo(hero, iah);
+	LOCPLINT->cb->getHeroInfo(hero, iah, adventureInt->selection);//todo: should this be nearest hero?
 
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 	new CHeroTooltip(Point(9, 10), iah);
@@ -439,11 +440,15 @@ CInfoBoxPopup::CInfoBoxPopup(Point position, const CGGarrison * garr):
 
 CIntObject * CRClickPopup::createInfoWin(Point position, const CGObjectInstance * specific) //specific=0 => draws info about selected town/hero
 {
-	if(!specific)
+	if(nullptr == specific)
 		specific = adventureInt->selection;
-
-	assert(specific);
-
+	
+	if(nullptr == specific)
+	{
+		logGlobal->error("createInfoWin: no object to describe");
+		return nullptr;
+	}	
+	
 	switch(specific->ID)
 	{
 	case Obj::HERO:

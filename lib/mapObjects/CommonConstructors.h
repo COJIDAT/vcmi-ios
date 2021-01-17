@@ -1,8 +1,3 @@
-#pragma once
-
-#include "CObjectClassesHandler.h"
-#include "../CTownHandler.h" // for building ID-based filters
-
 /*
  * CommonConstructors.h, part of VCMI engine
  *
@@ -12,13 +7,16 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "CObjectClassesHandler.h"
+#include "../CTownHandler.h" // for building ID-based filters
+#include "MapObjects.h"
 
 class CGObjectInstance;
 class CGTownInstance;
 class CGHeroInstance;
 class CGDwelling;
-//class CGArtifact;
-//class CGCreature;
 class CHeroClass;
 class CBank;
 class CStackBasicDescriptor;
@@ -28,27 +26,26 @@ template<class ObjectType>
 class CDefaultObjectTypeHandler : public AObjectTypeHandler
 {
 protected:
-	ObjectType * createTyped(ObjectTemplate tmpl) const
+	ObjectType * createTyped(const ObjectTemplate & tmpl) const
 	{
 		auto obj = new ObjectType();
-		obj->ID = tmpl.id;
-		obj->subID = tmpl.subid;
+		preInitObject(obj);
 		obj->appearance = tmpl;
 		return obj;
 	}
 public:
 	CDefaultObjectTypeHandler(){}
 
-	CGObjectInstance * create(ObjectTemplate tmpl) const
+	CGObjectInstance * create(const ObjectTemplate & tmpl) const override
 	{
 		return createTyped(tmpl);
 	}
 
-	virtual void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const
+	virtual void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const override
 	{
 	}
 
-	virtual std::unique_ptr<IObjectInfo> getObjectInfo(ObjectTemplate tmpl) const
+	virtual std::unique_ptr<IObjectInfo> getObjectInfo(const ObjectTemplate & tmpl) const override
 	{
 		return nullptr;
 	}
@@ -58,28 +55,30 @@ class CObstacleConstructor : public CDefaultObjectTypeHandler<CGObjectInstance>
 {
 public:
 	CObstacleConstructor();
-	bool isStaticObject();
+	bool isStaticObject() override;
 };
 
 class CTownInstanceConstructor : public CDefaultObjectTypeHandler<CGTownInstance>
 {
 	JsonNode filtersJson;
 protected:
-	bool objectFilter(const CGObjectInstance *, const ObjectTemplate &) const;
-	void initTypeData(const JsonNode & input);
+	bool objectFilter(const CGObjectInstance *, const ObjectTemplate &) const override;
+	void initTypeData(const JsonNode & input) override;
 
 public:
 	CFaction * faction;
 	std::map<std::string, LogicalExpression<BuildingID>> filters;
 
 	CTownInstanceConstructor();
-	CGObjectInstance * create(ObjectTemplate tmpl) const;
-	void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const;
-	void afterLoadFinalization();
+	CGObjectInstance * create(const ObjectTemplate & tmpl) const override;
+	void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const override;
+	void afterLoadFinalization() override;
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & filtersJson & faction & filters;
+		h & filtersJson;
+		h & faction;
+		h & filters;
 		h & static_cast<CDefaultObjectTypeHandler<CGTownInstance>&>(*this);
 	}
 };
@@ -88,21 +87,23 @@ class CHeroInstanceConstructor : public CDefaultObjectTypeHandler<CGHeroInstance
 {
 	JsonNode filtersJson;
 protected:
-	bool objectFilter(const CGObjectInstance *, const ObjectTemplate &) const;
-	void initTypeData(const JsonNode & input);
+	bool objectFilter(const CGObjectInstance *, const ObjectTemplate &) const override;
+	void initTypeData(const JsonNode & input) override;
 
 public:
 	CHeroClass * heroClass;
 	std::map<std::string, LogicalExpression<HeroTypeID>> filters;
 
 	CHeroInstanceConstructor();
-	CGObjectInstance * create(ObjectTemplate tmpl) const;
-	void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const;
-	void afterLoadFinalization();
+	CGObjectInstance * create(const ObjectTemplate & tmpl) const override;
+	void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const override;
+	void afterLoadFinalization() override;
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & filtersJson & heroClass & filters;
+		h & filtersJson;
+		h & heroClass;
+		h & filters;
 		h & static_cast<CDefaultObjectTypeHandler<CGHeroInstance>&>(*this);
 	}
 };
@@ -114,21 +115,22 @@ class CDwellingInstanceConstructor : public CDefaultObjectTypeHandler<CGDwelling
 	JsonNode guards;
 
 protected:
-	bool objectFilter(const CGObjectInstance *, const ObjectTemplate &) const;
-	void initTypeData(const JsonNode & input);
+	bool objectFilter(const CGObjectInstance *, const ObjectTemplate &) const override;
+	void initTypeData(const JsonNode & input) override;
 
 public:
 
 	CDwellingInstanceConstructor();
-	CGObjectInstance * create(ObjectTemplate tmpl) const;
-	void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const;
+	CGObjectInstance * create(const ObjectTemplate & tmpl) const override;
+	void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const override;
 
 	bool producesCreature(const CCreature * crea) const;
 	std::vector<const CCreature *> getProducedCreatures() const;
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & availableCreatures & guards;
+		h & availableCreatures;
+		h & guards;
 		h & static_cast<CDefaultObjectTypeHandler<CGDwelling>&>(*this);
 	}
 };
@@ -148,22 +150,36 @@ struct BankConfig
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & chance & upgradeChance & guards & combatValue & resources & creatures & artifacts & value & spells;
+		h & chance;
+		h & upgradeChance;
+		h & guards;
+		h & combatValue;
+		h & resources;
+		h & creatures;
+		h & artifacts;
+		h & value;
+		h & spells;
 	}
 };
 
-class CBankInfo : public IObjectInfo
-{
-	JsonVector config;
-public:
-	CBankInfo(JsonVector config);
+typedef std::vector<std::pair<ui8, IObjectInfo::CArmyStructure>> TPossibleGuards;
 
-	CArmyStructure minGuards() const;
-	CArmyStructure maxGuards() const;
-	bool givesResources() const;
-	bool givesArtifacts() const;
-	bool givesCreatures() const;
-	bool givesSpells() const;
+class DLL_LINKAGE CBankInfo : public IObjectInfo
+{
+	const JsonVector & config;
+public:
+	CBankInfo(const JsonVector & Config);
+
+	TPossibleGuards getPossibleGuards() const;
+
+	// These functions should try to evaluate minimal possible/max possible guards to give provide information on possible thread to AI
+	CArmyStructure minGuards() const override;
+	CArmyStructure maxGuards() const override;
+
+	bool givesResources() const override;
+	bool givesArtifacts() const override;
+	bool givesCreatures() const override;
+	bool givesSpells() const override;
 };
 
 class CBankInstanceConstructor : public CDefaultObjectTypeHandler<CBank>
@@ -172,7 +188,7 @@ class CBankInstanceConstructor : public CDefaultObjectTypeHandler<CBank>
 
 	JsonVector levels;
 protected:
-	void initTypeData(const JsonNode & input);
+	void initTypeData(const JsonNode & input) override;
 
 public:
 	// all banks of this type will be reset N days after clearing,
@@ -180,14 +196,15 @@ public:
 
 	CBankInstanceConstructor();
 
-	CGObjectInstance *create(ObjectTemplate tmpl) const;
-	void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const;
+	CGObjectInstance * create(const ObjectTemplate & tmpl) const override;
+	void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const override;
 
-	std::unique_ptr<IObjectInfo> getObjectInfo(ObjectTemplate tmpl) const;
+	std::unique_ptr<IObjectInfo> getObjectInfo(const ObjectTemplate & tmpl) const override;
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & levels & bankResetDuration;
+		h & levels;
+		h & bankResetDuration;
 		h & static_cast<CDefaultObjectTypeHandler<CBank>&>(*this);
 	}
 };

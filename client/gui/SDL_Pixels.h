@@ -1,9 +1,3 @@
-#pragma once
-
-#include <SDL_endian.h>
-
-#include "SDL_Extensions.h"
-
 /*
  * SDL_Pixels.h, part of VCMI engine
  *
@@ -13,6 +7,11 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include <SDL_endian.h>
+
+#include "SDL_Extensions.h"
 
 // for accessing channels from pixel in format-independent way
 //should be as fast as accessing via pointer at least for 3-4 bytes per pixel
@@ -49,7 +48,7 @@ namespace Channels
 		{
 			Uint16 * const pixel = (Uint16*)ptr;
 			Uint8 subpx = value >> (8 - bits);
-			*pixel = (*pixel & !mask) | ((subpx << shift) & mask );
+			*pixel = (*pixel & ~mask) | ((subpx << shift) & mask );
 		}
 
 		static Uint8 STRONG_INLINE get(const Uint8 *ptr)
@@ -135,11 +134,7 @@ struct ColorPutter<2, incrementPtr>
 template<int bpp, int incrementPtr>
 STRONG_INLINE void ColorPutter<bpp, incrementPtr>::PutColorAlpha(Uint8 *&ptr, const SDL_Color & Color)
 {
-	#ifdef VCMI_SDL1
-	PutColor(ptr, Color.r, Color.g, Color.b, Color.unused);
-	#else
 	PutColor(ptr, Color.r, Color.g, Color.b, Color.a);
-	#endif
 }
 
 template<int bpp, int incrementPtr>
@@ -268,11 +263,7 @@ STRONG_INLINE void ColorPutter<2, incrementPtr>::PutColor(Uint8 *&ptr, const Uin
 template <int incrementPtr>
 STRONG_INLINE void ColorPutter<2, incrementPtr>::PutColorAlpha(Uint8 *&ptr, const SDL_Color & Color)
 {
-	#ifdef VCMI_SDL1
-	PutColor(ptr, Color.r, Color.g, Color.b, Color.unused);
-	#else
 	PutColor(ptr, Color.r, Color.g, Color.b, Color.a);
-	#endif
 }
 
 template <int incrementPtr>

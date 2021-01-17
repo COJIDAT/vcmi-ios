@@ -1,35 +1,45 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #ifndef FL_HEADERS_H
 #define FL_HEADERS_H
 
+/**
+    The Headers.h file contains the headers of all the classes in the
+    `fuzzylite` library, thereby encouraging the use of the directive `#include
+    "fl/Headers.h"` in projects using the library.
+ */
+
+
 #include "fl/fuzzylite.h"
 
+#include "fl/Benchmark.h"
+#include "fl/Complexity.h"
 #include "fl/Console.h"
 #include "fl/Engine.h"
 #include "fl/Exception.h"
+
+#include "fl/activation/Activation.h"
+#include "fl/activation/First.h"
+#include "fl/activation/General.h"
+#include "fl/activation/Highest.h"
+#include "fl/activation/Last.h"
+#include "fl/activation/Lowest.h"
+#include "fl/activation/Proportional.h"
+#include "fl/activation/Threshold.h"
 
 #include "fl/defuzzifier/Bisector.h"
 #include "fl/defuzzifier/Centroid.h"
@@ -42,6 +52,7 @@
 #include "fl/defuzzifier/WeightedDefuzzifier.h"
 #include "fl/defuzzifier/WeightedSum.h"
 
+#include "fl/factory/ActivationFactory.h"
 #include "fl/factory/CloningFactory.h"
 #include "fl/factory/ConstructionFactory.h"
 #include "fl/factory/FactoryManager.h"
@@ -61,10 +72,12 @@
 #include "fl/imex/FllImporter.h"
 #include "fl/imex/FllExporter.h"
 #include "fl/imex/JavaExporter.h"
+#include "fl/imex/RScriptExporter.h"
 
 #include "fl/hedge/Any.h"
 #include "fl/hedge/Extremely.h"
 #include "fl/hedge/Hedge.h"
+#include "fl/hedge/HedgeFunction.h"
 #include "fl/hedge/Not.h"
 #include "fl/hedge/Seldom.h"
 #include "fl/hedge/Somewhat.h"
@@ -84,6 +97,8 @@
 #include "fl/norm/s/Maximum.h"
 #include "fl/norm/s/NilpotentMaximum.h"
 #include "fl/norm/s/NormalizedSum.h"
+#include "fl/norm/s/SNormFunction.h"
+#include "fl/norm/s/UnboundedSum.h"
 
 #include "fl/norm/t/AlgebraicProduct.h"
 #include "fl/norm/t/BoundedDifference.h"
@@ -92,6 +107,7 @@
 #include "fl/norm/t/HamacherProduct.h"
 #include "fl/norm/t/Minimum.h"
 #include "fl/norm/t/NilpotentMinimum.h"
+#include "fl/norm/t/TNormFunction.h"
 
 #include "fl/rule/Antecedent.h"
 #include "fl/rule/Consequent.h"
@@ -99,8 +115,9 @@
 #include "fl/rule/RuleBlock.h"
 #include "fl/rule/Expression.h"
 
-#include "fl/term/Accumulated.h"
+#include "fl/term/Aggregated.h"
 #include "fl/term/Bell.h"
+#include "fl/term/Binary.h"
 #include "fl/term/Concave.h"
 #include "fl/term/Constant.h"
 #include "fl/term/Cosine.h"

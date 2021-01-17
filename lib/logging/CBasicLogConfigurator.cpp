@@ -1,5 +1,15 @@
+/*
+ * CBasicLogConfigurator.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CBasicLogConfigurator.h"
+#include "CLogger.h"
 
 #include "../CConfigHandler.h"
 
@@ -32,7 +42,9 @@ void CBasicLogConfigurator::configure()
 				CLogger * logger = CLogger::getLogger(CLoggerDomain(name));
 
 				// Set log level
-				logger->setLevel(getLogLevel(loggerNode["level"].String()));
+				std::string level = loggerNode["level"].String();
+				logger->setLevel(getLogLevel(level));
+				logGlobal->debug("Set log level %s => %d", name, level);
 			}
 		}
 		CLogger::getGlobalLogger()->clearTargets();
@@ -78,11 +90,16 @@ void CBasicLogConfigurator::configure()
 	}
 	catch(const std::exception & e)
 	{
-		logGlobal->errorStream() << "Could not initialize the logging system due to configuration error/s."
-								 << "The logging system can be in a corrupted state. " << e.what();
+		logGlobal->error("Could not initialize the logging system due to configuration error/s."
+								     "The logging system can be in a corrupted state. %s", e.what());
 	}
 
-	logGlobal->infoStream() << "Initialized logging system based on settings successfully.";
+	logGlobal->info("Initialized logging system based on settings successfully.");
+	for (auto& domain : CLogManager::get().getRegisteredDomains())
+	{
+		logGlobal->info("[log level] %s => %s", domain,
+                    ELogLevel::to_string(CLogger::getLogger(CLoggerDomain(domain))->getLevel()));
+	}
 }
 
 ELogLevel::ELogLevel CBasicLogConfigurator::getLogLevel(const std::string & level)
@@ -95,7 +112,7 @@ ELogLevel::ELogLevel CBasicLogConfigurator::getLogLevel(const std::string & leve
 		{"warn", ELogLevel::WARN},
 		{"error", ELogLevel::ERROR},
 	};
-	
+
 	const auto & levelPair = levelMap.find(level);
 	if(levelPair != levelMap.end())
 		return levelPair->second;

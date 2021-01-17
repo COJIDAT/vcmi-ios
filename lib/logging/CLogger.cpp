@@ -1,3 +1,12 @@
+/*
+ * CLogger.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CLogger.h"
 
@@ -15,12 +24,32 @@ namespace ELogLevel
 			case INFO:  return ANDROID_LOG_INFO;
 			case WARN:  return ANDROID_LOG_WARN;
 			case ERROR: return ANDROID_LOG_ERROR;
-			default:;
+		default:
+			break;
 		}
 		return ANDROID_LOG_UNKNOWN;
 	}
 }
 #endif
+
+namespace vstd
+{
+
+CLoggerBase::~CLoggerBase() = default;
+
+
+CTraceLogger::CTraceLogger(const CLoggerBase * logger, const std::string & beginMessage, const std::string & endMessage)
+	: logger(logger), endMessage(endMessage)
+{
+	logger->trace(beginMessage);
+}
+
+CTraceLogger::~CTraceLogger()
+{
+	logger->trace(endMessage);
+}
+
+}//namespace vstd
 
 const std::string CLoggerDomain::DOMAIN_GLOBAL = "global";
 
@@ -45,27 +74,16 @@ bool CLoggerDomain::isGlobalDomain() const { return name == DOMAIN_GLOBAL; }
 
 const std::string& CLoggerDomain::getName() const { return name; }
 
-CLoggerStream::CLoggerStream(const CLogger & logger, ELogLevel::ELogLevel level) : logger(logger), level(level), sbuffer(nullptr) {}
-
-CLoggerStream::~CLoggerStream()
-{
-	if(sbuffer)
-	{
-		logger.log(level, sbuffer->str());
-		delete sbuffer;
-		sbuffer = nullptr;
-	}
-}
-
 boost::recursive_mutex CLogger::smx;
 boost::recursive_mutex CLogManager::smx;
 
-DLL_LINKAGE CLogger * logGlobal = CLogger::getGlobalLogger();
+DLL_LINKAGE vstd::CLoggerBase * logGlobal = CLogger::getGlobalLogger();
 
-DLL_LINKAGE CLogger * logBonus = CLogger::getLogger(CLoggerDomain("bonus"));
-DLL_LINKAGE CLogger * logNetwork = CLogger::getLogger(CLoggerDomain("network"));
-DLL_LINKAGE CLogger * logAi = CLogger::getLogger(CLoggerDomain("ai"));
-DLL_LINKAGE CLogger * logAnim = CLogger::getLogger(CLoggerDomain("animation"));
+DLL_LINKAGE vstd::CLoggerBase * logBonus = CLogger::getLogger(CLoggerDomain("bonus"));
+DLL_LINKAGE vstd::CLoggerBase * logNetwork = CLogger::getLogger(CLoggerDomain("network"));
+DLL_LINKAGE vstd::CLoggerBase * logAi = CLogger::getLogger(CLoggerDomain("ai"));
+DLL_LINKAGE vstd::CLoggerBase * logAnim = CLogger::getLogger(CLoggerDomain("animation"));
+DLL_LINKAGE vstd::CLoggerBase * logMod = CLogger::getLogger(CLoggerDomain("mod"));
 
 CLogger * CLogger::getLogger(const CLoggerDomain & domain)
 {
@@ -76,8 +94,14 @@ CLogger * CLogger::getLogger(const CLoggerDomain & domain)
 	{
 		logger = new CLogger(domain);
 		if(domain.isGlobalDomain())
+		{
 			logger->setLevel(ELogLevel::TRACE);
+		}
 		CLogManager::get().addLogger(logger);
+		if (logGlobal != nullptr)
+		{
+			logGlobal->debug("Created logger %s", domain.getName());
+		}
 	}
 	return logger;
 }
@@ -101,22 +125,22 @@ CLogger::CLogger(const CLoggerDomain & domain) : domain(domain)
 	}
 }
 
-void CLogger::trace(const std::string & message) const { log(ELogLevel::TRACE, message); }
-void CLogger::debug(const std::string & message) const { log(ELogLevel::DEBUG, message); }
-void CLogger::info(const std::string & message) const { log(ELogLevel::INFO, message); }
-void CLogger::warn(const std::string & message) const { log(ELogLevel::WARN, message); }
-void CLogger::error(const std::string & message) const { log(ELogLevel::ERROR, message); }
-
-CLoggerStream CLogger::traceStream() const { return CLoggerStream(*this, ELogLevel::TRACE); }
-CLoggerStream CLogger::debugStream() const { return CLoggerStream(*this, ELogLevel::DEBUG); }
-CLoggerStream CLogger::infoStream() const { return CLoggerStream(*this, ELogLevel::INFO); }
-CLoggerStream CLogger::warnStream() const { return CLoggerStream(*this, ELogLevel::WARN); }
-CLoggerStream CLogger::errorStream() const { return CLoggerStream(*this, ELogLevel::ERROR); }
-
 void CLogger::log(ELogLevel::ELogLevel level, const std::string & message) const
 {
 	if(getEffectiveLevel() <= level)
 		callTargets(LogRecord(domain, level, message));
+}
+
+void CLogger::log(ELogLevel::ELogLevel level, const boost::format & fmt) const
+{
+	try
+	{
+		log(level, fmt.str());
+	}
+	catch(...)
+	{
+        log(ELogLevel::ERROR, "Invalid log format!");
+	}
 }
 
 ELogLevel::ELogLevel CLogger::getLevel() const
@@ -134,7 +158,7 @@ void CLogger::setLevel(ELogLevel::ELogLevel level)
 
 const CLoggerDomain & CLogger::getDomain() const { return domain; }
 
-void CLogger::addTarget(unique_ptr<ILogTarget> && target)
+void CLogger::addTarget(std::unique_ptr<ILogTarget> && target)
 {
 	TLockGuard _(mx);
 	targets.push_back(std::move(target));
@@ -152,10 +176,12 @@ ELogLevel::ELogLevel CLogger::getEffectiveLevel() const
 
 void CLogger::callTargets(const LogRecord & record) const
 {
+#ifndef VCMI_IOS
 	TLockGuard _(mx);
 	for(const CLogger * logger = this; logger != nullptr; logger = logger->parent)
 		for(auto & target : logger->targets)
 			target->write(record);
+#endif
 }
 
 void CLogger::clearTargets()
@@ -167,13 +193,6 @@ void CLogger::clearTargets()
 bool CLogger::isDebugEnabled() const { return getEffectiveLevel() <= ELogLevel::DEBUG; }
 bool CLogger::isTraceEnabled() const { return getEffectiveLevel() <= ELogLevel::TRACE; }
 
-CTraceLogger::CTraceLogger(const CLogger * logger, const std::string & beginMessage, const std::string & endMessage)
-	: logger(logger), endMessage(endMessage)
-{
-	logger->trace(beginMessage);
-}
-CTraceLogger::~CTraceLogger() { logger->trace(std::move(endMessage)); }
-
 CLogManager & CLogManager::get()
 {
 	TLockGuardRec _(smx);
@@ -181,7 +200,7 @@ CLogManager & CLogManager::get()
 	return instance;
 }
 
-CLogManager::CLogManager() { }
+CLogManager::CLogManager() = default;
 CLogManager::~CLogManager()
 {
 	for(auto & i : loggers)
@@ -202,6 +221,16 @@ CLogger * CLogManager::getLogger(const CLoggerDomain & domain)
 		return it->second;
 	else
 		return nullptr;
+}
+
+std::vector<std::string> CLogManager::getRegisteredDomains() const
+{
+	std::vector<std::string> domains;
+	for (auto& pair : loggers)
+	{
+		domains.push_back(pair.second->getDomain().getName());
+	}
+	return std::move(domains);
 }
 
 CLogFormatter::CLogFormatter() : CLogFormatter("%m") { }
@@ -230,13 +259,10 @@ std::string CLogFormatter::format(const LogRecord & record) const
 {
 	std::string message = pattern;
 
-	// Format date
-	dateStream.str(std::string());
-	dateStream.clear();
-	dateStream << record.timeStamp;
-	boost::algorithm::replace_first(message, "%d", dateStream.str());
+	//Format date
+	boost::algorithm::replace_first(message, "%d", boost::posix_time::to_simple_string (record.timeStamp));
 
-	// Format log level
+	//Format log level
 	std::string level;
 	switch(record.level)
 	{
@@ -258,10 +284,12 @@ std::string CLogFormatter::format(const LogRecord & record) const
 	}
 	boost::algorithm::replace_first(message, "%l", level);
 
-	// Format name, thread id and message
+	//Format name, thread id and message
 	boost::algorithm::replace_first(message, "%n", record.domain.getName());
-	boost::algorithm::replace_first(message, "%t", boost::lexical_cast<std::string>(record.threadId));
+	boost::algorithm::replace_first(message, "%t", record.threadId);
 	boost::algorithm::replace_first(message, "%m", record.message);
+
+	//return boost::to_string (boost::format("%d %d %d[%d] - %d") % dateStream.str() % level % record.domain.getName() % record.threadId % record.message);
 
 	return message;
 }
@@ -324,15 +352,15 @@ void CLogConsoleTarget::write(const LogRecord & record)
 	std::string message = formatter.format(record);
 
 #ifdef VCMI_ANDROID
-	__android_log_write(ELogLevel::toAndroid(record.level), "VCMI", message.c_str());
-#endif
+    __android_log_write(ELogLevel::toAndroid(record.level), ("VCMI-" + record.domain.getName()).c_str(), message.c_str());
+#else
 
 	const bool printToStdErr = record.level >= ELogLevel::WARN;
 	if(console)
 	{
 		const EConsoleTextColor::EConsoleTextColor textColor =
 			coloredOutputEnabled ? colorMapping.getColorFor(record.domain, record.level) : EConsoleTextColor::DEFAULT;
-		
+
 		console->print(message, true, textColor, printToStdErr);
 	}
 	else
@@ -343,6 +371,7 @@ void CLogConsoleTarget::write(const LogRecord & record)
 		else
 			std::cout << message << std::endl;
 	}
+#endif
 }
 
 bool CLogConsoleTarget::isColoredOutputEnabled() const { return coloredOutputEnabled; }
@@ -357,7 +386,7 @@ void CLogConsoleTarget::setFormatter(const CLogFormatter & formatter) { this->fo
 const CColorMapping & CLogConsoleTarget::getColorMapping() const { return colorMapping; }
 void CLogConsoleTarget::setColorMapping(const CColorMapping & colorMapping) { this->colorMapping = colorMapping; }
 
-CLogFileTarget::CLogFileTarget(boost::filesystem::path filePath, bool append /*= true*/)
+CLogFileTarget::CLogFileTarget(boost::filesystem::path filePath, bool append)
 	: file(std::move(filePath), append ? std::ios_base::app : std::ios_base::out)
 {
 	formatter.setPattern("%d %l %n [%t] - %m");
@@ -365,8 +394,9 @@ CLogFileTarget::CLogFileTarget(boost::filesystem::path filePath, bool append /*=
 
 void CLogFileTarget::write(const LogRecord & record)
 {
+	std::string message = formatter.format(record); //formatting is slow, do it outside the lock
 	TLockGuard _(mx);
-	file << formatter.format(record) << std::endl;
+	file << message << std::endl;
 }
 
 const CLogFormatter & CLogFileTarget::getFormatter() const { return formatter; }

@@ -1,0 +1,1 @@
+../../../../libvorbis/lib/scales.h

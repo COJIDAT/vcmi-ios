@@ -1,38 +1,39 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
-
-//TODO Check http://en.wikipedia.org/wiki/Defuzzification for other defuzzifiers.
 
 #ifndef FL_DEFUZZIFIER_H
 #define FL_DEFUZZIFIER_H
 
 #include "fl/fuzzylite.h"
+
+#include "fl/Complexity.h"
+
 #include <string>
 
 namespace fl {
     class Term;
 
+    /**
+      The Defuzzifier class is the abstract class for defuzzifiers.
+
+      @author Juan Rada-Vilela, Ph.D.
+      @see IntegralDefuzzifier
+      @see WeightedDefuzzifier
+      @since 4.0
+     */
     class FL_API Defuzzifier {
     public:
 
@@ -43,11 +44,33 @@ namespace fl {
         }
         FL_DEFAULT_COPY_AND_MOVE(Defuzzifier)
 
+        /**
+          Returns the name of the class of the defuzzifier
+          @return the name of the class of the defuzzifier
+         */
         virtual std::string className() const = 0;
+        /**
+          Creates a clone of the defuzzifier
+          @return a clone of the defuzzifier
+         */
         virtual Defuzzifier* clone() const = 0;
+
+        /**
+          Computes the complexity of defuzzifying the given term
+          @param term is the term to defuzzify
+          @return the complexity of defuzzifying the given term
+         */
+        virtual Complexity complexity(const Term* term) const = 0;
+        /**
+          Defuzzifies the given fuzzy term utilizing the range `[minimum,maximum]`
+          @param term is the term to defuzzify, typically an Aggregated term
+          @param minimum is the minimum value of the range
+          @param maximum is the maximum value of the range
+          @return the defuzzified value of the given fuzzy term
+         */
         virtual scalar defuzzify(const Term* term, scalar minimum, scalar maximum) const = 0;
 
     };
-
 }
+
 #endif /* FL_DEFUZZIFIER_H */

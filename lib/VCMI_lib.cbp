@@ -7,10 +7,10 @@
 		<Option pch_mode="2" />
 		<Option compiler="gcc" />
 		<Build>
-			<Target title="Debug-win32-SDL2">
+			<Target title="Debug-win32">
 				<Option platforms="Windows;" />
 				<Option output="../VCMI_lib" prefix_auto="0" extension_auto="1" />
-				<Option object_output="../obj/Debug/Lib" />
+				<Option object_output="../obj/Lib/Debug/x86" />
 				<Option type="3" />
 				<Option compiler="gcc" />
 				<Option host_application="D:/projects/vcmi/engine/VCMI_client.exe" />
@@ -19,68 +19,93 @@
 				<Compiler>
 					<Add option="-Og" />
 					<Add option="-g" />
-					<Add directory="$(#sdl2.include)" />
+					<Add directory="$(#zlib.include)" />
+					<Add directory="lib/" />
 				</Compiler>
 				<Linker>
+					<Add option="-lws2_32" />
+					<Add option="-lz" />
+					<Add option="-lminizip" />
+					<Add option="-lboost_filesystem$(#boost.libsuffix)" />
+					<Add option="-lboost_system$(#boost.libsuffix)" />
+					<Add option="-lboost_thread$(#boost.libsuffix)" />
+					<Add option="-lboost_chrono$(#boost.libsuffix)" />
+					<Add option="-lboost_locale$(#boost.libsuffix)" />
+					<Add option="-lboost_date_time$(#boost.libsuffix)" />
+					<Add option="-liconv" />
+					<Add option="-ldbghelp" />
+					<Add directory="$(#boost.lib32)" />
 					<Add directory="$(#sdl2.lib)" />
+					<Add directory="$(#zlib.lib)" />
 				</Linker>
 			</Target>
-			<Target title="Release-win32-SDL2">
+			<Target title="Release-win32">
 				<Option platforms="Windows;" />
 				<Option output="../VCMI_lib" prefix_auto="0" extension_auto="1" />
-				<Option object_output="../obj/Release/Lib" />
+				<Option object_output="../obj/Lib/Release/x86" />
 				<Option type="3" />
 				<Option compiler="gcc" />
 				<Option createStaticLib="1" />
 				<Compiler>
 					<Add option="-fomit-frame-pointer" />
 					<Add option="-O2" />
-					<Add directory="$(#sdl2.include)" />
+					<Add directory="$(#zlib.include)" />
+					<Add directory="lib/" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
+					<Add option="-lws2_32" />
+					<Add option="-lz" />
+					<Add option="-lminizip" />
+					<Add option="-lboost_filesystem$(#boost.libsuffix)" />
+					<Add option="-lboost_system$(#boost.libsuffix)" />
+					<Add option="-lboost_thread$(#boost.libsuffix)" />
+					<Add option="-lboost_chrono$(#boost.libsuffix)" />
+					<Add option="-lboost_locale$(#boost.libsuffix)" />
+					<Add option="-lboost_date_time$(#boost.libsuffix)" />
+					<Add option="-liconv" />
+					<Add directory="$(#boost.lib32)" />
 					<Add directory="$(#sdl2.lib)" />
+					<Add directory="$(#zlib.lib)" />
 				</Linker>
 			</Target>
-			<Target title="Debug-win32-SDL1">
+			<Target title="Debug-win64">
 				<Option platforms="Windows;" />
 				<Option output="../VCMI_lib" prefix_auto="0" extension_auto="1" />
-				<Option object_output="../obj/Debug/Lib" />
+				<Option object_output="../obj/Lib/Debug/x64" />
 				<Option type="3" />
-				<Option compiler="gcc" />
+				<Option compiler="gnu_gcc_compiler_x64" />
 				<Option host_application="D:/projects/vcmi/engine/VCMI_client.exe" />
 				<Option run_host_application_in_terminal="1" />
 				<Option createStaticLib="1" />
 				<Compiler>
 					<Add option="-Og" />
 					<Add option="-g" />
-					<Add directory="$(#sdl.include)" />
+					<Add directory="$(#zlib64.include)" />
+					<Add directory="lib/" />
 				</Compiler>
 				<Linker>
-					<Add directory="$(#sdl.lib)" />
-				</Linker>
-			</Target>
-			<Target title="Release-win32-SDL1">
-				<Option platforms="Windows;" />
-				<Option output="../VCMI_lib" prefix_auto="0" extension_auto="1" />
-				<Option object_output="../obj/Release/Lib" />
-				<Option type="3" />
-				<Option compiler="gcc" />
-				<Option createStaticLib="1" />
-				<Compiler>
-					<Add option="-fomit-frame-pointer" />
-					<Add option="-O2" />
-					<Add directory="$(#sdl.include)" />
-				</Compiler>
-				<Linker>
-					<Add option="-s" />
-					<Add directory="$(#sdl.lib)" />
+					<Add option="-lws2_32" />
+					<Add option="-lzlib" />
+					<Add option="-lminizip" />
+					<Add option="-lboost_filesystem$(#boost.libsuffix)" />
+					<Add option="-lboost_system$(#boost.libsuffix)" />
+					<Add option="-lboost_thread$(#boost.libsuffix)" />
+					<Add option="-lboost_chrono$(#boost.libsuffix)" />
+					<Add option="-lboost_locale$(#boost.libsuffix)" />
+					<Add option="-lboost_date_time$(#boost.libsuffix)" />
+					<Add option="-liconv" />
+					<Add option="-ldbghelp" />
+					<Add directory="$(#boost.lib64)" />
+					<Add directory="$(#sdl2.lib64)" />
+					<Add directory="$(#zlib64.lib)" />
 				</Linker>
 			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-Wextra" />
 			<Add option="-Wall" />
+			<Add option="-std=gnu++11" />
 			<Add option="-fexceptions" />
 			<Add option="-Wpointer-arith" />
 			<Add option="-Wno-switch" />
@@ -88,38 +113,27 @@
 			<Add option="-Wno-unused-parameter" />
 			<Add option="-Wno-overloaded-virtual" />
 			<Add option="-Wno-unused-local-typedefs" />
+			<Add option="-isystem $(#boost.include)" />
 			<Add option="-DVCMI_DLL" />
 			<Add option="-DBOOST_THREAD_USE_LIB" />
+			<Add option="-DBOOST_SYSTEM_NO_DEPRECATED" />
 			<Add option="-D_WIN32_WINNT=0x0501" />
-			<Add directory="$(#zlib.include)" />
-			<Add directory="$(#boost.include)" />
+			<Add option="-D_WIN32" />
+			<Add option="-DVCMI_NO_EXTRA_VERSION" />
+			<Add directory="." />
+			<Add directory="$(#sdl2.include)" />
 			<Add directory="../include" />
-			<Add directory="../lib" />
 		</Compiler>
 		<Linker>
-			<Add option="-lws2_32" />
-			<Add option="-lz" />
-			<Add option="-lminizip" />
-			<Add option="-lboost_filesystem$(#boost.libsuffix)" />
-			<Add option="-lboost_system$(#boost.libsuffix)" />
-			<Add option="-lboost_thread$(#boost.libsuffix)" />
-			<Add option="-lboost_chrono$(#boost.libsuffix)" />
-			<Add option="-lboost_locale$(#boost.libsuffix)" />
-			<Add directory="$(#boost.lib32)" />
-			<Add directory="$(#zlib.lib)" />
 			<Add directory="../" />
 		</Linker>
+		<Unit filename="../Global.h" />
+		<Unit filename="../Version.h" />
+		<Unit filename="../include/vstd/CLoggerBase.h" />
+		<Unit filename="../include/vstd/RNG.h" />
 		<Unit filename="AI_Base.h" />
-		<Unit filename="BattleAction.cpp" />
-		<Unit filename="BattleAction.h" />
-		<Unit filename="BattleHex.cpp" />
-		<Unit filename="BattleHex.h" />
-		<Unit filename="BattleState.cpp" />
-		<Unit filename="BattleState.h" />
 		<Unit filename="CArtHandler.cpp" />
 		<Unit filename="CArtHandler.h" />
-		<Unit filename="CBattleCallback.cpp" />
-		<Unit filename="CBattleCallback.h" />
 		<Unit filename="CBonusTypeHandler.cpp" />
 		<Unit filename="CBonusTypeHandler.h" />
 		<Unit filename="CBuildingHandler.cpp" />
@@ -138,28 +152,31 @@
 		<Unit filename="CGameInterface.h" />
 		<Unit filename="CGameState.cpp" />
 		<Unit filename="CGameState.h" />
+		<Unit filename="CGameStateFwd.h" />
 		<Unit filename="CGeneralTextHandler.cpp" />
 		<Unit filename="CGeneralTextHandler.h" />
 		<Unit filename="CHeroHandler.cpp" />
 		<Unit filename="CHeroHandler.h" />
+		<Unit filename="CMakeLists.txt" />
 		<Unit filename="CModHandler.cpp" />
 		<Unit filename="CModHandler.h" />
-		<Unit filename="CObstacleInstance.cpp" />
-		<Unit filename="CObstacleInstance.h" />
+		<Unit filename="CPathfinder.cpp" />
+		<Unit filename="CPathfinder.h" />
+		<Unit filename="CPlayerState.h" />
 		<Unit filename="CRandomGenerator.cpp" />
 		<Unit filename="CRandomGenerator.h" />
 		<Unit filename="CScriptingModule.h" />
+		<Unit filename="CSkillHandler.cpp" />
+		<Unit filename="CSkillHandler.h" />
 		<Unit filename="CSoundBase.h" />
-		<Unit filename="CSpellHandler.cpp" />
-		<Unit filename="CSpellHandler.h" />
+		<Unit filename="CStack.cpp" />
+		<Unit filename="CStack.h" />
 		<Unit filename="CStopWatch.h" />
 		<Unit filename="CThreadHelper.cpp" />
 		<Unit filename="CThreadHelper.h" />
 		<Unit filename="CTownHandler.cpp" />
 		<Unit filename="CTownHandler.h" />
 		<Unit filename="CondSh.h" />
-		<Unit filename="Connection.cpp" />
-		<Unit filename="Connection.h" />
 		<Unit filename="ConstTransitivePtr.h" />
 		<Unit filename="FunctionList.h" />
 		<Unit filename="GameConstants.cpp" />
@@ -187,6 +204,7 @@
 		<Unit filename="ScopeGuard.h" />
 		<Unit filename="StartInfo.h" />
 		<Unit filename="StdInc.h">
+			<Option compile="1" />
 			<Option weight="0" />
 		</Unit>
 		<Unit filename="StringConstants.h" />
@@ -195,6 +213,43 @@
 		<Unit filename="VCMIDirs.h" />
 		<Unit filename="VCMI_Lib.cpp" />
 		<Unit filename="VCMI_Lib.h" />
+		<Unit filename="battle/AccessibilityInfo.cpp" />
+		<Unit filename="battle/AccessibilityInfo.h" />
+		<Unit filename="battle/BattleAction.cpp" />
+		<Unit filename="battle/BattleAction.h" />
+		<Unit filename="battle/BattleAttackInfo.cpp" />
+		<Unit filename="battle/BattleAttackInfo.h" />
+		<Unit filename="battle/BattleHex.cpp" />
+		<Unit filename="battle/BattleHex.h" />
+		<Unit filename="battle/BattleInfo.cpp" />
+		<Unit filename="battle/BattleInfo.h" />
+		<Unit filename="battle/BattleProxy.cpp" />
+		<Unit filename="battle/BattleProxy.h" />
+		<Unit filename="battle/CBattleInfoCallback.cpp" />
+		<Unit filename="battle/CBattleInfoCallback.h" />
+		<Unit filename="battle/CBattleInfoEssentials.cpp" />
+		<Unit filename="battle/CBattleInfoEssentials.h" />
+		<Unit filename="battle/CCallbackBase.cpp" />
+		<Unit filename="battle/CCallbackBase.h" />
+		<Unit filename="battle/CObstacleInstance.cpp" />
+		<Unit filename="battle/CObstacleInstance.h" />
+		<Unit filename="battle/CPlayerBattleCallback.cpp" />
+		<Unit filename="battle/CPlayerBattleCallback.h" />
+		<Unit filename="battle/CUnitState.cpp" />
+		<Unit filename="battle/CUnitState.h" />
+		<Unit filename="battle/Destination.cpp" />
+		<Unit filename="battle/Destination.h" />
+		<Unit filename="battle/IBattleState.cpp" />
+		<Unit filename="battle/IBattleState.h" />
+		<Unit filename="battle/IUnitInfo.h" />
+		<Unit filename="battle/ReachabilityInfo.cpp" />
+		<Unit filename="battle/ReachabilityInfo.h" />
+		<Unit filename="battle/SideInBattle.cpp" />
+		<Unit filename="battle/SideInBattle.h" />
+		<Unit filename="battle/SiegeInfo.cpp" />
+		<Unit filename="battle/SiegeInfo.h" />
+		<Unit filename="battle/Unit.cpp" />
+		<Unit filename="battle/Unit.h" />
 		<Unit filename="filesystem/AdapterLoaders.cpp" />
 		<Unit filename="filesystem/AdapterLoaders.h" />
 		<Unit filename="filesystem/CArchiveLoader.cpp" />
@@ -203,20 +258,31 @@
 		<Unit filename="filesystem/CBinaryReader.h" />
 		<Unit filename="filesystem/CCompressedStream.cpp" />
 		<Unit filename="filesystem/CCompressedStream.h" />
-		<Unit filename="filesystem/CFileInfo.cpp" />
-		<Unit filename="filesystem/CFileInfo.h" />
 		<Unit filename="filesystem/CFileInputStream.cpp" />
 		<Unit filename="filesystem/CFileInputStream.h" />
 		<Unit filename="filesystem/CFilesystemLoader.cpp" />
 		<Unit filename="filesystem/CFilesystemLoader.h" />
+		<Unit filename="filesystem/CInputOutputStream.h" />
 		<Unit filename="filesystem/CInputStream.h" />
+		<Unit filename="filesystem/CMemoryBuffer.cpp" />
+		<Unit filename="filesystem/CMemoryBuffer.h" />
 		<Unit filename="filesystem/CMemoryStream.cpp" />
 		<Unit filename="filesystem/CMemoryStream.h" />
+		<Unit filename="filesystem/COutputStream.h" />
+		<Unit filename="filesystem/CStream.h" />
 		<Unit filename="filesystem/CZipLoader.cpp" />
 		<Unit filename="filesystem/CZipLoader.h" />
+		<Unit filename="filesystem/CZipSaver.cpp" />
+		<Unit filename="filesystem/CZipSaver.h" />
+		<Unit filename="filesystem/FileInfo.cpp" />
+		<Unit filename="filesystem/FileInfo.h" />
+		<Unit filename="filesystem/FileStream.cpp" />
+		<Unit filename="filesystem/FileStream.h" />
 		<Unit filename="filesystem/Filesystem.cpp" />
 		<Unit filename="filesystem/Filesystem.h" />
 		<Unit filename="filesystem/ISimpleResourceLoader.h" />
+		<Unit filename="filesystem/MinizipExtensions.cpp" />
+		<Unit filename="filesystem/MinizipExtensions.h" />
 		<Unit filename="filesystem/ResourceID.cpp" />
 		<Unit filename="filesystem/ResourceID.h" />
 		<Unit filename="int3.h" />
@@ -257,6 +323,8 @@
 		<Unit filename="mapObjects/ObjectTemplate.h" />
 		<Unit filename="mapping/CCampaignHandler.cpp" />
 		<Unit filename="mapping/CCampaignHandler.h" />
+		<Unit filename="mapping/CDrawRoadsOperation.cpp" />
+		<Unit filename="mapping/CDrawRoadsOperation.h" />
 		<Unit filename="mapping/CMap.cpp" />
 		<Unit filename="mapping/CMap.h" />
 		<Unit filename="mapping/CMapEditManager.cpp" />
@@ -292,6 +360,75 @@
 		<Unit filename="rmg/CZoneGraphGenerator.h" />
 		<Unit filename="rmg/CZonePlacer.cpp" />
 		<Unit filename="rmg/CZonePlacer.h" />
+		<Unit filename="serializer/BinaryDeserializer.cpp" />
+		<Unit filename="serializer/BinaryDeserializer.h" />
+		<Unit filename="serializer/BinarySerializer.cpp" />
+		<Unit filename="serializer/BinarySerializer.h" />
+		<Unit filename="serializer/CLoadIntegrityValidator.cpp" />
+		<Unit filename="serializer/CLoadIntegrityValidator.h" />
+		<Unit filename="serializer/CMemorySerializer.cpp" />
+		<Unit filename="serializer/CMemorySerializer.h" />
+		<Unit filename="serializer/CSerializer.cpp" />
+		<Unit filename="serializer/CSerializer.h" />
+		<Unit filename="serializer/CTypeList.cpp" />
+		<Unit filename="serializer/CTypeList.h" />
+		<Unit filename="serializer/Connection.cpp" />
+		<Unit filename="serializer/Connection.h" />
+		<Unit filename="serializer/JsonDeserializer.cpp" />
+		<Unit filename="serializer/JsonDeserializer.h" />
+		<Unit filename="serializer/JsonSerializeFormat.cpp" />
+		<Unit filename="serializer/JsonSerializeFormat.h" />
+		<Unit filename="serializer/JsonSerializer.cpp" />
+		<Unit filename="serializer/JsonSerializer.h" />
+		<Unit filename="serializer/JsonTreeSerializer.h" />
+		<Unit filename="spells/AdventureSpellMechanics.cpp" />
+		<Unit filename="spells/AdventureSpellMechanics.h" />
+		<Unit filename="spells/BattleSpellMechanics.cpp" />
+		<Unit filename="spells/BattleSpellMechanics.h" />
+		<Unit filename="spells/CSpellHandler.cpp" />
+		<Unit filename="spells/CSpellHandler.h" />
+		<Unit filename="spells/ISpellMechanics.cpp" />
+		<Unit filename="spells/ISpellMechanics.h" />
+		<Unit filename="spells/Magic.h" />
+		<Unit filename="spells/Problem.cpp" />
+		<Unit filename="spells/Problem.h" />
+		<Unit filename="spells/TargetCondition.cpp" />
+		<Unit filename="spells/TargetCondition.h" />
+		<Unit filename="spells/ViewSpellInt.cpp" />
+		<Unit filename="spells/ViewSpellInt.h" />
+		<Unit filename="spells/effects/Catapult.cpp" />
+		<Unit filename="spells/effects/Catapult.h" />
+		<Unit filename="spells/effects/Clone.cpp" />
+		<Unit filename="spells/effects/Clone.h" />
+		<Unit filename="spells/effects/Damage.cpp" />
+		<Unit filename="spells/effects/Damage.h" />
+		<Unit filename="spells/effects/Dispel.cpp" />
+		<Unit filename="spells/effects/Dispel.h" />
+		<Unit filename="spells/effects/Effect.cpp" />
+		<Unit filename="spells/effects/Effect.h" />
+		<Unit filename="spells/effects/Effects.cpp" />
+		<Unit filename="spells/effects/Effects.h" />
+		<Unit filename="spells/effects/EffectsFwd.h" />
+		<Unit filename="spells/effects/Heal.cpp" />
+		<Unit filename="spells/effects/Heal.h" />
+		<Unit filename="spells/effects/LocationEffect.cpp" />
+		<Unit filename="spells/effects/LocationEffect.h" />
+		<Unit filename="spells/effects/Obstacle.cpp" />
+		<Unit filename="spells/effects/Obstacle.h" />
+		<Unit filename="spells/effects/Registry.cpp" />
+		<Unit filename="spells/effects/Registry.h" />
+		<Unit filename="spells/effects/RemoveObstacle.cpp" />
+		<Unit filename="spells/effects/RemoveObstacle.h" />
+		<Unit filename="spells/effects/Sacrifice.cpp" />
+		<Unit filename="spells/effects/Sacrifice.h" />
+		<Unit filename="spells/effects/Summon.cpp" />
+		<Unit filename="spells/effects/Summon.h" />
+		<Unit filename="spells/effects/Teleport.cpp" />
+		<Unit filename="spells/effects/Teleport.h" />
+		<Unit filename="spells/effects/Timed.cpp" />
+		<Unit filename="spells/effects/Timed.h" />
+		<Unit filename="spells/effects/UnitEffect.cpp" />
+		<Unit filename="spells/effects/UnitEffect.h" />
 		<Unit filename="vcmi_endian.h" />
 		<Extensions>
 			<code_completion />

@@ -1,12 +1,3 @@
-#include "StdInc.h"
-#include "CConfigHandler.h"
-
-#include "../lib/filesystem/Filesystem.h"
-#include "../lib/GameConstants.h"
-#include "../lib/VCMIDirs.h"
-
-using namespace config;
-
 /*
  * CConfigHandler.cpp, part of VCMI engine
  *
@@ -16,6 +7,15 @@ using namespace config;
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "CConfigHandler.h"
+
+#include "../lib/filesystem/Filesystem.h"
+#include "../lib/filesystem/FileStream.h"
+#include "../lib/GameConstants.h"
+#include "../lib/VCMIDirs.h"
+
+using namespace config;
 
 SettingsStorage settings;
 CConfigHandler conf;
@@ -80,8 +80,8 @@ void SettingsStorage::invalidateNode(const std::vector<std::string> &changedPath
 	savedConf.Struct().erase("session");
 	JsonUtils::minimize(savedConf, "vcmi:settings");
 
-	std::ofstream file(*CResourceHandler::get()->getResourceName(ResourceID("config/settings.json")), std::ofstream::trunc);
-	file << savedConf;
+	FileStream file(*CResourceHandler::get()->getResourceName(ResourceID("config/settings.json")), std::ofstream::out | std::ofstream::trunc);
+	file << savedConf.toJson();
 }
 
 JsonNode & SettingsStorage::getNode(std::vector<std::string> path)
@@ -173,7 +173,7 @@ JsonNode& Settings::operator [](std::string value)
 {
 	return node[value];
 }
-// 
+//
 // template DLL_LINKAGE struct SettingsStorage::NodeAccessor<SettingsListener>;
 // template DLL_LINKAGE struct SettingsStorage::NodeAccessor<Settings>;
 
@@ -200,11 +200,12 @@ static void setGem(AdventureMapConfig &ac, const int gem, const JsonNode &g)
 	ac.gemG.push_back(g["graphic"].String());
 }
 
-CConfigHandler::CConfigHandler(void): current(nullptr)
+CConfigHandler::CConfigHandler()
+	: current(nullptr)
 {
 }
 
-CConfigHandler::~CConfigHandler(void)
+CConfigHandler::~CConfigHandler()
 {
 }
 
@@ -214,20 +215,22 @@ void config::CConfigHandler::init()
 	const JsonNode config(ResourceID("config/resolutions.json"));
 	const JsonVector &guisettings_vec = config["GUISettings"].Vector();
 
-	for(const JsonNode &g : guisettings_vec) 
+	for(const JsonNode &g : guisettings_vec)
 	{
 		std::pair<int,int> curRes(g["resolution"]["x"].Float(), g["resolution"]["y"].Float());
 		GUIOptions *current = &conf.guiOptions[curRes];
-		
+
 		current->ac.inputLineLength = g["InGameConsole"]["maxInputPerLine"].Float();
 		current->ac.outputLineLength = g["InGameConsole"]["maxOutputPerLine"].Float();
-		
+
 		current->ac.advmapX = g["AdvMap"]["x"].Float();
 		current->ac.advmapY = g["AdvMap"]["y"].Float();
 		current->ac.advmapW = g["AdvMap"]["width"].Float();
 		current->ac.advmapH = g["AdvMap"]["height"].Float();
 		current->ac.smoothMove = g["AdvMap"]["smoothMove"].Float();
 		current->ac.puzzleSepia = g["AdvMap"]["puzzleSepia"].Float();
+		current->ac.screenFading = g["AdvMap"]["screenFading"].isNull() ? true : g["AdvMap"]["screenFading"].Float(); // enabled by default
+		current->ac.objectFading = g["AdvMap"]["objectFading"].isNull() ? true : g["AdvMap"]["objectFading"].Float();
 
 		current->ac.infoboxX = g["InfoBox"]["x"].Float();
 		current->ac.infoboxY = g["InfoBox"]["y"].Float();
@@ -238,6 +241,7 @@ void config::CConfigHandler::init()
 		setGem(current->ac, 3, g["gem3"]);
 
 		current->ac.mainGraphic = g["background"].String();
+		current->ac.worldViewGraphic = g["backgroundWorldView"].String();
 
 		current->ac.hlistX = g["HeroList"]["x"].Float();
 		current->ac.hlistY = g["HeroList"]["y"].Float();

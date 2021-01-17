@@ -1,3 +1,12 @@
+/*
+ * csettingsview_moc.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "csettingsview_moc.h"
 #include "ui_csettingsview_moc.h"
@@ -20,24 +29,54 @@ static const std::string knownEncodingsList[] = //TODO: remove hardcode
     "GB2312"  // basic set for Simplified Chinese. Separate from GBK to allow proper detection of H3 fonts
 };
 
+void CSettingsView::setDisplayList()
+{
+	QStringList list;
+	QDesktopWidget * widget = QApplication::desktop();
+	for(int display = 0; display < widget->screenCount(); display++)
+	{
+		QString string;
+		auto rect = widget->screenGeometry(display);
+		QTextStream(&string) << display << " - " << rect.width() << "x" << rect.height();
+		list << string;
+	}
+
+	if(list.count() < 2)
+	{
+		ui->comboBoxDisplayIndex->hide();
+		ui->labelDisplayIndex->hide();
+	}
+	else
+	{
+		int displayIndex = settings["video"]["displayIndex"].Integer();
+		ui->comboBoxDisplayIndex->clear();
+		ui->comboBoxDisplayIndex->addItems(list);
+		ui->comboBoxDisplayIndex->setCurrentIndex(displayIndex);
+	}
+}
+
 void CSettingsView::loadSettings()
 {
 	int resX = settings["video"]["screenRes"]["width"].Float();
 	int resY = settings["video"]["screenRes"]["height"].Float();
-
 	int resIndex = ui->comboBoxResolution->findText(QString("%1x%2").arg(resX).arg(resY));
 
 	ui->comboBoxResolution->setCurrentIndex(resIndex);
 	ui->comboBoxFullScreen->setCurrentIndex(settings["video"]["fullscreen"].Bool());
 	ui->comboBoxShowIntro->setCurrentIndex(settings["video"]["showIntro"].Bool());
+	ui->checkBoxFullScreen->setChecked(settings["video"]["realFullscreen"].Bool());
 
+	int friendlyAIIndex = ui->comboBoxFriendlyAI->findText(QString::fromUtf8(settings["server"]["friendlyAI"].String().c_str()));
 	int neutralAIIndex = ui->comboBoxNeutralAI->findText(QString::fromUtf8(settings["server"]["neutralAI"].String().c_str()));
+	int enemyAIIndex = ui->comboBoxEnemyAI->findText(QString::fromUtf8(settings["server"]["enemyAI"].String().c_str()));
 	int playerAIIndex = ui->comboBoxPlayerAI->findText(QString::fromUtf8(settings["server"]["playerAI"].String().c_str()));
 
+	ui->comboBoxFriendlyAI->setCurrentIndex(friendlyAIIndex);
 	ui->comboBoxNeutralAI->setCurrentIndex(neutralAIIndex);
+	ui->comboBoxEnemyAI->setCurrentIndex(enemyAIIndex);
 	ui->comboBoxPlayerAI->setCurrentIndex(playerAIIndex);
 
-	ui->spinBoxNetworkPort->setValue(settings["server"]["port"].Float());
+	ui->spinBoxNetworkPort->setValue(settings["server"]["port"].Integer());
 
 	ui->comboBoxAutoCheck->setCurrentIndex(settings["launcher"]["autoCheckRepositories"].Bool());
 	// all calls to plainText will trigger textChanged() signal overwriting config. Create backup before editing widget
@@ -71,6 +110,7 @@ CSettingsView::~CSettingsView()
 	delete ui;
 }
 
+
 void CSettingsView::on_comboBoxResolution_currentIndexChanged(const QString &arg1)
 {
 	QStringList list = arg1.split("x");
@@ -86,10 +126,22 @@ void CSettingsView::on_comboBoxFullScreen_currentIndexChanged(int index)
 	node->Bool() = index;
 }
 
+void CSettingsView::on_checkBoxFullScreen_stateChanged(int state)
+{
+	Settings node = settings.write["video"]["realFullscreen"];
+	node->Bool() = state;
+}
+
 void CSettingsView::on_comboBoxAutoCheck_currentIndexChanged(int index)
 {
 	Settings node = settings.write["launcher"]["autoCheckRepositories"];
 	node->Bool() = index;
+}
+
+void CSettingsView::on_comboBoxDisplayIndex_currentIndexChanged(int index)
+{
+	Settings node = settings.write["video"];
+	node["displayIndex"].Float() = index;
 }
 
 void CSettingsView::on_comboBoxPlayerAI_currentIndexChanged(const QString &arg1)
@@ -98,9 +150,21 @@ void CSettingsView::on_comboBoxPlayerAI_currentIndexChanged(const QString &arg1)
 	node->String() = arg1.toUtf8().data();
 }
 
+void CSettingsView::on_comboBoxFriendlyAI_currentIndexChanged(const QString & arg1)
+{
+	Settings node = settings.write["server"]["friendlyAI"];
+	node->String() = arg1.toUtf8().data();
+}
+
 void CSettingsView::on_comboBoxNeutralAI_currentIndexChanged(const QString &arg1)
 {
 	Settings node = settings.write["server"]["neutralAI"];
+	node->String() = arg1.toUtf8().data();
+}
+
+void CSettingsView::on_comboBoxEnemyAI_currentIndexChanged(const QString & arg1)
+{
+	Settings node = settings.write["server"]["enemyAI"];
 	node->String() = arg1.toUtf8().data();
 }
 

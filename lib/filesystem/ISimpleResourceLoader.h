@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * ISimpleResourceLoader.h, part of VCMI engine
  *
@@ -9,6 +7,7 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 class CInputStream;
 class ResourceID;
@@ -48,13 +47,36 @@ public:
 	 *
 	 * @return path or empty optional if file can't be accessed independently (e.g. file in archive)
 	 */
-	virtual boost::optional<std::string> getResourceName(const ResourceID & resourceName) const
+	virtual boost::optional<boost::filesystem::path> getResourceName(const ResourceID & resourceName) const
 	{
-		return boost::optional<std::string>();
+		return boost::optional<boost::filesystem::path>();
 	}
 
 	/**
-	 * Get list of files that matches filter function
+	 * Gets all full names of matching resources, e.g. names of files in filesystem.
+	 *
+	 * @return std::set with names.
+	 */
+	virtual std::set<boost::filesystem::path> getResourceNames(const ResourceID & resourceName) const
+	{
+		std::set<boost::filesystem::path> result;
+		auto rn = getResourceName(resourceName);
+		if(rn)
+		{
+			result.insert(rn->string());
+		}
+		return result;
+	}
+
+	/**
+	 * Update lists of files that match filter function
+	 *
+	 * @param filter Filter that returns true if specified mount point matches filter
+	 */
+	virtual void updateFilteredFiles(std::function<bool(const std::string &)> filter) const = 0;
+
+	/**
+	 * Get list of files that match filter function
 	 *
 	 * @param filter Filter that returns true if specified ID matches filter
 	 * @return Returns list of flies

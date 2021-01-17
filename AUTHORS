@@ -5,7 +5,7 @@ Michał Urbańczyk aka Tow,        <impono@gmail.com>
 maintenance, reverse engineering, general support.
 
 Mateusz B. aka Tow dragon,                <matcio1@gmail.com>
-   * general suport, battle support, support for many Heroes 3 config files, reverse engineering, ERM/VERM parser and interpreter
+   * general support, battle support, support for many Heroes 3 config files, reverse engineering, ERM/VERM parser and interpreter
 
 Stefan Pavlov aka Ste,            <mailste@gmail.com>
    * minor fixes in pregame
@@ -51,3 +51,21 @@ Alexey aka Macron1Robot,                 <>
 
 Alexander Shishkin aka alexvins,
    * MinGW platform support, modding related programming
+
+Arseniy Shestakov aka SXX,      <me@arseniyshestakov.com>
+   * pathfinding improvements, programming
+
+Vadim Markovtsev, <gmarkhor@gmail.com>
+   * resolving problems with macOS, bug fixes
+
+Michał Kalinowski, <feniks_fire@o2.pl>
+   * refactoring code
+
+Dydzio, <blood990@gmail.com>
+   * Small features, improvements and bug fixes in all VCMI parts
+
+Piotr Wójcik aka Chocimier, <chocimier@tlen.pl>
+   * Various bug fixes
+
+Henning Koehler, <henning.koehler.nz@gmail.com>
+   * skill modding

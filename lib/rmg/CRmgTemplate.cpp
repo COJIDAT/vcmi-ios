@@ -1,4 +1,3 @@
-
 /*
  * CRmgTemplate.cpp, part of VCMI engine
  *
@@ -47,7 +46,7 @@ int CRmgTemplateZoneConnection::getGuardStrength() const
 
 void CRmgTemplateZoneConnection::setGuardStrength(int value)
 {
-	if(value < 0) throw std::runtime_error("Negative value for guard strenth not allowed.");
+	if(value < 0) throw std::runtime_error("Negative value for guard strength not allowed.");
 	guardStrength = value;
 }
 

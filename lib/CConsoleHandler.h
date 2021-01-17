@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * CConsoleHandler.h, part of VCMI engine
  *
@@ -9,6 +7,7 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 namespace EConsoleTextColor
 {
@@ -31,8 +30,8 @@ enum EConsoleTextColor
 class DLL_LINKAGE CConsoleHandler
 {
 public:
-    CConsoleHandler(); //c-tor
-    ~CConsoleHandler(); //d-tor
+    CConsoleHandler();
+    ~CConsoleHandler();
     void start(); //starts listening thread
 
     template<typename T> void print(const T &data, bool addNewLine = false, EConsoleTextColor::EConsoleTextColor color = EConsoleTextColor::DEFAULT, bool printToStdErr = false)

@@ -7,11 +7,12 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
- 
+
 #include "StdInc.h"
 #include "ResourceSet.h"
 #include "StringConstants.h"
 #include "JsonNode.h"
+#include "serializer/JsonSerializeFormat.h"
 
 Res::ResourceSet::ResourceSet()
 {
@@ -23,6 +24,19 @@ Res::ResourceSet::ResourceSet(const JsonNode & node)
 	reserve(GameConstants::RESOURCE_QUANTITY);
 	for(std::string name : GameConstants::RESOURCE_NAMES)
 		push_back(node[name].Float());
+}
+
+void Res::ResourceSet::serializeJson(JsonSerializeFormat & handler, const std::string & fieldName)
+{
+	if(!handler.saving)
+		resize(GameConstants::RESOURCE_QUANTITY, 0);
+	if(handler.saving && !nonZero())
+		return;
+	auto s = handler.enterStruct(fieldName);
+
+	//TODO: add proper support for mithril to map format
+	for(int idx = 0; idx < GameConstants::RESOURCE_QUANTITY - 1; idx ++)
+		handler.serializeInt(GameConstants::RESOURCE_NAMES[idx], this->operator[](idx), 0);
 }
 
 bool Res::ResourceSet::nonZero() const
@@ -38,6 +52,12 @@ void Res::ResourceSet::amax(const TResourceCap &val)
 {
 	for(auto & elem : *this)
 		::vstd::amax(elem, val);
+}
+
+void Res::ResourceSet::amin(const TResourceCap &val)
+{
+	for(auto & elem : *this)
+		::vstd::amin(elem, val);
 }
 
 void Res::ResourceSet::positive()
@@ -64,6 +84,19 @@ bool Res::canAfford(const ResourceSet &res, const ResourceSet &price)
 			return false;
 
 	return true;
+}
+
+std::string Res::ResourceSet::toString() const
+{
+	std::ostringstream out;
+	out << "[";
+	for(auto it = begin(); it != end(); ++it)
+	{
+		out << *it;
+		if(std::prev(end()) != it) out << ", ";
+	}
+	out << "]";
+	return out.str();
 }
 
 bool Res::ResourceSet::nziterator::valid()

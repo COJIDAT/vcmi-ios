@@ -1,4 +1,3 @@
-
 /*
  * CVcmiTestConfig.cpp, part of VCMI engine
  *
@@ -18,20 +17,30 @@
 #include "../lib/VCMI_Lib.h"
 #include "../lib/logging/CLogger.h"
 #include "../lib/CConfigHandler.h"
+#include "../lib/filesystem/Filesystem.h"
+#include "../lib/filesystem/CFilesystemLoader.h"
+#include "../lib/filesystem/AdapterLoaders.h"
 
 CVcmiTestConfig::CVcmiTestConfig()
 {
-	console = new CConsoleHandler;
-	CBasicLogConfigurator logConfig(VCMIDirs::get().userCachePath() / "VCMI_Test_log.txt", console);
-	logConfig.configureDefault();
-	preinitDLL(console);
+	console = new CConsoleHandler();
+	preinitDLL(console, true);
 	settings.init();
-	logConfig.configure();
-	loadDLLClasses();
-	logGlobal->infoStream() << "Initialized global test setup.";
+	loadDLLClasses(true);
+
+	/* TEST_DATA_DIR may be wrong, if yes below test don't run,
+	find your test data folder in your build and change TEST_DATA_DIR for it*/
+	const std::string TEST_DATA_DIR = "test/testdata/";
+	auto path = boost::filesystem::current_path();
+	path+= "/" + TEST_DATA_DIR;
+	if(boost::filesystem::exists(path)){
+		auto loader = new CFilesystemLoader("test/", TEST_DATA_DIR);
+		dynamic_cast<CFilesystemList*>(CResourceHandler::get())->addLoader(loader, false);
+	}
 }
 
 CVcmiTestConfig::~CVcmiTestConfig()
 {
 	std::cout << "Ending global test tear-down." << std::endl;
 }
+

@@ -1,20 +1,3 @@
-#include "StdInc.h"
-#include "CHeroHandler.h"
-
-#include "CGeneralTextHandler.h"
-#include "filesystem/Filesystem.h"
-#include "VCMI_Lib.h"
-#include "JsonNode.h"
-#include "StringConstants.h"
-#include "BattleHex.h"
-#include "CCreatureHandler.h"
-#include "CModHandler.h"
-#include "CTownHandler.h"
-#include "mapObjects/CObjectHandler.h" //for hero specialty
-#include <math.h>
-
-#include "mapObjects/CObjectClassesHandler.h"
-
 /*
  * CHeroHandler.cpp, part of VCMI engine
  *
@@ -24,6 +7,22 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "CHeroHandler.h"
+
+#include "CGeneralTextHandler.h"
+#include "filesystem/Filesystem.h"
+#include "VCMI_Lib.h"
+#include "JsonNode.h"
+#include "StringConstants.h"
+#include "battle/BattleHex.h"
+#include "CCreatureHandler.h"
+#include "CModHandler.h"
+#include "CTownHandler.h"
+#include "mapObjects/CObjectHandler.h" //for hero specialty
+#include <math.h>
+
+#include "mapObjects/CObjectClassesHandler.h"
 
 SecondarySkill CHeroClass::chooseSecSkill(const std::set<SecondarySkill> & possibles, CRandomGenerator & rand) const //picks secondary skill out from given possibilities
 {
@@ -59,7 +58,7 @@ EAlignment::EAlignment CHeroClass::getAlignment() const
 }
 
 CHeroClass::CHeroClass()
- : commander(nullptr)
+ : faction(0), id(0), affinity(0), defaultTavernChance(0), commander(nullptr)
 {
 }
 
@@ -80,7 +79,7 @@ std::vector<BattleHex> CObstacleInfo::getBlocked(BattleHex hex) const
 			toBlock += BattleHex::LEFT;
 
 		if(!toBlock.isValid())
-            logGlobal->errorStream() << "Misplaced obstacle!";
+			logGlobal->error("Misplaced obstacle!");
 		else
 			ret.push_back(toBlock);
 	}
@@ -88,7 +87,7 @@ std::vector<BattleHex> CObstacleInfo::getBlocked(BattleHex hex) const
 	return ret;
 }
 
-bool CObstacleInfo::isAppropriate(ETerrainType terrainType, int specialBattlefield /*= -1*/) const
+bool CObstacleInfo::isAppropriate(ETerrainType terrainType, int specialBattlefield) const
 {
 	if(specialBattlefield != -1)
 		return vstd::contains(allowedSpecialBfields, specialBattlefield);
@@ -96,12 +95,12 @@ bool CObstacleInfo::isAppropriate(ETerrainType terrainType, int specialBattlefie
 	return vstd::contains(allowedTerrains, terrainType);
 }
 
-CHeroClass *CHeroClassHandler::loadFromJson(const JsonNode & node)
+CHeroClass * CHeroClassHandler::loadFromJson(const JsonNode & node, const std::string & identifier)
 {
 	std::string affinityStr[2] = { "might", "magic" };
 
 	auto  heroClass = new CHeroClass();
-
+	heroClass->identifier = identifier;
 	heroClass->imageBattleFemale = node["animation"]["battle"]["female"].String();
 	heroClass->imageBattleMale   = node["animation"]["battle"]["male"].String();
 	//MODS COMPATIBILITY FOR 0.96
@@ -192,7 +191,7 @@ std::vector<JsonNode> CHeroClassHandler::loadLegacyData(size_t dataSize)
 
 void CHeroClassHandler::loadObject(std::string scope, std::string name, const JsonNode & data)
 {
-	auto object = loadFromJson(data);
+	auto object = loadFromJson(data, normalizeIdentifier(scope, "core", name));
 	object->id = heroClasses.size();
 
 	heroClasses.push_back(object);
@@ -210,7 +209,7 @@ void CHeroClassHandler::loadObject(std::string scope, std::string name, const Js
 
 void CHeroClassHandler::loadObject(std::string scope, std::string name, const JsonNode & data, size_t index)
 {
-	auto object = loadFromJson(data);
+	auto object = loadFromJson(data, normalizeIdentifier(scope, "core", name));
 	object->id = index;
 
 	assert(heroClasses[index] == nullptr); // ensure that this id was not loaded before
@@ -281,17 +280,22 @@ CHeroHandler::CHeroHandler()
 	for (int i = 0; i < GameConstants::SKILL_QUANTITY; ++i)
 	{
 		VLC->modh->identifiers.registerObject("core", "skill", NSecondarySkill::names[i], i);
+		VLC->modh->identifiers.registerObject("core", "secondarySkill", NSecondarySkill::names[i], i);
 	}
 	loadObstacles();
 	loadTerrains();
+	for (int i = 0; i < GameConstants::TERRAIN_TYPES; ++i)
+	{
+		VLC->modh->identifiers.registerObject("core", "terrain", GameConstants::TERRAIN_NAMES[i], i);
+	}
 	loadBallistics();
 	loadExperience();
 }
 
-CHero * CHeroHandler::loadFromJson(const JsonNode & node)
+CHero * CHeroHandler::loadFromJson(const JsonNode & node, const std::string & identifier)
 {
-	auto  hero = new CHero;
-
+	auto hero = new CHero();
+	hero->identifier = identifier;
 	hero->sex = node["female"].Bool();
 	hero->special = node["special"].Bool();
 
@@ -358,7 +362,7 @@ void CHeroHandler::loadHeroSkills(CHero * hero, const JsonNode & node)
 		}
 		else
 		{
-			logGlobal->errorStream() << "Unknown skill level: " <<set["level"].String();
+			logMod->error("Unknown skill level: %s", set["level"].String());
 		}
 	}
 
@@ -536,9 +540,9 @@ std::vector<JsonNode> CHeroHandler::loadLegacyData(size_t dataSize)
 
 void CHeroHandler::loadObject(std::string scope, std::string name, const JsonNode & data)
 {
-	auto object = loadFromJson(data);
+	auto object = loadFromJson(data, normalizeIdentifier(scope, "core", name));
 	object->ID = HeroTypeID(heroes.size());
-	object->imageIndex = heroes.size() + 30; // 2 special frames + some extra portraits
+	object->imageIndex = heroes.size() + GameConstants::HERO_PORTRAIT_SHIFT; // 2 special frames + some extra portraits
 
 	heroes.push_back(object);
 
@@ -547,7 +551,7 @@ void CHeroHandler::loadObject(std::string scope, std::string name, const JsonNod
 
 void CHeroHandler::loadObject(std::string scope, std::string name, const JsonNode & data, size_t index)
 {
-	auto object = loadFromJson(data);
+	auto object = loadFromJson(data, normalizeIdentifier(scope, "core", name));
 	object->ID = HeroTypeID(index);
 	object->imageIndex = index;
 
@@ -573,7 +577,7 @@ ui64 CHeroHandler::reqExp (ui32 level) const
 	}
 	else
 	{
-        logGlobal->warnStream() << "A hero has reached unsupported amount of experience";
+		logGlobal->warn("A hero has reached unsupported amount of experience");
 		return expPerLevel[expPerLevel.size()-1];
 	}
 }
@@ -606,4 +610,32 @@ std::vector<bool> CHeroHandler::getDefaultAllowedAbilities() const
 	std::vector<bool> allowedAbilities;
 	allowedAbilities.resize(GameConstants::SKILL_QUANTITY, true);
 	return allowedAbilities;
+}
+
+si32 CHeroHandler::decodeHero(const std::string & identifier)
+{
+	auto rawId = VLC->modh->identifiers.getIdentifier("core", "hero", identifier);
+	if(rawId)
+		return rawId.get();
+	else
+		return -1;
+}
+
+std::string CHeroHandler::encodeHero(const si32 index)
+{
+	return VLC->heroh->heroes.at(index)->identifier;
+}
+
+si32 CHeroHandler::decodeSkill(const std::string & identifier)
+{
+	auto rawId = VLC->modh->identifiers.getIdentifier("core", "skill", identifier);
+	if(rawId)
+		return rawId.get();
+	else
+		return -1;
+}
+
+std::string CHeroHandler::encodeSkill(const si32 index)
+{
+	return NSecondarySkill::names[index];
 }

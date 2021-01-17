@@ -1,8 +1,3 @@
-#pragma once
-
-
-#include "../lib/ConstTransitivePtr.h"
-
 /*
  * CGameInfo.h, part of VCMI engine
  *
@@ -12,6 +7,10 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+
+#include "../lib/ConstTransitivePtr.h"
 
 class CModHandler;
 class CMapHandler;
@@ -19,6 +18,7 @@ class CArtHandler;
 class CHeroHandler;
 class CCreatureHandler;
 class CSpellHandler;
+class CSkillHandler;
 class CBuildingHandler;
 class CObjectHandler;
 class CSoundHandler;
@@ -56,6 +56,7 @@ public:
 	ConstTransitivePtr<CHeroHandler> heroh;
 	ConstTransitivePtr<CCreatureHandler> creh;
 	ConstTransitivePtr<CSpellHandler> spellh;
+	ConstTransitivePtr<CSkillHandler> skillh;
 	ConstTransitivePtr<CObjectHandler> objh;
 	ConstTransitivePtr<CObjectClassesHandler> objtypeh;
 	CGeneralTextHandler * generaltexth;

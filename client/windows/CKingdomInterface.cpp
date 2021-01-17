@@ -1,3 +1,12 @@
+/*
+ * CKingdomInterface.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CKingdomInterface.h"
 
@@ -19,20 +28,11 @@
 #include "../../lib/CGeneralTextHandler.h"
 #include "../../lib/CHeroHandler.h"
 #include "../../lib/CModHandler.h"
+#include "../../lib/CSkillHandler.h"
 #include "../../lib/CTownHandler.h"
 #include "../../lib/mapObjects/CGHeroInstance.h"
 #include "../../lib/mapObjects/CGTownInstance.h"
 #include "../../lib/mapObjects/MiscObjects.h"
-
-/*
- * CKingdomInterface.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
 
 InfoBox::InfoBox(Point position, InfoPos Pos, InfoSize Size, IInfoBoxData *Data):
 	size(Size),
@@ -73,8 +73,8 @@ InfoBox::InfoBox(Point position, InfoPos Pos, InfoSize Size, IInfoBoxData *Data)
 		pos = pos | name->pos;
 	if (value)
 		pos = pos | value->pos;
-	
-	hover = new CHoverableArea;
+
+	hover = new CHoverableArea();
 	hover->hoverText = data->getHoverText();
 	hover->pos = pos;
 }
@@ -148,9 +148,11 @@ std::string InfoBoxAbstractHeroData::getValueText()
 			si64 value = getValue();
 			if (value)
 				return CGI->generaltexth->levels[value];
+			else
+				return "";
 		}
 	default:
-		assert(0);
+		logGlobal->error("Invalid InfoBox info type");
 	}
 	return "";
 }
@@ -169,11 +171,11 @@ std::string InfoBoxAbstractHeroData::getNameText()
 		return CGI->heroh->heroes[getSubID()]->specName;
 	case HERO_SECONDARY_SKILL:
 		if (getValue())
-			return CGI->generaltexth->skillName[getSubID()];
+			return CGI->skillh->skillName(getSubID());
 		else
 			return "";
 	default:
-		assert(0);
+		logGlobal->error("Invalid InfoBox info type");
 	}
 	return "";
 }
@@ -280,7 +282,7 @@ bool InfoBoxAbstractHeroData::prepareMessage(std::string &text, CComponent **com
 			if (!value)
 				return false;
 
-			text = CGI->generaltexth->skillInfoTexts[subID][value-1];
+			text = CGI->skillh->skillInfo(subID, value);
 			*comp = new CComponent(CComponent::secskill, subID, value);
 			return true;
 		}
@@ -301,18 +303,21 @@ int InfoBoxHeroData::getSubID()
 {
 	switch(type)
 	{
-		case HERO_PRIMARY_SKILL:
-			return index;
-		case HERO_SECONDARY_SKILL:
-			if (hero->secSkills.size() > index)
-				return hero->secSkills[index].first;
-		case HERO_MANA:
-		case HERO_EXPERIENCE:
-		case HERO_SPECIAL:
+	case HERO_PRIMARY_SKILL:
+		return index;
+	case HERO_SECONDARY_SKILL:
+		if(hero->secSkills.size() > index)
+			return hero->secSkills[index].first;
+		else
 			return 0;
-		default:
-			assert(0);
-			return 0;
+	case HERO_SPECIAL:
+		return hero->type->ID.getNum();
+	case HERO_MANA:
+	case HERO_EXPERIENCE:
+		return 0;
+	default:
+		assert(0);
+		return 0;
 	}
 }
 
@@ -327,10 +332,12 @@ si64 InfoBoxHeroData::getValue()
 	case HERO_EXPERIENCE:
 		return hero->exp;
 	case HERO_SECONDARY_SKILL:
-		if (hero->secSkills.size() > index)
+		if(hero->secSkills.size() > index)
 			return hero->secSkills[index].second;
-	case HERO_SPECIAL:
+		else
 			return 0;
+	case HERO_SPECIAL:
+		return 0;
 	default:
 		assert(0);
 		return 0;
@@ -350,14 +357,14 @@ std::string InfoBoxHeroData::getHoverText()
 	case HERO_SPECIAL:
 		return CGI->generaltexth->heroscrn[27];
 	case HERO_SECONDARY_SKILL:
-		{
 		if (hero->secSkills.size() > index)
 		{
 			std::string level = CGI->generaltexth->levels[hero->secSkills[index].second-1];
-			std::string skill = CGI->generaltexth->skillName[hero->secSkills[index].first];
+			std::string skill = CGI->skillh->skillName(hero->secSkills[index].first);
 			return boost::str(boost::format(CGI->generaltexth->heroscrn[21]) % level % skill);
 		}
 		else
+		{
 			return "";
 		}
 	default:
@@ -564,7 +571,7 @@ void CKingdomInterface::generateMinesList(const std::vector<const CGObjectInstan
 	for(const CGObjectInstance * object : ownedObjects)
 	{
 		//Mines
-		if ( object->ID == Obj::MINE )
+		if(object->ID == Obj::MINE || object->ID == Obj::ABANDONED_MINE)
 		{
 			const CGMine *mine = dynamic_cast<const CGMine*>(object);
 			assert(mine);
@@ -597,7 +604,7 @@ void CKingdomInterface::generateMinesList(const std::vector<const CGObjectInstan
 
 		minesBox[i]->removeUsedEvents(LCLICK|RCLICK); //fixes #890 - mines boxes ignore clicks
 	}
-	incomeArea = new CHoverableArea;
+	incomeArea = new CHoverableArea();
 	incomeArea->pos = Rect(pos.x+580, pos.y+31+footerPos, 136, 68);
 	incomeArea->hoverText = CGI->generaltexth->allTexts[255];
 	incomeAmount = new CLabel(628, footerPos + 70, FONT_SMALL, TOPLEFT, Colors::WHITE, boost::lexical_cast<std::string>(totalIncome));
@@ -621,15 +628,15 @@ void CKingdomInterface::generateButtons()
 	btnExit->setImageOrder(3, 4, 5, 6);
 
 	//Object list control buttons
-	dwellTop = new CButton (Point(733, 4), "OVBUTN4.DEF", CButton::tooltip(), [&]{ dwellingsList->moveToPos(0);});
+	dwellTop = new CButton (Point(733, 4), "OVBUTN4.DEF", CButton::tooltip(), [&](){ dwellingsList->moveToPos(0);});
 
-	dwellBottom = new CButton (Point(733, footerPos+2), "OVBUTN4.DEF", CButton::tooltip(), [&]{ dwellingsList->moveToPos(-1); });
+	dwellBottom = new CButton (Point(733, footerPos+2), "OVBUTN4.DEF", CButton::tooltip(), [&](){ dwellingsList->moveToPos(-1); });
 	dwellBottom->setImageOrder(2, 3, 4, 5);
 
-	dwellUp = new CButton (Point(733, 24), "OVBUTN4.DEF", CButton::tooltip(), [&]{ dwellingsList->moveToPrev(); });
+	dwellUp = new CButton (Point(733, 24), "OVBUTN4.DEF", CButton::tooltip(), [&](){ dwellingsList->moveToPrev(); });
 	dwellUp->setImageOrder(4, 5, 6, 7);
 
-	dwellDown = new CButton (Point(733, footerPos-18), "OVBUTN4.DEF", CButton::tooltip(), [&]{ dwellingsList->moveToNext(); });
+	dwellDown = new CButton (Point(733, footerPos-18), "OVBUTN4.DEF", CButton::tooltip(), [&](){ dwellingsList->moveToNext(); });
 	dwellDown->setImageOrder(6, 7, 8, 9);
 }
 
@@ -707,8 +714,7 @@ CIntObject* CKingdHeroList::createHeroItem(size_t index)
 
 	if (index < heroesCount)
 	{
-		auto   hero = new CHeroItem(LOCPLINT->cb->getHeroBySerial(index, false), &artsCommonPart);
-		artsCommonPart.participants.insert(hero->heroArts);
+		auto   hero = new CHeroItem(LOCPLINT->cb->getHeroBySerial(index, false));
 		artSets.push_back(hero->heroArts);
 		return hero;
 	}
@@ -723,7 +729,6 @@ void CKingdHeroList::destroyHeroItem(CIntObject *object)
 	if (CHeroItem * hero = dynamic_cast<CHeroItem*>(object))
 	{
 		artSets.erase(std::find(artSets.begin(), artSets.end(), hero->heroArts));
-		artsCommonPart.participants.erase(hero->heroArts);
 	}
 	delete object;
 }
@@ -782,7 +787,7 @@ CTownItem::CTownItem(const CGTownInstance* Town):
 	background =  new CAnimImage("OVSLOT", 6);
 	name = new CLabel(74, 8, FONT_SMALL, TOPLEFT, Colors::WHITE, town->name);
 
-	income = new CLabel( 190, 60, FONT_SMALL, CENTER, Colors::WHITE, boost::lexical_cast<std::string>(town->dailyIncome()));
+	income = new CLabel( 190, 60, FONT_SMALL, CENTER, Colors::WHITE, boost::lexical_cast<std::string>(town->dailyIncome()[Res::GOLD]));
 	hall = new CTownInfo( 69, 31, town, true);
 	fort = new CTownInfo(111, 31, town, false);
 
@@ -792,9 +797,7 @@ CTownItem::CTownItem(const CGTownInstance* Town):
 	size_t iconIndex = town->town->clientInfo.icons[town->hasFort()][town->builded >= CGI->modh->settings.MAX_BUILDING_PER_TURN];
 
 	picture = new CAnimImage("ITPT", iconIndex, 0, 5, 6);
-	townArea = new LRClickableAreaOpenTown;
-	townArea->pos = Rect(pos.x+5, pos.y+6, 58, 64);
-	townArea->town = town;
+	new LRClickableAreaOpenTown(Rect(5, 6, 58, 64), town);
 
 	for (size_t i=0; i<town->creatures.size(); i++)
 	{
@@ -813,7 +816,7 @@ void CTownItem::updateGarrisons()
 
 void CTownItem::update()
 {
-	std::string incomeVal = boost::lexical_cast<std::string>(town->dailyIncome());
+	std::string incomeVal = boost::lexical_cast<std::string>(town->dailyIncome()[Res::GOLD]);
 	if (incomeVal != income->text)
 		income->setText(incomeVal);
 
@@ -830,7 +833,7 @@ class ArtSlotsTab : public CIntObject
 {
 public:
 	CAnimImage * background;
-	std::vector<CArtPlace*> arts;
+	std::vector<CHeroArtPlace*> arts;
 
 	ArtSlotsTab()
 	{
@@ -838,7 +841,7 @@ public:
 		background = new CAnimImage("OVSLOT", 4);
 		pos = background->pos;
 		for (size_t i=0; i<9; i++)
-			arts.push_back(new CArtPlace(Point(270+i*48, 65)));
+			arts.push_back(new CHeroArtPlace(Point(270+i*48, 65)));
 	}
 };
 
@@ -846,7 +849,7 @@ class BackpackTab : public CIntObject
 {
 public:
 	CAnimImage * background;
-	std::vector<CArtPlace*> arts;
+	std::vector<CHeroArtPlace*> arts;
 	CButton *btnLeft;
 	CButton *btnRight;
 
@@ -858,19 +861,19 @@ public:
 		btnLeft = new CButton(Point(269, 66), "HSBTNS3", CButton::tooltip(), 0);
 		btnRight = new CButton(Point(675, 66), "HSBTNS5", CButton::tooltip(), 0);
 		for (size_t i=0; i<8; i++)
-			arts.push_back(new CArtPlace(Point(295+i*48, 65)));
+			arts.push_back(new CHeroArtPlace(Point(295+i*48, 65)));
 	}
 };
 
-CHeroItem::CHeroItem(const CGHeroInstance* Hero, CArtifactsOfHero::SCommonPart * artsCommonPart):
+CHeroItem::CHeroItem(const CGHeroInstance* Hero):
 	hero(Hero)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 
 	artTabs.resize(3);
-	auto   arts1 = new ArtSlotsTab;
-	auto   arts2 = new ArtSlotsTab;
-	auto   backpack = new BackpackTab;
+	auto arts1 = new ArtSlotsTab();
+	auto arts2 = new ArtSlotsTab();
+	auto backpack = new BackpackTab();
 	artTabs[0] = arts1;
 	artTabs[1] = arts2;
 	artTabs[2] = backpack;
@@ -880,12 +883,35 @@ CHeroItem::CHeroItem(const CGHeroInstance* Hero, CArtifactsOfHero::SCommonPart *
 
 	name = new CLabel(75, 7, FONT_SMALL, TOPLEFT, Colors::WHITE, hero->name);
 
-	std::vector<CArtPlace*> arts;
-	arts.insert(arts.end(), arts1->arts.begin(), arts1->arts.end());
-	arts.insert(arts.end(), arts2->arts.begin(), arts2->arts.end());
+	//layout is not trivial: MACH4 - catapult - excluded, MISC[x] rearranged
+	assert(arts1->arts.size() == 9);
+	assert(arts2->arts.size() == 9);
 
-	heroArts = new CArtifactsOfHero(arts, backpack->arts, backpack->btnLeft, backpack->btnRight, false);
-	heroArts->commonInfo = artsCommonPart;
+	std::map<ArtifactPosition, CHeroArtPlace*> arts =
+	{
+		{ArtifactPosition::HEAD, arts1->arts[0]},
+		{ArtifactPosition::SHOULDERS,arts1->arts[1]},
+		{ArtifactPosition::NECK,arts1->arts[2]},
+		{ArtifactPosition::RIGHT_HAND,arts1->arts[3]},
+		{ArtifactPosition::LEFT_HAND,arts1->arts[4]},
+		{ArtifactPosition::TORSO, arts1->arts[5]},
+		{ArtifactPosition::RIGHT_RING,arts1->arts[6]},
+		{ArtifactPosition::LEFT_RING, arts1->arts[7]},
+		{ArtifactPosition::FEET, arts1->arts[8]},
+
+		{ArtifactPosition::MISC1, arts2->arts[0]},
+		{ArtifactPosition::MISC2, arts2->arts[1]},
+		{ArtifactPosition::MISC3, arts2->arts[2]},
+		{ArtifactPosition::MISC4, arts2->arts[3]},
+		{ArtifactPosition::MISC5, arts2->arts[4]},
+		{ArtifactPosition::MACH1, arts2->arts[5]},
+		{ArtifactPosition::MACH2, arts2->arts[6]},
+		{ArtifactPosition::MACH3, arts2->arts[7]},
+		{ArtifactPosition::SPELLBOOK, arts2->arts[8]}
+	};
+
+
+	heroArts = new CArtifactsOfHero(arts, backpack->arts, backpack->btnLeft, backpack->btnRight, true);
 	heroArts->setHero(hero);
 
 	artsTabs = new CTabbedInt(std::bind(&CHeroItem::onTabSelected, this, _1), std::bind(&CHeroItem::onTabDeselected, this, _1));
@@ -915,7 +941,7 @@ CHeroItem::CHeroItem(const CGHeroInstance* Hero, CArtifactsOfHero::SCommonPart *
 	artsText = new CLabel(320, 55, FONT_SMALL, CENTER, Colors::WHITE, CGI->generaltexth->overview[2]);
 
 	for (size_t i=0; i<GameConstants::PRIMARY_SKILLS; i++)
-		heroInfo.push_back(new InfoBox(Point(78+i*36, 26), InfoBox::POS_DOWN, InfoBox::SIZE_SMALL, 
+		heroInfo.push_back(new InfoBox(Point(78+i*36, 26), InfoBox::POS_DOWN, InfoBox::SIZE_SMALL,
 		                   new InfoBoxHeroData(IInfoBoxData::HERO_PRIMARY_SKILL, hero, i)));
 
 	for (size_t i=0; i<GameConstants::SKILL_PER_HERO; i++)

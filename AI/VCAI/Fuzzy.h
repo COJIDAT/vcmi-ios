@@ -1,7 +1,3 @@
-#pragma once
-#include "fl/Headers.h"
-#include "Goals.h"
-
 /*
  * Fuzzy.h, part of VCMI engine
  *
@@ -11,22 +7,31 @@
  * Full text of license available in license.txt file, in main folder
  *
 */
+#pragma once
+#include "fl/Headers.h"
+#include "Goals.h"
 
 class VCAI;
 class CArmedInstance;
 class CBank;
+struct SectorMap;
+
+class engineBase
+{
+public:
+	fl::Engine engine;
+	fl::RuleBlock rules;
+
+	engineBase();
+	void configure();
+	void addRule(const std::string &txt);
+};
 
 class FuzzyHelper
 {
 	friend class VCAI;
 
-	fl::Engine engine;
-
-	fl::InputVariable* bankInput;
-	fl::OutputVariable* bankDanger;
-	fl::RuleBlock bankBlock;
-
-	class TacticalAdvantage
+	class TacticalAdvantage : public engineBase
 	{
 	public:
 		fl::InputVariable * ourWalkers, * ourShooters, * ourFlyers, * enemyWalkers, * enemyShooters, * enemyFlyers;
@@ -34,28 +39,29 @@ class FuzzyHelper
 		fl::InputVariable * bankPresent;
 		fl::InputVariable * castleWalls;
 		fl::OutputVariable * threat;
-		fl::RuleBlock tacticalAdvantage;
 		~TacticalAdvantage();
 	} ta;
 
-	class EvalVisitTile
+	class EvalVisitTile : public engineBase
 	{
 	public:
 		fl::InputVariable * strengthRatio;
 		fl::InputVariable * heroStrength;
 		fl::InputVariable * turnDistance;
 		fl::InputVariable * missionImportance;
+		fl::InputVariable * estimatedReward;
 		fl::OutputVariable * value;
 		fl::RuleBlock rules;
 		~EvalVisitTile();
 	} vt;
+
+	
 
 public:
 	enum RuleBlocks {BANK_DANGER, TACTICAL_ADVANTAGE, VISIT_TILE};
 	//blocks should be initialized in this order, which may be confusing :/
 
 	FuzzyHelper();
-	void initBank();
 	void initTacticalAdvantage();
 	void initVisitTile();
 
@@ -77,5 +83,5 @@ public:
 	float getTacticalAdvantage (const CArmedInstance *we, const CArmedInstance *enemy); //returns factor how many times enemy is stronger than us
 
 	Goals::TSubgoal chooseSolution (Goals::TGoalVec vec);
-	//shared_ptr<AbstractGoal> chooseSolution (std::vector<shared_ptr<AbstractGoal>> & vec);
+	//std::shared_ptr<AbstractGoal> chooseSolution (std::vector<std::shared_ptr<AbstractGoal>> & vec);
 };

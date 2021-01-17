@@ -1,32 +1,24 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/defuzzifier/IntegralDefuzzifier.h"
 
 namespace fl {
 
-    int IntegralDefuzzifier::_defaultResolution = 200;
+    int IntegralDefuzzifier::_defaultResolution = 100;
 
     void IntegralDefuzzifier::setDefaultResolution(int defaultResolution) {
         _defaultResolution = defaultResolution;
@@ -37,11 +29,9 @@ namespace fl {
     }
 
     IntegralDefuzzifier::IntegralDefuzzifier(int resolution)
-    : Defuzzifier(), _resolution(resolution) {
-    }
+    : Defuzzifier(), _resolution(resolution) { }
 
-    IntegralDefuzzifier::~IntegralDefuzzifier() {
-    }
+    IntegralDefuzzifier::~IntegralDefuzzifier() { }
 
     void IntegralDefuzzifier::setResolution(int resolution) {
         this->_resolution = resolution;
@@ -50,4 +40,5 @@ namespace fl {
     int IntegralDefuzzifier::getResolution() const {
         return this->_resolution;
     }
+
 }

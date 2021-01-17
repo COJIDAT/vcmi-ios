@@ -1,3 +1,12 @@
+/*
+ * CGuiHandler.h, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #pragma once
 
 //#include "../../lib/CStopWatch.h"
@@ -8,19 +17,10 @@ class CFramerateManager;
 class CGStatusBar;
 class CIntObject;
 class IUpdateable;
-class ILockedUpdatable;
 class IShowActivatable;
 class IShowable;
-
-/*
- * CGuiHandler.h, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
+enum class EIntObjMouseBtnType;
+template <typename T> struct CondSh;
 
 // A fps manager which holds game updates at a constant rate
 class CFramerateManager
@@ -29,7 +29,7 @@ private:
 	double rateticks;
 	ui32 lastticks, timeElapsed;
 	int rate;
-
+	ui32 accumulatedTime,accumulatedFrames;
 public:
 	int fps; // the actual fps value
 
@@ -48,39 +48,45 @@ public:
 	CGStatusBar * statusbar;
 
 private:
+	std::atomic<bool> continueEventHandling;
 	typedef std::list<CIntObject*> CIntObjectList;
-	
+
 	//active GUI elements (listening for events
-	CIntObjectList lclickable, 
-				   rclickable, 
-				   hoverable, 
+	CIntObjectList lclickable,
+				   rclickable,
+				   mclickable,
+				   hoverable,
 				   keyinterested,
 				   motioninterested,
 	               timeinterested,
 	               wheelInterested,
-	               doubleClickInterested;
-	#ifndef VCMI_SDL1
-	CIntObjectList textInterested;
-	#endif // VCMI_SDL1
-	               
-	void processLists(const ui16 activityFlag, std::function<void (std::list<CIntObject*> *)> cb);               
+	               doubleClickInterested,
+	               textInterested;
+
+
+	void handleMouseButtonClick(CIntObjectList & interestedObjs, EIntObjMouseBtnType btn, bool isPressed);
+	void processLists(const ui16 activityFlag, std::function<void (std::list<CIntObject*> *)> cb);
 public:
 	void handleElementActivate(CIntObject * elem, ui16 activityFlag);
 	void handleElementDeActivate(CIntObject * elem, ui16 activityFlag);
-	
+
 public:
 	//objs to blit
 	std::vector<IShowable*> objsToBlit;
 
 	SDL_Event * current; //current event - can be set to nullptr to stop handling event
-	ILockedUpdatable *curInt;
+	IUpdateable *curInt;
 
 	Point lastClick;
 	unsigned lastClickTime;
 
+	ui8 defActionsDef; //default auto actions
+	bool captureChildren; //all newly created objects will get their parents from stack and will be added to parents children list
+	std::list<CIntObject *> createdObj; //stack of objs being created
+
 	CGuiHandler();
 	~CGuiHandler();
-	
+
 	void renderFrame();
 
 	void totalRedraw(); //forces total redraw (using showAll), sets a flag, method gets called at the end of the rendering
@@ -94,22 +100,21 @@ public:
 
 	void updateTime(); //handles timeInterested
 	void handleEvents(); //takes events from queue and calls interested objects
-	void handleEvent(SDL_Event *sEvent);
-	void handleMouseMotion(SDL_Event *sEvent);
+	void handleCurrentEvent();
+	void handleMouseMotion();
 	void handleMoveInterested( const SDL_MouseMotionEvent & motion );
 	void fakeMouseMove();
 	void breakEventHandling(); //current event won't be propagated anymore
 	void drawFPSCounter(); // draws the FPS to the upper left corner of the screen
-	ui8 defActionsDef; //default auto actions
-	ui8 captureChildren; //all newly created objects will get their parents from stack and will be added to parents children list
-	std::list<CIntObject *> createdObj; //stack of objs being created
 
-	static SDLKey arrowToNum(SDLKey key); //converts arrow key to according numpad key
-	static SDLKey numToDigit(SDLKey key);//converts numpad digit key to normal digit key
-	static bool isNumKey(SDLKey key, bool number = true); //checks if key is on numpad (numbers - check only for numpad digits)
-	static bool isArrowKey(SDLKey key);
+	static SDL_Keycode arrowToNum(SDL_Keycode key); //converts arrow key to according numpad key
+	static SDL_Keycode numToDigit(SDL_Keycode key);//converts numpad digit key to normal digit key
+	static bool isNumKey(SDL_Keycode key, bool number = true); //checks if key is on numpad (numbers - check only for numpad digits)
+	static bool isArrowKey(SDL_Keycode key);
 	static bool amIGuiThread();
 	static void pushSDLEvent(int type, int usercode = 0);
+
+	CondSh<bool> * terminate_cond; // confirm termination
 };
 
 extern CGuiHandler GH; //global gui handler
@@ -135,6 +140,7 @@ struct SSetCaptureState
 };
 
 #define OBJ_CONSTRUCTION SObjectConstruction obj__i(this)
+#define OBJECT_CONSTRUCTION_CAPTURING(actions) defActions = actions; SSetCaptureState obj__i1(true, actions); SObjectConstruction obj__i(this)
 #define OBJ_CONSTRUCTION_CAPTURING_ALL defActions = 255; SSetCaptureState obj__i1(true, 255); SObjectConstruction obj__i(this)
 #define BLOCK_CAPTURING SSetCaptureState obj__i(false, 0)
 #define BLOCK_CAPTURING_DONT_TOUCH_REC_ACTIONS SSetCaptureState obj__i(false, GH.defActionsDef)

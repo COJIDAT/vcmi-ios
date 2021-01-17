@@ -2,7 +2,6 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="CBitmapHandler.cpp" />
-    <ClCompile Include="CDefHandler.cpp" />
     <ClCompile Include="CGameInfo.cpp" />
     <ClCompile Include="Client.cpp" />
     <ClCompile Include="CMessage.cpp" />
@@ -109,17 +108,17 @@
       <Filter>gui</Filter>
     </ClCompile>
     <ClCompile Include="..\CCallback.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="CQuestLog.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="SDLRWwrapper.cpp" />
+    <ClCompile Include="windows\QuickRecruitmentWindow.cpp">
+      <Filter>windows</Filter>
     </ClCompile>
+    <ClCompile Include="windows\CreaturePurchaseCard.cpp">
+      <Filter>windows</Filter>
+    </ClCompile>
+    <ClCompile Include="CreatureCostBox.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="VCMI_client.rc" />
-    <ClInclude Include="CQuestLog.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="vcmi.ico" />
@@ -140,7 +139,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CBitmapHandler.h" />
-    <ClInclude Include="CDefHandler.h" />
     <ClInclude Include="CGameInfo.h" />
     <ClInclude Include="Client.h" />
     <ClInclude Include="CMessage.h" />
@@ -152,7 +150,6 @@
     <ClInclude Include="Graphics.h" />
     <ClInclude Include="mapHandler.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="SDLMain.h" />
     <ClInclude Include="StdInc.h" />
     <ClInclude Include="windows\CAdvmapInterface.h">
       <Filter>windows</Filter>
@@ -254,5 +251,13 @@
       <Filter>gui</Filter>
     </ClInclude>
     <ClInclude Include="..\CCallback.h" />
+    <ClInclude Include="SDLRWwrapper.h" />
+    <ClInclude Include="windows\QuickRecruitmentWindow.h">
+      <Filter>windows</Filter>
+    </ClInclude>
+    <ClInclude Include="windows\CreaturePurchaseCard.h">
+      <Filter>windows</Filter>
+    </ClInclude>
+    <ClInclude Include="CreatureCostBox.h" />
   </ItemGroup>
 </Project>

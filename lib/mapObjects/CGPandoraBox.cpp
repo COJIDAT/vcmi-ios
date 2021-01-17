@@ -14,9 +14,11 @@
 #include "../NetPacks.h"
 #include "../CSoundBase.h"
 
-#include "../CSpellHandler.h"
+#include "../spells/CSpellHandler.h"
 #include "../StartInfo.h"
 #include "../IGameCallback.h"
+#include "../StringConstants.h"
+#include "../serializer/JsonSerializeFormat.h"
 
 ///helpers
 static void showInfoDialog(const PlayerColor playerID, const ui32 txtID, const ui16 soundID)
@@ -34,7 +36,14 @@ static void showInfoDialog(const CGHeroInstance* h, const ui32 txtID, const ui16
 	showInfoDialog(playerID,txtID,soundID);
 }
 
-void CGPandoraBox::initObj()
+CGPandoraBox::CGPandoraBox()
+	: hasGuardians(false), gainedExp(0), manaDiff(0), moraleDiff(0), luckDiff(0)
+{
+
+}
+
+
+void CGPandoraBox::initObj(CRandomGenerator & rand)
 {
 	blockVisit = (ID==Obj::PANDORAS_BOX); //block only if it's really pandora's box (events also derive from that class)
 	hasGuardians = stacks.size();
@@ -44,14 +53,13 @@ void CGPandoraBox::onHeroVisit(const CGHeroInstance * h) const
 {
 		BlockingDialog bd (true, false);
 		bd.player = h->getOwner();
-		bd.soundID = soundBase::QUEST;
 		bd.text.addTxt (MetaString::ADVOB_TXT, 14);
 		cb->showBlockingDialog (&bd);
 }
 
 void CGPandoraBox::giveContentsUpToExp(const CGHeroInstance *h) const
 {
-	cb->removeAfterVisit(this);
+	afterSuccessfulVisit();
 
 	InfoWindow iw;
 	iw.player = h->getOwner();
@@ -66,7 +74,25 @@ void CGPandoraBox::giveContentsUpToExp(const CGHeroInstance *h) const
 		}
 	}
 
-	if(gainedExp || changesPrimSkill || abilities.size())
+	std::vector<std::pair<SecondarySkill, ui8>> unpossessedAbilities; //ability + ability level
+	int abilitiesRequiringSlot = 0;
+
+	//filter out unnecessary secondary skills
+	for (int i = 0; i < abilities.size(); i++)
+	{
+		int curLev = h->getSecSkillLevel(abilities[i]);
+		bool abilityCanUseSlot = !curLev && ((h->secSkills.size() + abilitiesRequiringSlot) < GameConstants::SKILL_PER_HERO); //limit new abilities to number of slots
+
+		if (abilityCanUseSlot)
+			abilitiesRequiringSlot++;
+
+		if ((curLev && curLev < abilityLevels[i]) || abilityCanUseSlot)
+		{
+			unpossessedAbilities.push_back({ abilities[i], abilityLevels[i] });
+		}
+	}
+
+	if(gainedExp || changesPrimSkill || unpossessedAbilities.size())
 	{
 		TExpType expVal = h->calculateXp(gainedExp);
 		//getText(iw,afterBattle,175,h); //wtf?
@@ -75,25 +101,21 @@ void CGPandoraBox::giveContentsUpToExp(const CGHeroInstance *h) const
 
 		if(expVal)
 			iw.components.push_back(Component(Component::EXPERIENCE,0,expVal,0));
+
 		for(int i=0; i<primskills.size(); i++)
 			if(primskills[i])
 				iw.components.push_back(Component(Component::PRIM_SKILL,i,primskills[i],0));
 
-		for(int i=0; i<abilities.size(); i++)
-			iw.components.push_back(Component(Component::SEC_SKILL,abilities[i],abilityLevels[i],0));
+		for(auto abilityData : unpossessedAbilities)
+			iw.components.push_back(Component(Component::SEC_SKILL, abilityData.first, abilityData.second, 0));
 
 		cb->showInfoDialog(&iw);
 
 		//give sec skills
-		for(int i=0; i<abilities.size(); i++)
-		{
-			int curLev = h->getSecSkillLevel(abilities[i]);
+		for (auto abilityData : unpossessedAbilities)
+			cb->changeSecSkill(h, abilityData.first, abilityData.second, true);
 
-			if( (curLev  &&  curLev < abilityLevels[i])	|| (h->canLearnSkill() ))
-			{
-				cb->changeSecSkill(h,abilities[i],abilityLevels[i],true);
-			}
-		}
+		assert(h->secSkills.size() <= GameConstants::SKILL_PER_HERO);
 
 		//give prim skills
 		for(int i=0; i<primskills.size(); i++)
@@ -106,6 +128,7 @@ void CGPandoraBox::giveContentsUpToExp(const CGHeroInstance *h) const
 		if(expVal)
 			cb->changePrimSkill(h, PrimarySkill::EXPERIENCE, expVal, false);
 	}
+	//else { } //TODO:Create information that box was empty for now, and deliver to CGPandoraBox::giveContentsAfterExp or refactor
 
 	if(!cb->isVisitCoveredByAnotherQuery(this, h))
 		giveContentsAfterExp(h);
@@ -120,32 +143,45 @@ void CGPandoraBox::giveContentsAfterExp(const CGHeroInstance *h) const
 	InfoWindow iw;
 	iw.player = h->getOwner();
 
+	//TODO: reuse this code for Scholar skill
 	if(spells.size())
 	{
 		std::set<SpellID> spellsToGive;
-		iw.components.clear();
-		if (spells.size() > 1)
+
+		auto i = spells.cbegin();
+		while (i != spells.cend())
 		{
-			iw.text.addTxt(MetaString::ADVOB_TXT, 188); //%s learns spells
-		}
-		else
-		{
-			iw.text.addTxt(MetaString::ADVOB_TXT, 184); //%s learns a spell
-		}
-		iw.text.addReplacement(h->name);
-		std::vector<ConstTransitivePtr<CSpell> > * sp = &VLC->spellh->objects;
-		for(auto i=spells.cbegin(); i != spells.cend(); i++)
-		{
-			if ((*sp)[*i]->level <= h->getSecSkillLevel(SecondarySkill::WISDOM) + 2) //enough wisdom
+			iw.components.clear();
+			iw.text.clear();
+			spellsToGive.clear();
+
+			for (; i != spells.cend(); i++)
 			{
-				iw.components.push_back(Component(Component::SPELL,*i,0,0));
-				spellsToGive.insert(*i);
+				const CSpell * sp = (*i).toSpell();
+				if(h->canLearnSpell(sp))
+				{
+					iw.components.push_back(Component(Component::SPELL, *i, 0, 0));
+					spellsToGive.insert(*i);
+				}
+				if(spellsToGive.size() == 8) //display up to 8 spells at once
+				{
+					break;
+				}
 			}
-		}
-		if(!spellsToGive.empty())
-		{
-			cb->changeSpells(h,true,spellsToGive);
-			cb->showInfoDialog(&iw);
+			if (!spellsToGive.empty())
+			{
+				if (spellsToGive.size() > 1)
+				{
+					iw.text.addTxt(MetaString::ADVOB_TXT, 188); //%s learns spells
+				}
+				else
+				{
+					iw.text.addTxt(MetaString::ADVOB_TXT, 184); //%s learns a spell
+				}
+				iw.text.addReplacement(h->name);
+				cb->changeSpells(h, true, spellsToGive);
+				cb->showInfoDialog(&iw);
+			}
 		}
 	}
 
@@ -225,9 +261,7 @@ void CGPandoraBox::giveContentsAfterExp(const CGHeroInstance *h) const
 		cb->showInfoDialog(&iw);
 	}
 
-	for(int i=0; i<resources.size(); i++)
-		if(resources[i])
-			cb->giveResource(h->getOwner(),static_cast<Res::ERes>(i),resources[i]);
+	cb->giveResources(h->getOwner(), resources);
 
 	for(auto & elem : artifacts)
 		cb->giveHeroNewArtifact(h, VLC->arth->artifacts[elem],ArtifactPosition::FIRST_AVAILABLE);
@@ -235,7 +269,7 @@ void CGPandoraBox::giveContentsAfterExp(const CGHeroInstance *h) const
 	iw.components.clear();
 	iw.text.clear();
 
-	if (creatures.Slots().size())
+	if(creatures.stacksCount())
 	{ //this part is taken straight from creature bank
 		MetaString loot;
 		for(auto & elem : creatures.Slots())
@@ -245,7 +279,7 @@ void CGPandoraBox::giveContentsAfterExp(const CGHeroInstance *h) const
 			loot.addReplacement(*elem.second);
 		}
 
-		if (creatures.Slots().size() == 1 && creatures.Slots().begin()->second->count == 1)
+		if(creatures.stacksCount() == 1 && creatures.Slots().begin()->second->count == 1)
 			iw.text.addTxt(MetaString::ADVOB_TXT, 185);
 		else
 			iw.text.addTxt(MetaString::ADVOB_TXT, 186);
@@ -254,7 +288,7 @@ void CGPandoraBox::giveContentsAfterExp(const CGHeroInstance *h) const
 		iw.text.addReplacement(h->name);
 
 		cb->showInfoDialog(&iw);
-		cb->giveCreatures(this, h, creatures, true);
+		cb->giveCreatures(this, h, creatures, false);
 	}
 	if(!hasGuardians && msg.size())
 	{
@@ -295,25 +329,25 @@ void CGPandoraBox::getText( InfoWindow &iw, bool &afterBattle, int val, int nega
 
 void CGPandoraBox::battleFinished(const CGHeroInstance *hero, const BattleResult &result) const
 {
-	if(result.winner)
-		return;
-
-	giveContentsUpToExp(hero);
+	if(result.winner == 0)
+	{
+		giveContentsUpToExp(hero);
+	}
 }
 
 void CGPandoraBox::blockingDialogAnswered(const CGHeroInstance *hero, ui32 answer) const
 {
-	if (answer)
+	if(answer)
 	{
-		if (stacksCount() > 0) //if pandora's box is protected by army
+		if(stacksCount() > 0) //if pandora's box is protected by army
 		{
 			showInfoDialog(hero,16,0);
 			cb->startBattleI(hero, this); //grants things after battle
 		}
-		else if (message.size() == 0 && resources.size() == 0
+		else if(message.size() == 0 && resources.size() == 0
 			&& primskills.size() == 0 && abilities.size() == 0
-			&& abilityLevels.size() == 0 &&  artifacts.size() == 0
-			&& spells.size() == 0 && creatures.Slots().size() > 0
+			&& abilityLevels.size() == 0 && artifacts.size() == 0
+			&& spells.size() == 0 && creatures.stacksCount() > 0
 			&& gainedExp == 0 && manaDiff == 0 && moraleDiff == 0 && luckDiff == 0) //if it gives nothing without battle
 		{
 			showInfoDialog(hero,15,0);
@@ -329,6 +363,104 @@ void CGPandoraBox::blockingDialogAnswered(const CGHeroInstance *hero, ui32 answe
 void CGPandoraBox::heroLevelUpDone(const CGHeroInstance *hero) const
 {
 	giveContentsAfterExp(hero);
+}
+
+void CGPandoraBox::afterSuccessfulVisit() const
+{
+	cb->removeAfterVisit(this);
+}
+
+CGEvent::CGEvent()
+	: CGPandoraBox(), removeAfterVisit(false), availableFor(0), computerActivate(false), humanActivate(false)
+{
+
+}
+
+void CGPandoraBox::serializeJsonOptions(JsonSerializeFormat & handler)
+{
+	CCreatureSet::serializeJson(handler, "guards", 7);
+	handler.serializeString("guardMessage", message);
+
+	handler.serializeInt("experience", gainedExp, 0);
+	handler.serializeInt("mana", manaDiff, 0);
+	handler.serializeInt("morale", moraleDiff, 0);
+	handler.serializeInt("luck", luckDiff, 0);
+
+	resources.serializeJson(handler, "resources");
+
+	{
+		bool haveSkills = false;
+
+		if(handler.saving)
+		{
+			for(int idx = 0; idx < primskills.size(); idx ++)
+				if(primskills[idx] != 0)
+					haveSkills = true;
+		}
+		else
+		{
+			primskills.resize(GameConstants::PRIMARY_SKILLS,0);
+			haveSkills = true;
+		}
+
+		if(haveSkills)
+		{
+			auto s = handler.enterStruct("primarySkills");
+			for(int idx = 0; idx < primskills.size(); idx ++)
+				handler.serializeInt(PrimarySkill::names[idx], primskills[idx], 0);
+		}
+	}
+
+	if(handler.saving)
+	{
+		if(!abilities.empty())
+		{
+			auto s = handler.enterStruct("secondarySkills");
+
+			for(size_t idx = 0; idx < abilities.size(); idx++)
+			{
+				handler.serializeEnum(NSecondarySkill::names[abilities[idx]], abilityLevels[idx], NSecondarySkill::levels);
+			}
+		}
+	}
+	else
+	{
+		auto s = handler.enterStruct("secondarySkills");
+
+		const JsonNode & skillMap = handler.getCurrent();
+
+		abilities.clear();
+		abilityLevels.clear();
+
+		for(const auto & p : skillMap.Struct())
+		{
+			const std::string skillName = p.first;
+			const std::string levelId = p.second.String();
+
+			const int rawId = vstd::find_pos(NSecondarySkill::names, skillName);
+			if(rawId < 0)
+			{
+				logGlobal->error("Invalid secondary skill %s", skillName);
+				continue;
+			}
+
+			const int level = vstd::find_pos(NSecondarySkill::levels, levelId);
+			if(level < 0)
+			{
+				logGlobal->error("Invalid secondary skill level %s", levelId);
+				continue;
+			}
+
+			abilities.push_back(SecondarySkill(rawId));
+			abilityLevels.push_back(level);
+		}
+	}
+
+
+	handler.serializeIdArray("artifacts", artifacts);
+	handler.serializeIdArray("spells", spells);
+
+	creatures.serializeJson(handler, "creatures");
 }
 
 void CGEvent::onHeroVisit( const CGHeroInstance * h ) const
@@ -361,4 +493,37 @@ void CGEvent::activated( const CGHeroInstance * h ) const
 	{
 		giveContentsUpToExp(h);
 	}
+}
+
+void CGEvent::afterSuccessfulVisit() const
+{
+	if(removeAfterVisit)
+	{
+		cb->removeAfterVisit(this);
+	}
+	else if(hasGuardians)
+		hasGuardians = false;
+}
+
+void CGEvent::serializeJsonOptions(JsonSerializeFormat & handler)
+{
+	CGPandoraBox::serializeJsonOptions(handler);
+
+	handler.serializeBool<bool>("aIActivable", computerActivate, true, false, false);
+	handler.serializeBool<bool>("humanActivable", humanActivate, true, false, true);
+	handler.serializeBool<bool>("removeAfterVisit", removeAfterVisit, true, false, false);
+
+	{
+		auto decodePlayer = [](const std::string & id)->si32
+		{
+			return vstd::find_pos(GameConstants::PLAYER_COLOR_NAMES, id);
+		};
+
+		auto encodePlayer = [](si32 idx)->std::string
+		{
+			return GameConstants::PLAYER_COLOR_NAMES[idx];
+		};
+
+		handler.serializeIdArray<ui8, PlayerColor::PLAYER_LIMIT_I>("availableFor", availableFor, GameConstants::ALL_PLAYERS, decodePlayer, encodePlayer);
+    }
 }

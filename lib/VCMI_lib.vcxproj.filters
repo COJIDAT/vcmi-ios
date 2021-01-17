@@ -5,9 +5,6 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
-    <Filter Include="Source Files">
-      <UniqueIdentifier>{132126f1-89bb-4505-a77e-d4c3a18103be}</UniqueIdentifier>
-    </Filter>
     <Filter Include="filesystem">
       <UniqueIdentifier>{a2ca6977-50bf-4585-aa6e-779a10863922}</UniqueIdentifier>
     </Filter>
@@ -26,20 +23,28 @@
     <Filter Include="mapObjects">
       <UniqueIdentifier>{ee24c7f7-f4e2-4d35-b994-94a6e29ea92f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="spells">
+      <UniqueIdentifier>{bda963b1-00e1-412a-9b44-f5cd3f8e9e33}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="serializer">
+      <UniqueIdentifier>{2f582170-d8a6-42f3-8da3-8255bac28f5a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="battle">
+      <UniqueIdentifier>{d18aad99-ef40-484a-b317-8f7a36d975fc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="spells\effects">
+      <UniqueIdentifier>{a3de4952-3c98-4c1a-bc4b-bd3eeaa82ba7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="BattleAction.cpp" />
-    <ClCompile Include="BattleState.cpp" />
     <ClCompile Include="CArtHandler.cpp" />
     <ClCompile Include="CBuildingHandler.cpp" />
     <ClCompile Include="CCreatureHandler.cpp" />
     <ClCompile Include="CGeneralTextHandler.cpp" />
     <ClCompile Include="CHeroHandler.cpp" />
-    <ClCompile Include="CSpellHandler.cpp" />
     <ClCompile Include="CTownHandler.cpp" />
     <ClCompile Include="CCreatureSet.cpp" />
     <ClCompile Include="CGameState.cpp" />
-    <ClCompile Include="Connection.cpp" />
     <ClCompile Include="CRandomGenerator.cpp" />
     <ClCompile Include="HeroBonus.cpp" />
     <ClCompile Include="IGameCallback.cpp" />
@@ -49,14 +54,11 @@
     <ClCompile Include="ResourceSet.cpp" />
     <ClCompile Include="CGameInterface.cpp" />
     <ClCompile Include="JsonNode.cpp" />
-    <ClCompile Include="BattleHex.cpp" />
     <ClCompile Include="CConsoleHandler.cpp" />
     <ClCompile Include="CThreadHelper.cpp" />
     <ClCompile Include="StdInc.cpp" />
-    <ClCompile Include="CObstacleInstance.cpp" />
     <ClCompile Include="CModHandler.cpp" />
     <ClCompile Include="CConfigHandler.cpp" />
-    <ClCompile Include="CBattleCallback.cpp" />
     <ClCompile Include="Mapping\CCampaignHandler.cpp" />
     <ClCompile Include="GameConstants.cpp" />
     <ClCompile Include="VCMIDirs.cpp" />
@@ -95,9 +97,6 @@
       <Filter>filesystem</Filter>
     </ClCompile>
     <ClCompile Include="filesystem\CFileInputStream.cpp">
-      <Filter>filesystem</Filter>
-    </ClCompile>
-    <ClCompile Include="filesystem\CFileInfo.cpp">
       <Filter>filesystem</Filter>
     </ClCompile>
     <ClCompile Include="filesystem\CCompressedStream.cpp">
@@ -156,8 +155,6 @@
     <ClCompile Include="registerTypes\TypesClientPacks1.cpp">
       <Filter>registerTypes</Filter>
     </ClCompile>
-    <ClCompile Include="registerTypes\TypesMapObjects1.cpp" />
-    <ClCompile Include="registerTypes\TypesMapObjects2.cpp" />
     <ClCompile Include="mapObjects\CArmedInstance.cpp">
       <Filter>mapObjects</Filter>
     </ClCompile>
@@ -203,8 +200,186 @@
     <ClCompile Include="mapObjects\ObjectTemplate.cpp">
       <Filter>mapObjects</Filter>
     </ClCompile>
-    <ClCompile Include="registerTypes\TypesMapObjects3.cpp" />
     <ClCompile Include="IHandlerBase.cpp" />
+    <ClCompile Include="spells\AdventureSpellMechanics.cpp">
+      <Filter>spells</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\CSpellHandler.cpp">
+      <Filter>spells</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\ViewSpellInt.cpp">
+      <Filter>spells</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\ISpellMechanics.cpp">
+      <Filter>spells</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\BattleSpellMechanics.cpp">
+      <Filter>spells</Filter>
+    </ClCompile>
+    <ClCompile Include="mapping\CDrawRoadsOperation.cpp" />
+    <ClCompile Include="CPathfinder.cpp" />
+    <ClCompile Include="registerTypes\TypesMapObjects1.cpp">
+      <Filter>registerTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="registerTypes\TypesMapObjects2.cpp">
+      <Filter>registerTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="registerTypes\TypesMapObjects3.cpp">
+      <Filter>registerTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="filesystem\FileStream.cpp">
+      <Filter>filesystem</Filter>
+    </ClCompile>
+    <ClCompile Include="filesystem\FileInfo.cpp" />
+    <ClCompile Include="serializer\JsonDeserializer.cpp">
+      <Filter>serializer</Filter>
+    </ClCompile>
+    <ClCompile Include="serializer\JsonSerializeFormat.cpp">
+      <Filter>serializer</Filter>
+    </ClCompile>
+    <ClCompile Include="serializer\JsonSerializer.cpp">
+      <Filter>serializer</Filter>
+    </ClCompile>
+    <ClCompile Include="filesystem\CMemoryBuffer.cpp">
+      <Filter>filesystem</Filter>
+    </ClCompile>
+    <ClCompile Include="filesystem\CZipSaver.cpp">
+      <Filter>filesystem</Filter>
+    </ClCompile>
+    <ClCompile Include="filesystem\MinizipExtensions.cpp">
+      <Filter>filesystem</Filter>
+    </ClCompile>
+    <ClCompile Include="CStack.cpp" />
+    <ClCompile Include="battle\AccessibilityInfo.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\BattleAction.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\BattleAttackInfo.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\BattleHex.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\BattleInfo.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\CBattleInfoCallback.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\CBattleInfoEssentials.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\CCallbackBase.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\CObstacleInstance.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\CPlayerBattleCallback.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\ReachabilityInfo.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\SideInBattle.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\SiegeInfo.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="serializer\CSerializer.cpp">
+      <Filter>serializer</Filter>
+    </ClCompile>
+    <ClCompile Include="serializer\BinarySerializer.cpp">
+      <Filter>serializer</Filter>
+    </ClCompile>
+    <ClCompile Include="serializer\BinaryDeserializer.cpp">
+      <Filter>serializer</Filter>
+    </ClCompile>
+    <ClCompile Include="serializer\CLoadIntegrityValidator.cpp">
+      <Filter>serializer</Filter>
+    </ClCompile>
+    <ClCompile Include="serializer\CMemorySerializer.cpp">
+      <Filter>serializer</Filter>
+    </ClCompile>
+    <ClCompile Include="serializer\Connection.cpp">
+      <Filter>serializer</Filter>
+    </ClCompile>
+    <ClCompile Include="serializer\CTypeList.cpp">
+      <Filter>serializer</Filter>
+    </ClCompile>
+    <ClCompile Include="CSkillHandler.cpp" />
+    <ClCompile Include="battle\BattleProxy.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\CUnitState.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\Destination.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\IBattleState.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="battle\Unit.cpp">
+      <Filter>battle</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\TargetCondition.cpp">
+      <Filter>spells</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Catapult.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Dispel.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Heal.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Obstacle.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\RemoveObstacle.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Sacrifice.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Teleport.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\UnitEffect.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Clone.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Damage.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Effect.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Effects.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\LocationEffect.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Registry.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Summon.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\effects\Timed.cpp">
+      <Filter>spells\effects</Filter>
+    </ClCompile>
+    <ClCompile Include="spells\Problem.cpp">
+      <Filter>spells</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CCreatureSet.h">
@@ -214,9 +389,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CondSh.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Connection.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="HeroBonus.h">
@@ -258,19 +430,7 @@
     <ClInclude Include="ConstTransitivePtr.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CSpellHandler.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="CTownHandler.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="BattleAction.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="BattleState.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="CObstacleInstance.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="IGameEventsReceiver.h">
@@ -292,9 +452,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="AI_Base.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="BattleHex.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CConsoleHandler.h">
@@ -328,9 +485,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CConfigHandler.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="CBattleCallback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Mapping\CCampaignHandler.h">
@@ -435,9 +589,6 @@
     <ClInclude Include="LogicalExpression.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="registerTypes\RegisterTypes.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="rmg\float3.h">
       <Filter>rmg</Filter>
     </ClInclude>
@@ -491,6 +642,246 @@
     </ClInclude>
     <ClInclude Include="CGameStateFwd.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\AdventureSpellMechanics.h">
+      <Filter>spells</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\BattleSpellMechanics.h">
+      <Filter>spells</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\CSpellHandler.h">
+      <Filter>spells</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\ISpellMechanics.h">
+      <Filter>spells</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\ViewSpellInt.h">
+      <Filter>spells</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\SpellMechanics.h">
+      <Filter>spells</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\Magic.h">
+      <Filter>spells</Filter>
+    </ClInclude>
+    <ClInclude Include="CPathfinder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CPlayerState.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mapping\CMapDefines.h">
+      <Filter>mapping</Filter>
+    </ClInclude>
+    <ClInclude Include="CSoundBase.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="IHandlerBase.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="NetPacksBase.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ScopeGuard.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="StringConstants.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="vcmi_endian.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mapping\CDrawRoadsOperation.h">
+      <Filter>mapping</Filter>
+    </ClInclude>
+    <ClInclude Include="filesystem\FileStream.h">
+      <Filter>filesystem</Filter>
+    </ClInclude>
+    <ClInclude Include="filesystem\FileInfo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\JsonDeserializer.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\JsonSerializeFormat.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\JsonSerializer.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="filesystem\CInputOutputStream.h">
+      <Filter>filesystem</Filter>
+    </ClInclude>
+    <ClInclude Include="filesystem\CMemoryBuffer.h">
+      <Filter>filesystem</Filter>
+    </ClInclude>
+    <ClInclude Include="filesystem\COutputStream.h">
+      <Filter>filesystem</Filter>
+    </ClInclude>
+    <ClInclude Include="filesystem\CStream.h">
+      <Filter>filesystem</Filter>
+    </ClInclude>
+    <ClInclude Include="filesystem\CZipSaver.h">
+      <Filter>filesystem</Filter>
+    </ClInclude>
+    <ClInclude Include="filesystem\MinizipExtensions.h">
+      <Filter>filesystem</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Version.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CStack.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\AccessibilityInfo.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\BattleAction.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\BattleAttackInfo.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\BattleHex.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\BattleInfo.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\CBattleInfoCallback.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\CBattleInfoEssentials.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\CCallbackBase.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\CObstacleInstance.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\CPlayerBattleCallback.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\ReachabilityInfo.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\SideInBattle.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\SiegeInfo.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="registerTypes\RegisterTypes.h">
+      <Filter>registerTypes</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\CSerializer.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\BinaryDeserializer.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\BinarySerializer.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\CLoadIntegrityValidator.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\CMemorySerializer.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\Connection.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\CTypeList.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="CSkillHandler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\GlobalEffect.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\StackEffect.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="serializer\JsonTreeSerializer.h">
+      <Filter>serializer</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\BattleProxy.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\CUnitState.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\Destination.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\IBattleState.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\IUnitInfo.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\Unit.h">
+      <Filter>battle</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\TargetCondition.h">
+      <Filter>spells</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Catapult.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Dispel.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\EffectsFwd.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Heal.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Obstacle.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\RemoveObstacle.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Sacrifice.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Teleport.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\UnitEffect.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Clone.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Damage.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Effect.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Effects.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\LocationEffect.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Registry.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Summon.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\effects\Timed.h">
+      <Filter>spells\effects</Filter>
+    </ClInclude>
+    <ClInclude Include="spells\Problem.h">
+      <Filter>spells</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

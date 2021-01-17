@@ -10,7 +10,8 @@
 #pragma once
 
 
-#include "BattleHex.h"
+#include "battle/BattleHex.h"
+#include "GameConstants.h"
 #include "int3.h"
 
 class CGTownInstance;
@@ -31,12 +32,11 @@ struct Bonus;
 class IMarket;
 struct SetObjectProperty;
 struct PackageApplied;
-struct BattleAction;
+class BattleAction;
 struct BattleStackAttacked;
 struct BattleResult;
 struct BattleSpellCast;
 struct CatapultAttack;
-struct BattleStacksRemoved;
 class CStack;
 class CCreatureSet;
 struct BattleAttack;
@@ -46,6 +46,10 @@ class CComponent;
 struct CObstacleInstance;
 struct CPackForServer;
 class EVictoryLossCheckResult;
+struct MetaString;
+struct CustomEffectInfo;
+class ObstacleChanges;
+class UnitChanges;
 
 class DLL_LINKAGE IBattleEventsReceiver
 {
@@ -53,7 +57,7 @@ public:
 	virtual void actionFinished(const BattleAction &action){};//occurs AFTER every action taken by any stack or by the hero
 	virtual void actionStarted(const BattleAction &action){};//occurs BEFORE every action taken by any stack or by the hero
 	virtual void battleAttack(const BattleAttack *ba){}; //called when stack is performing attack
-	virtual void battleStacksAttacked(const std::vector<BattleStackAttacked> & bsa){}; //called when stack receives damage (after battleAttack())
+	virtual void battleStacksAttacked(const std::vector<BattleStackAttacked> & bsa, const std::vector<MetaString> & battleLog){}; //called when stack receives damage (after battleAttack())
 	virtual void battleEnd(const BattleResult *br){};
 	virtual void battleNewRoundFirst(int round){}; //called at the beginning of each turn before changes are applied;
 	virtual void battleNewRound(int round){}; //called at the beginning of each turn, round=-1 is the tactic phase, round=0 is the first "normal" turn
@@ -63,12 +67,10 @@ public:
 	virtual void battleTriggerEffect(const BattleTriggerEffect & bte){}; //called for various one-shot effects
 	virtual void battleStartBefore(const CCreatureSet *army1, const CCreatureSet *army2, int3 tile, const CGHeroInstance *hero1, const CGHeroInstance *hero2) {}; //called just before battle start
 	virtual void battleStart(const CCreatureSet *army1, const CCreatureSet *army2, int3 tile, const CGHeroInstance *hero1, const CGHeroInstance *hero2, bool side){}; //called by engine when battle starts; side=0 - left, side=1 - right
-	virtual void battleStacksHealedRes(const std::vector<std::pair<ui32, ui32> > & healedStacks, bool lifeDrain, bool tentHeal, si32 lifeDrainFrom){}; //called when stacks are healed / resurrected first element of pair - stack id, second - healed hp
-	virtual void battleNewStackAppeared(const CStack * stack){}; //not called at the beginning of a battle or by resurrection; called eg. when elemental is summoned
-	virtual void battleObstaclesRemoved(const std::set<si32> & removedObstacles){}; //called when a certain set  of obstacles is removed from batlefield; IDs of them are given
+	virtual void battleUnitsChanged(const std::vector<UnitChanges> & units, const std::vector<CustomEffectInfo> & customEffects, const std::vector<MetaString> & battleLog){};
+	virtual void battleObstaclesChanged(const std::vector<ObstacleChanges> & obstacles){};
 	virtual void battleCatapultAttacked(const CatapultAttack & ca){}; //called when catapult makes an attack
-	virtual void battleStacksRemoved(const BattleStacksRemoved & bsr){}; //called when certain stack is completely removed from battlefield
-	virtual void battleObstaclePlaced(const CObstacleInstance &obstacle){};
+	virtual void battleGateStateChanged(const EGateState state){};
 };
 
 class DLL_LINKAGE IGameEventsReceiver
@@ -103,12 +105,13 @@ public:
 	virtual void heroManaPointsChanged(const CGHeroInstance * hero){} //not called at the beginning of turn and after spell casts
 	virtual void heroMovePointsChanged(const CGHeroInstance * hero){} //not called at the beginning of turn and after movement
 	virtual void heroVisitsTown(const CGHeroInstance* hero, const CGTownInstance * town){};
-	virtual void receivedResource(int type, int val){};
+	virtual void receivedResource(){};
 	virtual void showInfoDialog(const std::string &text, const std::vector<Component*> &components, int soundID){};
 	virtual void showRecruitmentDialog(const CGDwelling *dwelling, const CArmedInstance *dst, int level){}
 	virtual void showShipyardDialog(const IShipyard *obj){} //obj may be town or shipyard; state: 0 - can buid, 1 - lack of resources, 2 - dest tile is blocked, 3 - no water
 
 	virtual void showPuzzleMap(){};
+	virtual void viewWorldMap(){};
 	virtual void showMarketWindow(const IMarket *market, const CGHeroInstance *visitor){};
 	virtual void showUniversityWindow(const IMarket *market, const CGHeroInstance *visitor){};
 	virtual void showHillFortWindow(const CGObjectInstance *object, const CGHeroInstance *visitor){};

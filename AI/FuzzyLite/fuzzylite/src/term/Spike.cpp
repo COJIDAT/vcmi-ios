@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/term/Spike.h"
@@ -27,25 +19,26 @@
 namespace fl {
 
     Spike::Spike(const std::string& name, scalar center, scalar width, scalar height)
-    : Term(name, height), _center(center), _width(width) {
-    }
+    : Term(name, height), _center(center), _width(width) { }
 
-    Spike::~Spike() {
-
-    }
+    Spike::~Spike() { }
 
     std::string Spike::className() const {
         return "Spike";
     }
 
+    Complexity Spike::complexity() const {
+        return Complexity().comparison(1).arithmetic(1 + 3).function(2);
+    }
+
     scalar Spike::membership(scalar x) const {
-        if (fl::Op::isNaN(x)) return fl::nan;
-        return _height * std::exp(-std::fabs(10.0 / _width * (x - _center)));
+        if (Op::isNaN(x)) return fl::nan;
+        return Term::_height * std::exp(-std::abs(10.0 / _width * (x - _center)));
     }
 
     std::string Spike::parameters() const {
         return Op::join(2, " ", _center, _width) +
-                (not Op::isEq(_height, 1.0) ? " " + Op::str(_height) : "");
+                (not Op::isEq(getHeight(), 1.0) ? " " + Op::str(getHeight()) : "");
     }
 
     void Spike::configure(const std::string& parameters) {
@@ -56,7 +49,7 @@ namespace fl {
             std::ostringstream ex;
             ex << "[configuration error] term <" << className() << ">"
                     << " requires <" << required << "> parameters";
-            throw fl::Exception(ex.str(), FL_AT);
+            throw Exception(ex.str(), FL_AT);
         }
         setCenter(Op::toScalar(values.at(0)));
         setWidth(Op::toScalar(values.at(1)));
@@ -87,4 +80,5 @@ namespace fl {
     Term* Spike::constructor() {
         return new Spike;
     }
+
 }

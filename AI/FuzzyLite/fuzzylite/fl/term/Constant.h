@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #ifndef FL_CONSTANT_H
@@ -29,23 +21,55 @@
 
 namespace fl {
 
+    /**
+      The Constant class is a (zero) polynomial Term that represents a constant
+      value @f$ f(x) = k @f$
+
+      @author Juan Rada-Vilela, Ph.D.
+      @see Term
+      @see Variable
+      @since 4.0
+     */
     class FL_API Constant : public Term {
-    protected:
+    private:
         scalar _value;
 
     public:
-        Constant(const std::string& name = "",
+        explicit Constant(const std::string& name = "",
                 scalar value = fl::nan);
         virtual ~Constant() FL_IOVERRIDE;
         FL_DEFAULT_COPY_AND_MOVE(Constant)
 
         virtual std::string className() const FL_IOVERRIDE;
+        /**
+          Returns the parameters of the term
+          @return `"value"`
+         */
         virtual std::string parameters() const FL_IOVERRIDE;
+        /**
+          Configures the term with the parameters
+          @param parameters as `"value"`
+         */
         virtual void configure(const std::string& parameters) FL_IOVERRIDE;
 
+        virtual Complexity complexity() const FL_IOVERRIDE;
+
+        /**
+          Computes the membership function evaluated at @f$x@f$
+          @param x is irrelevant
+          @return @f$c@f$, where @f$c@f$ is the constant value
+         */
         virtual scalar membership(scalar x) const FL_IOVERRIDE;
 
+        /**
+          Sets the constant value
+          @param value is the constant value
+         */
         virtual void setValue(scalar value);
+        /**
+          Gets the constant value
+          @return the constant value
+         */
         virtual scalar getValue() const;
 
         virtual Constant* clone() const FL_IOVERRIDE;
@@ -53,6 +77,5 @@ namespace fl {
         static Term* constructor();
     };
 }
-
 #endif  /* FL_CONSTANT_H */
 

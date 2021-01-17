@@ -1,10 +1,3 @@
-#pragma once
-
-#include "../lib/ConstTransitivePtr.h"
-#include "GameConstants.h"
-#include "HeroBonus.h"
-#include "IHandlerBase.h"
-
 /*
  * CHeroHandler.h, part of VCMI engine
  *
@@ -14,9 +7,14 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "../lib/ConstTransitivePtr.h"
+#include "GameConstants.h"
+#include "HeroBonus.h"
+#include "IHandlerBase.h"
 
 class CHeroClass;
-class CDefHandler;
 class CGameInfo;
 class CGHeroInstance;
 struct BattleHex;
@@ -30,7 +28,10 @@ struct SSpecialtyInfo
 	si32 additionalinfo;
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & type & val & subtype & additionalinfo;
+		h & type;
+		h & val;
+		h & subtype;
+		h & additionalinfo;
 	}
 };
 
@@ -41,7 +42,8 @@ struct SSpecialtyBonus
 	BonusList bonuses;
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & growsWithLevel & bonuses;
+		h & growsWithLevel;
+		h & bonuses;
 	}
 };
 
@@ -56,10 +58,12 @@ public:
 
 		template <typename Handler> void serialize(Handler &h, const int version)
 		{
-			h & minAmount & maxAmount & creature;
+			h & minAmount;
+			h & maxAmount;
+			h & creature;
 		}
 	};
-
+	std::string identifier;
 	HeroTypeID ID;
 	si32 imageIndex;
 
@@ -89,9 +93,30 @@ public:
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & ID & imageIndex & initialArmy & heroClass & secSkillsInit & spec & specialty & spells & haveSpellBook & sex & special;
-		h & name & biography & specName & specDescr & specTooltip;
-		h & iconSpecSmall & iconSpecLarge & portraitSmall & portraitLarge;
+		h & ID;
+		h & imageIndex;
+		h & initialArmy;
+		h & heroClass;
+		h & secSkillsInit;
+		h & spec;
+		h & specialty;
+		h & spells;
+		h & haveSpellBook;
+		h & sex;
+		h & special;
+		h & name;
+		h & biography;
+		h & specName;
+		h & specDescr;
+		h & specTooltip;
+		h & iconSpecSmall;
+		h & iconSpecLarge;
+		h & portraitSmall;
+		h & portraitLarge;
+		if(version >= 759)
+		{
+			h & identifier;
+		}
 	}
 };
 
@@ -137,11 +162,22 @@ public:
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & identifier & name & faction & id & defaultTavernChance;// & aggression;
-		h & primarySkillInitial   & primarySkillLowLevel;
-		h & primarySkillHighLevel & secSkillProbability;
-		h & selectionProbability & affinity & commander;
-		h & imageBattleMale & imageBattleFemale & imageMapMale & imageMapFemale;
+		h & identifier;
+		h & name;
+		h & faction;
+		h & id;
+		h & defaultTavernChance;
+		h & primarySkillInitial;
+		h & primarySkillLowLevel;
+		h & primarySkillHighLevel;
+		h & secSkillProbability;
+		h & selectionProbability;
+		h & affinity;
+		h & commander;
+		h & imageBattleMale;
+		h & imageBattleFemale;
+		h & imageMapMale;
+		h & imageMapFemale;
 	}
 	EAlignment::EAlignment getAlignment() const;
 };
@@ -163,13 +199,20 @@ struct DLL_LINKAGE CObstacleInfo
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & ID & defName & allowedTerrains & allowedSpecialBfields & isAbsoluteObstacle & width & height & blockedTiles;
+		h & ID;
+		h & defName;
+		h & allowedTerrains;
+		h & allowedSpecialBfields;
+		h & isAbsoluteObstacle;
+		h & width;
+		h & height;
+		h & blockedTiles;
 	}
 };
 
 class DLL_LINKAGE CHeroClassHandler : public IHandlerBase
 {
-	CHeroClass *loadFromJson(const JsonNode & node);
+	CHeroClass *loadFromJson(const JsonNode & node, const std::string & identifier);
 public:
 	std::vector< ConstTransitivePtr<CHeroClass> > heroClasses;
 
@@ -178,9 +221,9 @@ public:
 	void loadObject(std::string scope, std::string name, const JsonNode & data) override;
 	void loadObject(std::string scope, std::string name, const JsonNode & data, size_t index) override;
 
-	void afterLoadFinalization();
+	void afterLoadFinalization() override;
 
-	std::vector<bool> getDefaultAllowed() const;
+	std::vector<bool> getDefaultAllowed() const override;
 
 	~CHeroClassHandler();
 
@@ -207,7 +250,7 @@ class DLL_LINKAGE CHeroHandler : public IHandlerBase
 	void loadObstacles();
 
 	/// Load single hero from json
-	CHero * loadFromJson(const JsonNode & node);
+	CHero * loadFromJson(const JsonNode & node, const std::string & identifier);
 
 public:
 	CHeroClassHandler classes;
@@ -225,7 +268,15 @@ public:
 		ui8 sum; //I don't know if it is useful for anything, but it's in config file
 		template <typename Handler> void serialize(Handler &h, const int version)
 		{
-			h & keep & tower & gate & wall & shots & noDmg & oneDmg & twoDmg & sum;
+			h & keep;
+			h & tower;
+			h & gate;
+			h & wall;
+			h & shots;
+			h & noDmg;
+			h & oneDmg;
+			h & twoDmg;
+			h & sum;
 		}
 	};
 	std::vector<SBallisticsLevelInfo> ballistics; //info about ballistics ability per level; [0] - none; [1] - basic; [2] - adv; [3] - expert
@@ -241,10 +292,10 @@ public:
 	void loadObject(std::string scope, std::string name, const JsonNode & data) override;
 	void loadObject(std::string scope, std::string name, const JsonNode & data, size_t index) override;
 
-	CHeroHandler(); //c-tor
-	~CHeroHandler(); //d-tor
+	CHeroHandler();
+	~CHeroHandler();
 
-	std::vector<bool> getDefaultAllowed() const;
+	std::vector<bool> getDefaultAllowed() const override;
 
 	/**
 	 * Gets a list of default allowed abilities. OH3 abilities/skills are all allowed by default.
@@ -253,9 +304,26 @@ public:
 	 */
 	std::vector<bool> getDefaultAllowedAbilities() const;
 
+	///json serialization helper
+	static si32 decodeHero(const std::string & identifier);
+
+	///json serialization helper
+	static std::string encodeHero(const si32 index);
+
+	///json serialization helper
+	static si32 decodeSkill(const std::string & identifier);
+
+	///json serialization helper
+	static std::string encodeSkill(const si32 index);
+
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & classes & heroes & expPerLevel & ballistics & terrCosts;
-		h & obstacles & absoluteObstacles;
+		h & classes;
+		h & heroes;
+		h & expPerLevel;
+		h & ballistics;
+		h & terrCosts;
+		h & obstacles;
+		h & absoluteObstacles;
 	}
 };

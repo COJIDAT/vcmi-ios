@@ -1,4 +1,3 @@
-
 /*
  * MapFormatH3M.h, part of VCMI engine
  *
@@ -50,14 +49,14 @@ public:
 	 *
 	 * @return a unique ptr of the loaded map class
 	 */
-	std::unique_ptr<CMap> loadMap();
+	std::unique_ptr<CMap> loadMap() override;
 
 	/**
 	 * Loads the VCMI/H3 map header.
 	 *
 	 * @return a unique ptr of the loaded map header class
 	 */
-	std::unique_ptr<CMapHeader> loadMapHeader();
+	std::unique_ptr<CMapHeader> loadMapHeader() override;
 
 	/** true if you want to enable the map loader profiler to see how long a specific part took; default=false */
 	static const bool IS_PROFILING_ENABLED;
@@ -125,15 +124,6 @@ private:
 	bool loadArtifactToSlot(CGHeroInstance * hero, int slot);
 
 	/**
-	 * Creates an artifact instance.
-	 *
-	 * @param aid the id of the artifact
-	 * @param spellID optional. the id of a spell if a spell scroll object should be created
-	 * @return the created artifact instance
-	 */
-	CArtifactInstance * createArtifact(int aid, int spellID = -1);
-
-	/**
 	 * Read rumors.
 	 */
 	void readRumors();
@@ -172,7 +162,7 @@ private:
 	 * @param idToBeGiven the object id which should be set for the hero
 	 * @return a object instance
 	 */
-	CGObjectInstance * readHero(ObjectInstanceID idToBeGiven);
+	CGObjectInstance * readHero(ObjectInstanceID idToBeGiven, const int3 & initialPos);
 
 	/**
 	 * Reads a seer hut.
@@ -250,6 +240,8 @@ private:
 		p.z = reader.readUInt8();
 		return p;
 	}
+
+	void afterRead();
 
 	/** List of templates loaded from the map, used on later stage to create
 	 *  objects but not needed for fully functional CMap */

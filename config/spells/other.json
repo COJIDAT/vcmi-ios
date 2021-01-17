@@ -1,13 +1,49 @@
 {
 	"quicksand" : {
 		"index" : 10,
-		"anim" : -1,
+		"targetType" : "NO_TARGET",
+
 		"sounds": {
 			"cast": "QUIKSAND"
 		},
 		"levels" : {
 			"base":{
-				"range" : "X"
+				"range" : "X",
+				"battleEffects" : {
+					"obstacle" : {
+						"type":"core:obstacle",
+						"hidden" : true,
+						"passable" : true,
+						"trap" : true,
+						"trigger" : false,
+						"patchCount" : 4,
+						"turnsRemaining" : -1,
+						"attacker" :{
+							"animation" : "C17SPE1",
+							"appearAnimation" : "C17SPE0",
+							"offsetY" : -42
+						},
+						"defender" :{
+							"animation" : "C17SPE1",
+							"appearAnimation" : "C17SPE0",
+							"offsetY" : -42
+						}
+					}
+				}
+			},
+			"advanced":{
+				"battleEffects":{
+					"obstacle":{
+						"patchCount" : 6
+					}
+				}
+			},
+			"expert":{
+				"battleEffects":{
+					"obstacle":{
+						"patchCount" : 8
+					}
+				}
 			}
 		},
 		"flags" : {
@@ -16,32 +52,134 @@
 	},
 	"landMine" : {
 		"index" : 11,
-		"anim" : -1,
+		"targetType" : "NO_TARGET",
+
 		"sounds": {
 			"cast": ""
 		},
 		"levels" : {
 			"base":{
-				"range" : "X"
+				"range" : "X",
+				"battleEffects" : {
+					"obstacle" : {
+						"type":"core:obstacle",
+						"hidden" : true,
+						"passable" : true,
+						"trap" : false,
+						"trigger" : true,
+						"removeOnTrigger" : true,
+						"patchCount" : 4,
+						"turnsRemaining" : -1,
+						"attacker" :{
+							"animation" : "C09SPF1",
+							"appearAnimation" : "C09SPF0"
+						},
+						"defender" :{
+							"animation" : "C09SPF1",
+							"appearAnimation" : "C09SPF0"
+						}
+					},
+					"damage":{
+						"type":"core:damage",
+						"optional":false,
+						"indirect":true,
+						"customEffectId" : 82
+					}
+				}
+			},
+			"advanced":{
+				"battleEffects":{
+					"obstacle":{
+						"patchCount" : 6
+					}
+				}
+			},
+			"expert":{
+				"battleEffects":{
+					"obstacle":{
+						"patchCount" : 8
+					}
+				}
 			}
 		},
 		"flags" : {
 			"damage": true,
 			"indifferent": true
 		},
-		"immunity" : {
-			"DIRECT_DAMAGE_IMMUNITY": true
+		"targetCondition" : {
+			"noneOf" : {
+				"bonus.DIRECT_DAMAGE_IMMUNITY" : "normal"
+			}
 		}
 	},
 	"forceField" : {
 		"index" : 12,
-		"anim" : -1,
+		"targetType" : "LOCATION",
+
 		"sounds": {
 			"cast": "FORCEFLD"
 		},
 		"levels" : {
 			"base":{
-				"range" : "0"
+				"range" : "0",
+				"targetModifier":{
+					"clearAffected": true
+				},
+				"battleEffects":{
+					"obstacle":{
+						"type":"core:obstacle",
+						"hidden" : false,
+						"passable" : false,
+						"trap" : false,
+						"trigger" : false,
+						"patchCount" : 1,
+						"turnsRemaining" : 2,
+						"attacker" :{
+							"range" : [[""]],
+							"shape" : [[""], ["TR"]],
+							"animation" : "C15SPE1",
+							"appearAnimation" : "C15SPE0"
+						},
+						"defender" :{
+							"range" : [[""]],
+							"shape" : [[""], ["TL"]],
+							"animation" : "C15SPE4",
+							"appearAnimation" : "C15SPE0"
+						}
+					}
+				}
+			},
+			"advanced":{
+				"battleEffects":{
+					"obstacle":{
+						"attacker" :{
+							"shape" : [[""], ["TR"], ["TR", "TL"]],
+							"animation" : "C15SPE10",
+							"appearAnimation" : "C15SPE9"
+						},
+						"defender" :{
+							"shape" : [[""], ["TL"], ["TL", "TR"]],
+							"animation" : "C15SPE7",
+							"appearAnimation" : "C15SPE6"
+						}
+					}
+				}
+			},
+			"expert":{
+				"battleEffects":{
+					"obstacle":{
+						"attacker" :{
+							"shape" : [[""], ["TR"], ["TR", "TL"]],
+							"animation" : "C15SPE10",
+							"appearAnimation" : "C15SPE9"
+						},
+						"defender" :{
+							"shape" : [[""], ["TL"], ["TL", "TR"]],
+							"animation" : "C15SPE7",
+							"appearAnimation" : "C15SPE6"
+						}
+					}
+				}
 			}
 		},
 		"flags" : {
@@ -50,66 +188,196 @@
 	},
 	"fireWall" : {
 		"index" : 13,
-		"anim" : -1,
+		"targetType" : "LOCATION",
+
 		"sounds": {
 			"cast": "FIREWALL"
 		},
 		"levels" : {
 			"base":{
-				"range" : "0"
+				"range" : "0",
+				"targetModifier":{
+					"clearAffected": true
+				},
+				"battleEffects":{
+					"obstacle":{
+						"type":"core:obstacle",
+						"hidden" : false,
+						"passable" : true,
+						"trap" : false,
+						"trigger" : true,
+						"patchCount" : 1,
+						"turnsRemaining" : 2,
+						"attacker" :{
+							"shape" : [[""]],
+							"range" : [[""], ["TR"]],
+							"animation" : "C07SPF61",
+							"appearAnimation" : "C07SPF60"
+						},
+						"defender" :{
+							"shape" : [[""]],
+							"range" : [[""], ["TL"]],
+							"animation" : "C07SPF61",
+							"appearAnimation" : "C07SPF60"
+						}
+					},
+					"damage":{
+						"type":"core:damage",
+						"optional":false,
+						"indirect":true
+					}
+				}
+			},
+			"advanced":{
+				"battleEffects":{
+					"obstacle":{
+						"attacker" :{
+							"range" : [[""], ["TR"], ["TR", "TL"]]
+						},
+						"defender" :{
+							"range" : [[""], ["TL"], ["TL", "TR"]]
+						}
+					}
+				}
+			},
+			"expert":{
+				"battleEffects":{
+					"obstacle":{
+						"attacker" :{
+							"range" : [[""], ["TR"], ["TR", "TL"]]
+						},
+						"defender" :{
+							"range" : [[""], ["TL"], ["TL", "TR"]]
+						}
+					}
+				}
 			}
 		},
 		"flags" : {
 			"damage": true,
 			"indifferent": true
 		},
-		"immunity" : {
-			"DIRECT_DAMAGE_IMMUNITY": true
+		"targetCondition" : {
+			"noneOf" : {
+				"bonus.DIRECT_DAMAGE_IMMUNITY" : "normal"
+			}
 		}
 	},
 	"earthquake" : {
 		"index" : 14,
-		"anim" : -1,
+		"targetType" : "NO_TARGET",
+
 		"sounds": {
 			"cast": "ERTHQUAK"
 		},
 		"levels" : {
 			"base":{
+				"targetModifier":{"smart":true},
+				"battleEffects":{
+					"catapult":{
+						"type":"core:catapult",
+						"targetsToAttack": 2
+					}
+				},
 				"range" : "X"
+			},
+			"advanced":{
+				"battleEffects":{
+					"catapult":{
+						"targetsToAttack": 3
+					}
+				}
+			},
+			"expert":{
+				"battleEffects":{
+					"catapult":{
+						"targetsToAttack": 4
+					}
+				}
 			}
 		},
 		"flags" : {
 			"indifferent": true
 		}
 	},
-	
+
 	"dispel" : {
 		"index" : 35,
-		"anim" : 41,
+		"targetType" : "CREATURE",
+
+		"animation":{
+			"affect":["C05SPW"] //C05SPW0
+		},
 		"sounds": {
 			"cast": "DISPELL"
 		},
 		"levels" : {
-			"base":{
-				"range" : "0"
+ 			"base":{
+				"targetModifier":{
+					"smart":true
+				},
+				"battleEffects":{
+					"dispel":{
+						"type":"core:dispel",
+						"optional":false,
+						"ignoreImmunity" : true,
+						"dispelNegative":true,
+						"dispelNeutral":true,
+						"dispelPositive":true
+					}
+				},
+ 				"range" : "0"
+ 			},
+			"advanced":{
+				"targetModifier":{"smart":false}
 			},
-			"expert":{
-				"range" : "X"
-			}
+ 			"expert":{
+				"targetModifier":{"smart":false},
+				"battleEffects":{
+					"dispel":{
+						"optional":true
+					},
+					"removeObstacle":{
+						"optional":true,
+						"type":"core:removeObstacle",
+						"removeAllSpells" : true
+					}
+				},
+ 				"range" : "X"
+ 			}
 		},
 		"flags" : {
-			"indifferent": true
+			"positive": true
 		}
 	},
 	"cure" : {
 		"index" : 37,
-		"anim" : 39,
+		"targetType" : "CREATURE",
+		"animation":{
+			"affect":["C03SPW"]//C03SPW0
+		},
+
 		"sounds": {
 			"cast": "CURE"
 		},
 		"levels" : {
 			"base":{
 				"targetModifier":{"smart":true},
+				"battleEffects":{
+					"heal":{
+						"type":"core:heal",
+						"healLevel":"heal",
+						"healPower":"permanent",
+						"optional":true
+					},
+					"cure":{
+						"type":"core:dispel",
+						"optional":true,
+						"dispelNegative":true,
+						"dispelNeutral":false,
+						"dispelPositive":false
+					}
+				},
 				"range" : "0"
 			},
 			"expert":{
@@ -122,34 +390,83 @@
 	},
 	"resurrection" : {
 		"index" : 38,
-		"anim" : 79,
+		"targetType" : "CREATURE",
+
+		"animation":{
+			"affect":["C01SPE0"]
+		},
 		"sounds": {
 			"cast": "RESURECT"
 		},
 		"levels" : {
 			"base":{
 				"range" : "0",
+				"battleEffects":{
+					"heal":{
+						"type":"core:heal",
+						"healLevel":"resurrect",
+						"healPower":"oneBattle",
+						"minFullUnits" : 1
+					},
+					"cure":{
+						"type":"core:dispel",
+						"indirect": true,
+						"optional":true,
+						"dispelNegative":true,
+						"dispelNeutral":false,
+						"dispelPositive":false
+					}
+				},
 				"targetModifier":{"smart":true}
+			},
+			"advanced":{
+				"battleEffects":{
+					"heal":{
+						"healPower":"permanent"
+					}
+				}
+			},
+			"expert":{
+				"battleEffects":{
+					"heal":{
+						"healPower":"permanent"
+					}
+				}
 			}
 		},
 		"flags" : {
 			"rising": true,
 			"positive": true
 		},
-		"absoluteImmunity" : {
-			"UNDEAD": true,
-			"NON_LIVING": true
+		"targetCondition" : {
+			"noneOf" : {
+				"bonus.NON_LIVING" : "absolute",
+				"bonus.SIEGE_WEAPON" : "absolute",
+				"bonus.UNDEAD" : "absolute"
+			}
 		}
 	},
 	"animateDead" : {
 		"index" : 39,
-		"anim" : 79,
+		"targetType" : "CREATURE",
+
+		"animation":{
+			"affect":["C01SPE0"]
+		},
 		"sounds": {
 			"cast": "ANIMDEAD"
 		},
 		"levels" : {
 			"base":{
 				"range" : "0",
+				"battleEffects":{
+					"heal":{
+						"type":"core:heal",
+						"healLevel":"resurrect",
+						"healPower":"permanent",
+						"minFullUnits" : 1
+					}
+				},
 				"targetModifier":{"smart":true}
 			}
 		},
@@ -157,19 +474,33 @@
 			"rising": true,
 			"positive": true
 		},
-		"absoluteLimit" : {
-			"UNDEAD": true
+		"targetCondition" : {
+			"allOf" : {
+				"bonus.UNDEAD" : "absolute"
+			}
 		}
 	},
 	"sacrifice" : {
 		"index" : 40,
-		"anim" : 79,
+		"targetType" : "CREATURE",
+
+		"animation":{
+			"affect":["C01SPE0"]
+		},
 		"sounds": {
 			"cast": "SACRIF1"
 		},
 		"levels" : {
 			"base":{
 				"range" : "0",
+				"battleEffects":{
+					"sacrifice":{
+						"type":"core:sacrifice",
+						"healLevel":"resurrect",
+						"healPower":"permanent",
+						"minFullUnits" : 0
+					}
+				},
 				"targetModifier":{"smart":true}
 			}
 		},
@@ -177,39 +508,74 @@
 			"rising": true,
 			"positive": true
 		},
-		"absoluteImmunity" : {
-			"UNDEAD": true,
-			"NON_LIVING": true
+		"targetCondition" : {
+			"noneOf" : {
+				"bonus.NON_LIVING" : "absolute",
+				"bonus.SIEGE_WEAPON" : "absolute",
+				"bonus.UNDEAD" : "absolute"
+			}
 		}
 	},
 	"teleport" : {
 		"index" : 63,
-		"anim" : -1,
+		"targetType" : "CREATURE",
+
 		"sounds": {
 			"cast": "TELPTOUT"
 		},
 		"levels" : {
 			"base":{
 				"range" : "0",
+				"battleEffects":{
+					"teleport":{
+						"type":"core:teleport"
+					}
+				},
 				"targetModifier":{"smart":true}
 			}
 		},
-		"immunity" : {
-			"SIEGE_WEAPON": true
-		},
 		"flags" : {
 			"positive": true
+		},
+		"targetCondition" : {
+			"noneOf" : {
+				"bonus.SIEGE_WEAPON" : "absolute"
+			}
 		}
 	},
 	"removeObstacle" : {
 		"index" : 64,
-		"anim" : -1,
+		"targetType" : "OBSTACLE",
+		"animation":{
+			"cast":[2]
+		},
 		"sounds": {
 			"cast": "REMOVEOB"
 		},
 		"levels" : {
 			"base":{
-				"range" : "X"
+				"range" : "0",
+				"battleEffects": {
+					"removeObstacle" : {
+						"optional":false,
+						"type":"core:removeObstacle",
+						"removeUsual" : true
+					}
+				}
+			},
+			"advanced" : {
+				"battleEffects": {
+					"removeObstacle" : {
+						"removeSpells" : ["fireWall"]
+					}
+				}
+			},
+			"expert" : {
+				"battleEffects": {
+					"removeObstacle" : {
+						"removeAllSpells" : true
+					}
+				}
 			}
 		},
 		"flags" : {
@@ -218,32 +584,68 @@
 	},
 	"clone" : {
 		"index" : 65,
-		"anim" : -1,
+		"targetType" : "CREATURE",
+		"animation":{
+			"cast":[2]
+		},
 		"sounds": {
 			"cast": "CLONE"
 		},
 		"levels" : {
 			"base":{
 				"range" : "0",
+				"battleEffects":{
+					"clone":{
+						"maxTier":5,
+						"type":"core:clone"
+					}
+				},
 				"targetModifier":{"smart":true}
+			},
+			"advanced":{
+				"battleEffects":{
+					"clone":{
+						"maxTier":6
+					}
+				}
+			},
+			"expert":{
+				"battleEffects":{
+					"clone":{
+						"maxTier":1000
+					}
+				}
 			}
-		},
-		"immunity" : {
-			"SIEGE_WEAPON": true
 		},
 		"flags" : {
 			"positive": true
+		},
+		"targetCondition" : {
+			"noneOf" : {
+				"bonus.SIEGE_WEAPON" : "absolute"
+			}
 		}
 	},
 	"fireElemental" : {
 		"index" : 66,
-		"anim" : -1,
+		"targetType" : "NO_TARGET",
+		"animation":{
+			"cast":[2]
+		},
 		"sounds": {
 			"cast": "SUMNELM"
 		},
 		"levels" : {
 			"base":{
-				"range" : "X"
+				"range" : "X",
+				"battleEffects":{
+					"summon":{
+						"exclusive":true,
+						"id":"fireElemental",
+						"permanent":false,
+						"type":"core:summon"
+					}
+				}
 			}
 		},
 		"flags" : {
@@ -252,13 +654,24 @@
 	},
 	"earthElemental" : {
 		"index" : 67,
-		"anim" : -1,
+		"targetType" : "NO_TARGET",
+		"animation":{
+			"cast":[2]
+		},
 		"sounds": {
 			"cast": "SUMNELM"
 		},
 		"levels" : {
 			"base":{
-				"range" : "X"
+				"range" : "X",
+				"battleEffects":{
+					"summon":{
+						"exclusive":true,
+						"id":"earthElemental",
+						"permanent":false,
+						"type":"core:summon"
+					}
+				}
 			}
 		},
 		"flags" : {
@@ -267,13 +680,24 @@
 	},
 	"waterElemental" : {
 		"index" : 68,
-		"anim" : -1,
+		"targetType" : "NO_TARGET",
+		"animation":{
+			"cast":[2]
+		},
 		"sounds": {
 			"cast": "SUMNELM"
 		},
 		"levels" : {
 			"base":{
-				"range" : "X"
+				"range" : "X",
+				"battleEffects":{
+					"summon":{
+						"exclusive":true,
+						"id":"waterElemental",
+						"permanent":false,
+						"type":"core:summon"
+					}
+				}
 			}
 		},
 		"flags" : {
@@ -282,13 +706,24 @@
 	},
 	"airElemental" : {
 		"index" : 69,
-		"anim" : -1,
+		"targetType" : "NO_TARGET",
+		"animation":{
+			"cast":[2]
+		},
 		"sounds": {
 			"cast": "SUMNELM"
 		},
 		"levels" : {
 			"base":{
-				"range" : "X"
+				"range" : "X",
+				"battleEffects":{
+					"summon":{
+						"exclusive":true,
+						"id":"airElemental",
+						"permanent":false,
+						"type":"core:summon"
+					}
+				}
 			}
 		},
 		"flags" : {

@@ -1,8 +1,4 @@
-﻿#pragma once
-
-#include "CObjectHandler.h"
-
-/*
+﻿/*
  * CGMarket.h, part of VCMI engine
  *
  * Authors: listed in file AUTHORS in main folder
@@ -11,6 +7,9 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "CObjectHandler.h"
 
 class DLL_LINKAGE IMarket
 {
@@ -61,7 +60,7 @@ class DLL_LINKAGE CGBlackMarket : public CGMarket
 public:
 	std::vector<const CArtifact *> artifacts; //available artifacts
 
-	void newTurn() const override; //reset artifacts for black market every month
+	void newTurn(CRandomGenerator & rand) const override; //reset artifacts for black market every month
 	std::vector<int> availableItemsIds(EMarketMode::EMarketMode mode) const override;
 
 	template <typename Handler> void serialize(Handler &h, const int version)
@@ -76,8 +75,8 @@ class DLL_LINKAGE CGUniversity : public CGMarket
 public:
 	std::vector<int> skills; //available skills
 
-	std::vector<int> availableItemsIds(EMarketMode::EMarketMode mode) const;
-	void initObj() override;//set skills for trade
+	std::vector<int> availableItemsIds(EMarketMode::EMarketMode mode) const override;
+	void initObj(CRandomGenerator & rand) override;//set skills for trade
 	void onHeroVisit(const CGHeroInstance * h) const override; //open window
 
 	template <typename Handler> void serialize(Handler &h, const int version)

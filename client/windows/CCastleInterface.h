@@ -1,3 +1,12 @@
+/*
+ * CCastleInterface.h, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #pragma once
 
 #include "../widgets/CGarrisonInt.h"
@@ -21,17 +30,6 @@ class CGHeroInstance;
 class CGarrisonInt;
 class CCreature;
 
-/*
- * CCastleInterface.h, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
-
-
 /// Building "button"
 class CBuildingRect : public CShowableAnim
 {
@@ -45,18 +43,18 @@ public:
 	const CStructure* str;
 	SDL_Surface* border;
 	SDL_Surface* area;
-	
+
 	ui32 stateCounter;//For building construction - current stage in animation
-	
-	CBuildingRect(CCastleBuildings * Par, const CGTownInstance *Town, const CStructure *Str); //c-tor
-	~CBuildingRect(); //d-tor
+
+	CBuildingRect(CCastleBuildings * Par, const CGTownInstance *Town, const CStructure *Str);
+	~CBuildingRect();
 	bool operator<(const CBuildingRect & p2) const;
-	void hover(bool on);
-	void clickLeft(tribool down, bool previousState);
-	void clickRight(tribool down, bool previousState);
-	void mouseMoved (const SDL_MouseMotionEvent & sEvent);
-	void show(SDL_Surface * to);
-	void showAll(SDL_Surface * to);
+	void hover(bool on) override;
+	void clickLeft(tribool down, bool previousState) override;
+	void clickRight(tribool down, bool previousState) override;
+	void mouseMoved (const SDL_MouseMotionEvent & sEvent) override;
+	void show(SDL_Surface * to) override;
+	void showAll(SDL_Surface * to) override;
 };
 
 /// Dwelling info box - right-click screen for dwellings
@@ -66,7 +64,7 @@ class CDwellingInfoBox : public CWindowObject
 	CCreaturePic *animation;
 	CLabel *available;
 	CLabel *costPerTroop;
-	
+
 	std::vector<CAnimImage *> resPicture;
 	std::vector<CLabel *> resAmount;
 public:
@@ -84,15 +82,16 @@ public:
 
 	CAnimImage *image;
 	CAnimImage *selection; //selection border. nullptr if not selected
-	
+
 	void setHighlight(bool on);
 	void set(const CGHeroInstance *newHero);
 
-	void hover (bool on);
-	void clickLeft(tribool down, bool previousState);
-	void deactivate();
-	CHeroGSlot(int x, int y, int updown, const CGHeroInstance *h, HeroSlots * Owner); //c-tor
-	~CHeroGSlot(); //d-tor
+	void hover (bool on) override;
+	void clickLeft(tribool down, bool previousState) override;
+	void clickRight(tribool down, bool previousState) override;
+	void deactivate() override;
+	CHeroGSlot(int x, int y, int updown, const CGHeroInstance *h, HeroSlots * Owner);
+	~CHeroGSlot();
 };
 
 /// Two hero slots that can interact with each other
@@ -144,13 +143,14 @@ public:
 	~CCastleBuildings();
 
 	void enterDwelling(int level);
+	void enterToTheQuickRecruitmentWindow();
 
 	void buildingClicked(BuildingID building);
 	void addBuilding(BuildingID building);
 	void removeBuilding(BuildingID building);//FIXME: not tested!!!
-	
-	void show(SDL_Surface * to);
-	void showAll(SDL_Surface * to);
+
+	void show(SDL_Surface * to) override;
+	void showAll(SDL_Surface * to) override;
 };
 
 /// Creature info window
@@ -160,20 +160,20 @@ class CCreaInfo : public CIntObject
 	const CCreature *creature;
 	int level;
 	bool showAvailable;
-	
+
 	CAnimImage *picture;
 	CLabel * label;
 
 	int AddToString(std::string from, std::string & to, int numb);
 	std::string genGrowthText();
-	
+
 public:
 	CCreaInfo(Point position, const CGTownInstance *Town, int Level, bool compact=false, bool showAvailable=false);
-	
+
 	void update();
-	void hover(bool on);
-	void clickLeft(tribool down, bool previousState);
-	void clickRight(tribool down, bool previousState);
+	void hover(bool on) override;
+	void clickLeft(tribool down, bool previousState) override;
+	void clickRight(tribool down, bool previousState) override;
 };
 
 /// Town hall and fort icons for town screen
@@ -181,13 +181,13 @@ class CTownInfo : public CIntObject
 {
 	const CGTownInstance *town;
 	const CBuilding *building;
-	CAnimImage *picture;
 public:
+	CAnimImage * picture;
 	//if (townHall) hall-capital else fort - castle
 	CTownInfo(int posX, int posY, const CGTownInstance* town, bool townHall);
-	
-	void hover(bool on);
-	void clickRight(tribool down, bool previousState);
+
+	void hover(bool on) override;
+	void clickRight(tribool down, bool previousState) override;
 };
 
 /// Class which manages the castle window
@@ -205,14 +205,12 @@ class CCastleInterface : public CWindowObject, public CWindowWithGarrison
 
 	CButton *exit;
 	CButton *split;
+	CButton * fastArmyPurhase;
 
 	std::vector<CCreaInfo*> creainfo;//small icons of creatures (bottom-left corner);
 
 public:
 	CTownList * townlist;
-
-	//TODO: remove - currently used only in dialog messages
-	CDefEssential* bicons; //150x70 buildings imgs
 
 	//TODO: move to private
 	const CGTownInstance * town;
@@ -220,12 +218,12 @@ public:
 	CCastleBuildings *builds;
 
 	//from - previously selected castle (if any)
-	CCastleInterface(const CGTownInstance * Town, const CGTownInstance * from = nullptr); //c-tor
+	CCastleInterface(const CGTownInstance * Town, const CGTownInstance * from = nullptr);
 	~CCastleInterface();
 
 	void castleTeleport(int where);
 	void townChange();
-	void keyPressed(const SDL_KeyboardEvent & key);
+	void keyPressed(const SDL_KeyboardEvent & key) override;
 	void close();
 	void addBuilding(BuildingID bid);
 	void removeBuilding(BuildingID bid);
@@ -242,20 +240,14 @@ class CHallInterface : public CWindowObject
 		const CBuilding * building;
 
 		ui32 state;//Buildings::EBuildStructure enum
-
-		CAnimImage * picture;
-		CAnimImage * panel;
-		CAnimImage * icon;
-		CLabel * label;
-
 	public:
 		CBuildingBox(int x, int y, const CGTownInstance * Town, const CBuilding * Building);
-		void hover(bool on);
-		void clickLeft(tribool down, bool previousState);
-		void clickRight(tribool down, bool previousState);
+		void hover(bool on) override;
+		void clickLeft(tribool down, bool previousState) override;
+		void clickRight(tribool down, bool previousState) override;
 	};
 	const CGTownInstance * town;
-	
+
 	std::vector< std::vector<CBuildingBox*> >boxes;
 	CLabel *title;
 	CGStatusBar *statusBar;
@@ -263,7 +255,7 @@ class CHallInterface : public CWindowObject
 	CButton *exit;
 
 public:
-	CHallInterface(const CGTownInstance * Town); //c-tor
+	CHallInterface(const CGTownInstance * Town);
 };
 
 ///  Window where you can decide to buy a building or not
@@ -272,17 +264,13 @@ class CBuildWindow: public CWindowObject
 	const CGTownInstance *town;
 	const CBuilding *building;
 
-	CButton *buy;
-	CButton *cancel;
-
 	std::string getTextForState(int state);
 	void buyFunc();
-
 public:
-	CBuildWindow(const CGTownInstance *Town, const CBuilding * building, int State, bool rightClick); //c-tor
+	CBuildWindow(const CGTownInstance *Town, const CBuilding * building, int State, bool rightClick);
 };
 
-//Small class to display 
+//Small class to display
 class LabeledValue : public CIntObject
 {
 	std::string hoverText;
@@ -293,7 +281,7 @@ class LabeledValue : public CIntObject
 public:
 	LabeledValue(Rect size, std::string name, std::string descr, int min, int max);
 	LabeledValue(Rect size, std::string name, std::string descr, int val);
-	void hover(bool on);
+	void hover(bool on) override;
 };
 
 /// The fort screen where you can afford units
@@ -305,24 +293,20 @@ class CFortScreen : public CWindowObject
 		int level;
 
 		std::string hoverText;
-		CLabel * creatureName;
-		CLabel * dwellingName;
 		CLabel * availableCount;
 
 		std::vector<LabeledValue*> values;
 		CPicture *icons;
-		CAnimImage * buildingPic;
-		CCreaturePic *creatureAnim;
 
 		const CCreature * getMyCreature();
 		const CBuilding * getMyBuilding();
 	public:
 		RecruitArea(int posX, int posY, const CGTownInstance *town, int level);
-		
+
 		void creaturesChanged();
-		void hover(bool on);
-		void clickLeft(tribool down, bool previousState);
-		void clickRight(tribool down, bool previousState);
+		void hover(bool on) override;
+		void clickLeft(tribool down, bool previousState) override;
+		void clickRight(tribool down, bool previousState) override;
 	};
 	CLabel *title;
 	std::vector<RecruitArea*> recAreas;
@@ -333,7 +317,7 @@ class CFortScreen : public CWindowObject
 	std::string getBgName(const CGTownInstance *town);
 
 public:
-	CFortScreen(const CGTownInstance * town); //c-tor
+	CFortScreen(const CGTownInstance * town);
 
 	void creaturesChanged();
 };
@@ -348,9 +332,9 @@ class CMageGuildScreen : public CWindowObject
 
 	public:
 		Scroll(Point position, const CSpell *Spell);
-		void clickLeft(tribool down, bool previousState);
-		void clickRight(tribool down, bool previousState);
-		void hover(bool on);
+		void clickLeft(tribool down, bool previousState) override;
+		void clickRight(tribool down, bool previousState) override;
+		void hover(bool on) override;
 	};
 	CPicture *window;
 	CButton *exit;

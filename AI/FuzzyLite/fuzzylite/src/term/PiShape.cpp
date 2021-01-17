@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/term/PiShape.h"
@@ -29,47 +21,45 @@ namespace fl {
     PiShape::PiShape(const std::string& name, scalar bottomLeft, scalar topLeft,
             scalar topRight, scalar bottomRight, scalar height)
     : Term(name, height), _bottomLeft(bottomLeft), _topLeft(topLeft),
-    _topRight(topRight), _bottomRight(bottomRight) {
-    }
+    _topRight(topRight), _bottomRight(bottomRight) { }
 
-    PiShape::~PiShape() {
-    }
+    PiShape::~PiShape() { }
 
     std::string PiShape::className() const {
         return "PiShape";
     }
 
+    Complexity PiShape::complexity() const {
+        return Complexity().comparison(1 + 6).arithmetic(1 + 5 + 5).function(1 + 1);
+    }
+
     scalar PiShape::membership(scalar x) const {
-        if (fl::Op::isNaN(x)) return fl::nan;
-        //from Octave smf.m
-        scalar a_b_ave = (_bottomLeft + _topLeft) / 2.0;
-        scalar b_minus_a = _topLeft - _bottomLeft;
-        scalar c_d_ave = (_topRight + _bottomRight) / 2.0;
-        scalar d_minus_c = _bottomRight - _topRight;
+        if (Op::isNaN(x)) return fl::nan;
 
-        if (Op::isLE(x, _bottomLeft)) return _height * 0.0;
+        scalar sshape;
+        if (Op::isLE(x, _bottomLeft))
+            sshape = 0.0;
+        else if (Op::isLE(x, 0.5 * (_bottomLeft + _topLeft)))
+            sshape = 2.0 * std::pow((x - _bottomLeft) / (_topLeft - _bottomLeft), 2);
+        else if (Op::isLt(x, _topLeft))
+            sshape = 1.0 - 2.0 * std::pow((x - _topLeft) / (_topLeft - _bottomLeft), 2);
+        else sshape = 1.0;
 
-        if (Op::isLE(x, a_b_ave))
-            return _height * (2.0 * std::pow((x - _bottomLeft) / b_minus_a, 2));
-
-        if (Op::isLt(x, _topLeft))
-            return _height * (1.0 - 2.0 * std::pow((x - _topLeft) / b_minus_a, 2));
-
+        scalar zshape;
         if (Op::isLE(x, _topRight))
-            return _height * 1.0;
+            zshape = 1.0;
+        else if (Op::isLE(x, 0.5 * (_topRight + _bottomRight)))
+            zshape = 1.0 - 2.0 * std::pow((x - _topRight) / (_bottomRight - _topRight), 2);
+        else if (Op::isLt(x, _bottomRight))
+            zshape = 2.0 * std::pow((x - _bottomRight) / (_bottomRight - _topRight), 2);
+        else zshape = 0.0;
 
-        if (Op::isLE(x, c_d_ave))
-            return _height * (1.0 - 2.0 * std::pow((x - _topRight) / d_minus_c, 2));
-
-        if (Op::isLt(x, _bottomRight))
-            return _height * (2.0 * std::pow((x - _bottomRight) / d_minus_c, 2));
-
-        return _height * 0.0;
+        return Term::_height * sshape * zshape;
     }
 
     std::string PiShape::parameters() const {
         return Op::join(4, " ", _bottomLeft, _topLeft, _topRight, _bottomRight) +
-                (not Op::isEq(_height, 1.0) ? " " + Op::str(_height) : "");
+                (not Op::isEq(getHeight(), 1.0) ? " " + Op::str(getHeight()) : "");
     }
 
     void PiShape::configure(const std::string& parameters) {
@@ -80,7 +70,7 @@ namespace fl {
             std::ostringstream ex;
             ex << "[configuration error] term <" << className() << ">"
                     << " requires <" << required << "> parameters";
-            throw fl::Exception(ex.str(), FL_AT);
+            throw Exception(ex.str(), FL_AT);
         }
         setBottomLeft(Op::toScalar(values.at(0)));
         setTopLeft(Op::toScalar(values.at(1)));

@@ -3,14 +3,15 @@
 	[
 		{
 			"resolution": { "x": 800, "y": 600 },
-			"InGameConsole": { "maxInputPerLine": 60, "maxOutputPerLine": 39 },
-			"AdvMap": { "x": 7, "y": 7, "width": 594, "height": 546, "smoothMove": 1, "puzzleSepia": 1 },
+			"InGameConsole": { "maxInputPerLine": 60, "maxOutputPerLine": 60 },
+			"AdvMap": { "x": 7, "y": 7, "width": 594, "height": 546, "smoothMove": 1, "puzzleSepia": 1, "objectFading" : 1, "screenFading" : 1 },
 			"InfoBox": { "x": 605, "y": 389 },
 			"gem0": { "x": 6, "y": 508, "graphic": "agemLL.def" },
 			"gem1": { "x": 556, "y": 508, "graphic": "agemLR.def" },
 			"gem2": { "x": 6, "y": 6, "graphic": "agemUL.def" },
 			"gem3": { "x": 556, "y": 6, "graphic": "agemUR.def" },
 			"background": "AdvMap.bmp",
+			"backgroundWorldView": "VWorld.bmp",
 			"HeroList": { "size": 5, "x": 609, "y": 196, "movePoints": "IMOBIL.DEF", "manaPoints": "IMANA.DEF", "arrowUp": "IAM012.DEF", "arrowDown": "IAM013.DEF" },
 			"TownList": { "size": 5, "x": 747, "y": 196, "arrowUp": "IAM014.DEF", "arrowDown": "IAM015.DEF" },
 			"Minimap": { "width": 144, "height": 144, "x": 630, "y": 26 },

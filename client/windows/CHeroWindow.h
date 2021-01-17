@@ -1,9 +1,3 @@
-#pragma once
-
-#include "../../lib/HeroBonus.h"
-#include "../widgets/CArtifactHolder.h"
-#include "../widgets/CGarrisonInt.h"
-
 /*
  * CHeroWindow.h, part of VCMI engine
  *
@@ -13,11 +7,15 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "../../lib/HeroBonus.h"
+#include "../widgets/CArtifactHolder.h"
+#include "../widgets/CGarrisonInt.h"
 
 class CButton;
 struct SDL_Surface;
 class CGHeroInstance;
-class CDefHandler;
 class CArtifact;
 class CHeroWindow;
 class LClickableAreaHero;
@@ -35,13 +33,13 @@ class CHeroSwitcher : public CIntObject
 	const CGHeroInstance * hero;
 	CAnimImage *image;
 public:
-	virtual void clickLeft(tribool down, bool previousState);
+	virtual void clickLeft(tribool down, bool previousState) override;
 
 	CHeroSwitcher(Point pos, const CGHeroInstance * hero);
 };
 
 //helper class for calculating values of hero bonuses without bonuses from picked up artifact
-class CHeroWithMaybePickedArtifact : public IBonusBearer
+class CHeroWithMaybePickedArtifact : public virtual IBonusBearer
 {
 public:
 	const CGHeroInstance *hero;
@@ -49,6 +47,8 @@ public:
 
 	CHeroWithMaybePickedArtifact(CWindowWithArtifacts *Cww, const CGHeroInstance *Hero);
 	const TBonusListPtr getAllBonuses(const CSelector &selector, const CSelector &limit, const CBonusSystemNode *root = nullptr, const std::string &cachingStr = "") const override;
+
+	int64_t getTreeVersion() const override;
 };
 
 class CHeroWindow: public CWindowObject, public CWindowWithGarrison, public CWindowWithArtifacts
@@ -75,24 +75,24 @@ class CHeroWindow: public CWindowObject, public CWindowWithGarrison, public CWin
 	CHeroWithMaybePickedArtifact heroWArt;
 
 	CButton * quitButton, * dismissButton, * questlogButton, * commanderButton; //general
-		
+
 	CToggleButton *tacticsButton; //garrison / formation handling;
 	CToggleGroup *formations;
 
 public:
 	const CGHeroInstance * curHero;
 
-	CHeroWindow(const CGHeroInstance *hero); //c-tor
+	CHeroWindow(const CGHeroInstance *hero);
 
 	void update(const CGHeroInstance * hero, bool redrawNeeded = false); //sets main displayed hero
-	void showAll(SDL_Surface * to);
+	void showAll(SDL_Surface * to) override;
 
 	void dismissCurrent(); //dissmissed currently displayed hero (curHero)
-	void questlog(); //show quest log in hero window
 	void commanderWindow();
 	void switchHero(); //changes displayed hero
+	virtual void updateGarrisons() override;  //updates the morale widget and calls the parent
 
 	//friends
-	friend void CArtPlace::clickLeft(tribool down, bool previousState);
+	friend void CHeroArtPlace::clickLeft(tribool down, bool previousState);
 	friend class CPlayerInterface;
 };

@@ -1,12 +1,3 @@
-#pragma once
-
-#include "ConstTransitivePtr.h"
-#include "ResourceSet.h"
-#include "int3.h"
-#include "GameConstants.h"
-#include "IHandlerBase.h"
-#include "LogicalExpression.h"
-
 /*
  * CTownHandler.h, part of VCMI engine
  *
@@ -16,11 +7,21 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "ConstTransitivePtr.h"
+#include "ResourceSet.h"
+#include "int3.h"
+#include "GameConstants.h"
+#include "IHandlerBase.h"
+#include "LogicalExpression.h"
+#include "battle/BattleHex.h"
 
 class CLegacyConfigParser;
 class JsonNode;
 class CTown;
 class CFaction;
+struct BattleHex;
 
 /// a typical building encountered in every castle ;]
 /// this is structure available to both client and server
@@ -54,6 +55,8 @@ public:
 		BUILD_GRAIL    // 3 - grail - building reqires grail to be built
 	} mode;
 
+	CBuilding();
+
 	const std::string &Name() const;
 	const std::string &Description() const;
 
@@ -65,10 +68,25 @@ public:
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & identifier & town & bid & resources & produce & name & description & requirements & upgrade & mode;
+		h & identifier;
+		h & town;
+		h & bid;
+		h & resources;
+		h & produce;
+		h & name;
+		h & description;
+		h & requirements;
+		h & upgrade;
+		h & mode;
+		if(!h.saving)
+			deserializeFix();
 	}
 
 	friend class CTownHandler;
+
+private:
+
+	void deserializeFix();
 };
 
 /// This is structure used only by client
@@ -85,7 +103,14 @@ struct DLL_LINKAGE CStructure
 	bool hiddenUpgrade; // used only if "building" is upgrade, if true - structure on town screen will behave exactly like parent (mouse clicks, hover texts, etc)
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & pos & defName & borderName & areaName & identifier & building & buildable & hiddenUpgrade;
+		h & pos;
+		h & defName;
+		h & borderName;
+		h & areaName;
+		h & identifier;
+		h & building;
+		h & buildable;
+		h & hiddenUpgrade;
 	}
 };
 
@@ -98,7 +123,11 @@ struct DLL_LINKAGE SPuzzleInfo
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & number & x & y & whenUncovered & filename;
+		h & number;
+		h & x;
+		h & y;
+		h & whenUncovered;
+		h & filename;
 	}
 };
 
@@ -120,14 +149,22 @@ public:
 
 	std::string creatureBg120;
 	std::string creatureBg130;
-	
-	
+
+
 
 	std::vector<SPuzzleInfo> puzzleMap;
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & name & identifier & index & nativeTerrain & alignment & town & creatureBg120 & creatureBg130 & puzzleMap;
+		h & name;
+		h & identifier;
+		h & index;
+		h & nativeTerrain;
+		h & alignment;
+		h & town;
+		h & creatureBg120;
+		h & creatureBg130;
+		h & puzzleMap;
 	}
 };
 
@@ -136,9 +173,15 @@ class DLL_LINKAGE CTown
 public:
 	CTown();
 	~CTown();
+	// TODO: remove once save and mod compatability not needed
+	static std::vector<BattleHex> defaultMoatHexes();
+
+	std::string getFactionName() const;
+	std::string getBuildingScope() const;
+	std::set<si32> getAllBuildings() const;
 
 	CFaction * faction;
-	
+
 	std::vector<std::string> names; //names of the town instances
 
 	/// level -> list of creatures on this tier
@@ -156,6 +199,7 @@ public:
 	ui16 primaryRes;
 	ArtifactID warMachine;
 	si32 moatDamage;
+	std::vector<BattleHex> moatHexes;
 	// default chance for hero of specific class to appear in tavern, if field "tavern" was not set
 	// resulting chance = sqrt(town.chance * heroClass.chance)
 	ui32 defaultTavernChance;
@@ -169,7 +213,10 @@ public:
 			si32 y;
 
 			template <typename Handler> void serialize(Handler &h, const int version)
-			{ h & x & y; }
+			{
+				h & x;
+				h & y;
+			}
 		};
 
 		//icons [fort is present?][build limit reached?] -> index of icon in def files
@@ -196,26 +243,47 @@ public:
 
 		template <typename Handler> void serialize(Handler &h, const int version)
 		{
-			h & icons & iconSmall & iconLarge & tavernVideo & musicTheme & townBackground & guildBackground & guildWindow & buildingsIcons & hallBackground;
-			h & hallSlots & structures;
-			h & siegePrefix & siegePositions & siegeShooter;
+			h & icons;
+			h & iconSmall;
+			h & iconLarge;
+			h & tavernVideo;
+			h & musicTheme;
+			h & townBackground;
+			h & guildBackground;
+			h & guildWindow;
+			h & buildingsIcons;
+			h & hallBackground;
+			h & hallSlots;
+			h & structures;
+			h & siegePrefix;
+			h & siegePositions;
+			h & siegeShooter;
 		}
 	} clientInfo;
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & names & faction & creatures & dwellings & dwellingNames & buildings & hordeLvl & mageLevel
-			& primaryRes & warMachine & clientInfo & moatDamage & defaultTavernChance;
-
-		auto findNull = [](const std::pair<BuildingID, ConstTransitivePtr<CBuilding>> &building)
-		{ return building.second == nullptr; };
-
-		//Fix #1444 corrupted save
-		while(auto badElem = vstd::tryFindIf(buildings, findNull))
+		h & names;
+		h & faction;
+		h & creatures;
+		h & dwellings;
+		h & dwellingNames;
+		h & buildings;
+		h & hordeLvl;
+		h & mageLevel;
+		h & primaryRes;
+		h & warMachine;
+		h & clientInfo;
+		h & moatDamage;
+		if(version >= 758)
 		{
-			logGlobal->errorStream() << "#1444-like bug encountered in CTown::serialize, fixing buildings list by removing bogus entry " << badElem->first << " from " << faction->name;
-			buildings.erase(badElem->first);
+			h & moatHexes;
 		}
+		else if(!h.saving)
+		{
+			moatHexes = defaultMoatHexes();
+		}
+		h & defaultTavernChance;
 	}
 };
 
@@ -225,16 +293,16 @@ class DLL_LINKAGE CTownHandler : public IHandlerBase
 	{
 		JsonNode json;
 		CBuilding * building;
-		CFaction * faction;
+		CTown * town;
 	};
 
 	std::vector<BuildingRequirementsHelper> requirementsToLoad;
 	void initializeRequirements();
 
 	/// loads CBuilding's into town
-	void loadBuildingRequirements(CTown &town, CBuilding & building, const JsonNode & source);
-	void loadBuilding(CTown &town, const std::string & stringID, const JsonNode & source);
-	void loadBuildings(CTown &town, const JsonNode & source);
+	void loadBuildingRequirements(CBuilding * building, const JsonNode & source);
+	void loadBuilding(CTown * town, const std::string & stringID, const JsonNode & source);
+	void loadBuildings(CTown * town, const JsonNode & source);
 
 	/// loads CStructure's into town
 	void loadStructure(CTown &town, const std::string & stringID, const JsonNode & source);
@@ -250,10 +318,13 @@ class DLL_LINKAGE CTownHandler : public IHandlerBase
 
 	void loadPuzzle(CFaction & faction, const JsonNode & source);
 
-	CFaction * loadFromJson(const JsonNode & data, std::string identifier);
+	CFaction * loadFromJson(const JsonNode & data, const std::string & identifier);
 
+	void loadRandomFaction();
 public:
 	std::vector<ConstTransitivePtr<CFaction> > factions;
+
+	CTown * randomTown;
 
 	CTownHandler(); //c-tor, set pointer in VLC to this
 	~CTownHandler();
@@ -263,13 +334,29 @@ public:
 	void loadObject(std::string scope, std::string name, const JsonNode & data) override;
 	void loadObject(std::string scope, std::string name, const JsonNode & data, size_t index) override;
 
+	void loadCustom() override;
 	void afterLoadFinalization() override;
 
 	std::vector<bool> getDefaultAllowed() const override;
 	std::set<TFaction> getAllowedFactions(bool withTown = true) const;
 
+	//json serialization helper
+	static si32 decodeFaction(const std::string & identifier);
+
+	//json serialization helper
+	static std::string encodeFaction(const si32 index);
+
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
 		h & factions;
+
+		if(version >= 770)
+		{
+			h & randomTown;
+		}
+		else if(!h.saving)
+		{
+			loadRandomFaction();
+		}
 	}
 };

@@ -1,3 +1,12 @@
+/*
+ * AdapterLoaders.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "AdapterLoaders.h"
 
@@ -8,7 +17,8 @@ CMappedFileLoader::CMappedFileLoader(const std::string & mountPoint, const JsonN
 {
 	for(auto entry : config.Struct())
 	{
-		fileList[ResourceID(mountPoint + entry.first)] = ResourceID(mountPoint + entry.second.String());
+		//fileList[ResourceID(mountPoint + entry.first)] = ResourceID(mountPoint + entry.second.String());
+		fileList.emplace(ResourceID(mountPoint + entry.first), ResourceID(mountPoint + entry.second.String()));
 	}
 }
 
@@ -27,7 +37,7 @@ std::string CMappedFileLoader::getMountPoint() const
 	return ""; // does not have any meaning with this type of data source
 }
 
-boost::optional<std::string> CMappedFileLoader::getResourceName(const ResourceID & resourceName) const
+boost::optional<boost::filesystem::path> CMappedFileLoader::getResourceName(const ResourceID & resourceName) const
 {
 	return CResourceHandler::get()->getResourceName(fileList.at(resourceName));
 }
@@ -80,11 +90,31 @@ std::string CFilesystemList::getMountPoint() const
 	return "";
 }
 
-boost::optional<std::string> CFilesystemList::getResourceName(const ResourceID & resourceName) const
+boost::optional<boost::filesystem::path> CFilesystemList::getResourceName(const ResourceID & resourceName) const
 {
 	if (existsResource(resourceName))
 		return getResourcesWithName(resourceName).back()->getResourceName(resourceName);
-	return boost::optional<std::string>();
+	return boost::optional<boost::filesystem::path>();
+}
+
+std::set<boost::filesystem::path> CFilesystemList::getResourceNames(const ResourceID & resourceName) const
+{
+	std::set<boost::filesystem::path> paths;
+	for(auto& loader : getResourcesWithName(resourceName))
+	{
+		auto rn = loader->getResourceName(resourceName);
+		if(rn)
+		{
+			paths.insert(rn->string());
+		}
+	}
+	return std::move(paths);
+}
+
+void CFilesystemList::updateFilteredFiles(std::function<bool(const std::string &)> filter) const
+{
+	for (auto & loader : loaders)
+		loader->updateFilteredFiles(filter);
 }
 
 std::unordered_set<ResourceID> CFilesystemList::getFilteredFiles(std::function<bool(const ResourceID &)> filter) const
@@ -100,7 +130,7 @@ std::unordered_set<ResourceID> CFilesystemList::getFilteredFiles(std::function<b
 
 bool CFilesystemList::createResource(std::string filename, bool update)
 {
-	logGlobal->traceStream()<< "Creating " << filename;
+	logGlobal->trace("Creating %s", filename);
 	for (auto & loader : boost::adaptors::reverse(loaders))
 	{
 		if (writeableLoaders.count(loader.get()) != 0                       // writeable,
@@ -111,11 +141,11 @@ bool CFilesystemList::createResource(std::string filename, bool update)
 			// b) in update mode, call with filename that does not exists
 			assert(load(ResourceID(filename)));
 
-			logGlobal->traceStream()<< "Resource created successfully";
+			logGlobal->trace("Resource created successfully");
 			return true;
 		}
 	}
-	logGlobal->traceStream()<< "Failed to create resource";
+	logGlobal->trace("Failed to create resource");
 	return false;
 }
 

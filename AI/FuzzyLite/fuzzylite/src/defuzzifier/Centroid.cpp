@@ -1,71 +1,60 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/defuzzifier/Centroid.h"
 
-#include "fl/term/Accumulated.h"
 #include "fl/term/Term.h"
-
 
 namespace fl {
 
-    Centroid::Centroid(int divisions)
-    : IntegralDefuzzifier(divisions) {
-    }
+    Centroid::Centroid(int resolution)
+    : IntegralDefuzzifier(resolution) { }
 
-    Centroid::~Centroid() {
-
-    }
+    Centroid::~Centroid() { }
 
     std::string Centroid::className() const {
         return "Centroid";
     }
 
+    Complexity Centroid::complexity(const Term* term) const {
+        return Complexity().comparison(1).arithmetic(1 + 2 + 1) +
+                term->complexity().arithmetic(6).multiply(getResolution());
+    }
+
     scalar Centroid::defuzzify(const Term* term, scalar minimum, scalar maximum) const {
-        if (not fl::Op::isFinite(minimum + maximum)) {
-            return fl::nan;
-        }
-        if (maximum - minimum > _resolution) {
-            FL_DBG("[accuracy warning] the resolution <" << _resolution << "> "
-                    "is smaller than the range <" << minimum << ", " << maximum << ">. In order to "
-                    "improve the accuracy, the resolution should be at least equal to the range.");
-        }
-        scalar dx = (maximum - minimum) / _resolution;
+        if (not Op::isFinite(minimum + maximum)) return fl::nan;
+
+        const int resolution = getResolution();
+        const scalar dx = (maximum - minimum) / resolution;
         scalar x, y;
-        scalar area = 0, xcentroid = 0, ycentroid = 0;
-        for (int i = 0; i < _resolution; ++i) {
+        scalar area = 0, xcentroid = 0;
+        //scalar ycentroid = 0;
+        for (int i = 0; i < resolution; ++i) {
             x = minimum + (i + 0.5) * dx;
             y = term->membership(x);
 
             xcentroid += y * x;
-            ycentroid += y * y;
+            //ycentroid += y * y;
             area += y;
         }
-        xcentroid /= area;
-        ycentroid /= 2 * area;
-        area *= dx; //total area... unused, but for future reference.
-        return xcentroid;
+        //Final results not computed for efficiency
+        //xcentroid /= area;
+        //ycentroid /= 2 * area;
+        //area *= dx;
+        return xcentroid / area;
     }
 
     Centroid* Centroid::clone() const {
@@ -75,6 +64,5 @@ namespace fl {
     Defuzzifier* Centroid::constructor() {
         return new Centroid;
     }
-
 
 }

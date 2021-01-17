@@ -1,13 +1,3 @@
-#include "StdInc.h"
-#include "AIUtility.h"
-#include "VCAI.h"
-#include "Fuzzy.h"
-
-#include "../../lib/UnlockGuard.h"
-#include "../../lib/CConfigHandler.h"
-#include "../../lib/CHeroHandler.h"
-#include "../../lib/mapObjects/CBank.h"
-
 /*
  * AIUtility.cpp, part of VCMI engine
  *
@@ -17,6 +7,19 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "AIUtility.h"
+#include "VCAI.h"
+#include "Fuzzy.h"
+
+#include "../../lib/UnlockGuard.h"
+#include "../../lib/CConfigHandler.h"
+#include "../../lib/CHeroHandler.h"
+#include "../../lib/mapObjects/CBank.h"
+#include "../../lib/mapObjects/CGTownInstance.h"
+#include "../../lib/mapObjects/CQuest.h"
+#include "../../lib/CPathfinder.h"
+#include "../../lib/mapping/CMapDefines.h"
 
 extern boost::thread_specific_ptr<CCallback> cb;
 extern boost::thread_specific_ptr<VCAI> ai;
@@ -82,7 +85,7 @@ bool HeroPtr::operator<(const HeroPtr &rhs) const
 	return hid < rhs.hid;
 }
 
-const CGHeroInstance * HeroPtr::get(bool doWeExpectNull /*= false*/) const
+const CGHeroInstance * HeroPtr::get(bool doWeExpectNull) const
 {
 	//TODO? check if these all assertions every time we get info about hero affect efficiency
 	//
@@ -150,7 +153,7 @@ void foreach_neighbour(const int3 &pos, std::function<void(const int3& pos)> foo
 {
 	CCallback * cbp = cb.get(); // avoid costly retrieval of thread-specific pointer
 
-	for(const int3 &dir : dirs)
+	for(const int3 &dir : int3::getDirs())
 	{
 		const int3 n = pos + dir;
 		if(cbp->isInTheMap(n))
@@ -160,19 +163,12 @@ void foreach_neighbour(const int3 &pos, std::function<void(const int3& pos)> foo
 
 void foreach_neighbour(CCallback * cbp, const int3 &pos, std::function<void(CCallback * cbp, const int3& pos)> foo)
 {
-	for(const int3 &dir : dirs)
+	for(const int3 &dir : int3::getDirs())
 	{
 		const int3 n = pos + dir;
 		if(cbp->isInTheMap(n))
 			foo(cbp, pos+dir);
 	}
-}
-
-std::string strFromInt3(int3 pos)
-{
-	std::ostringstream oss;
-	oss << pos;
-	return oss.str();
 }
 
 bool CDistanceSorter::operator ()(const CGObjectInstance *lhs, const CGObjectInstance *rhs)
@@ -234,8 +230,11 @@ ui64 evaluateDanger(crint3 tile, const CGHeroInstance *visitor)
 		{
 			//TODO: don't downcast objects AI shouldn't know about!
 			auto armedObj = dynamic_cast<const CArmedInstance*>(dangerousObject);
-			if(armedObj)
-				objectDanger *= fh->getTacticalAdvantage(visitor, armedObj); //this line tends to go infinite for allied towns (?)
+			if (armedObj)
+			{
+				float tacticalAdvantage = fh->getTacticalAdvantage(visitor, armedObj);
+				objectDanger *= tacticalAdvantage; //this line tends to go infinite for allied towns (?)
+			}
 		}
 		if (dangerousObject->ID == Obj::SUBTERRANEAN_GATE)
 		{ //check guard on the other side of the gate
@@ -290,6 +289,7 @@ ui64 evaluateDanger(const CGObjectInstance *obj)
 			return cre->getArmyStrength();
 		}
 	case Obj::CREATURE_GENERATOR1:
+	case Obj::CREATURE_GENERATOR4:
 		{
 			const CGDwelling *d = dynamic_cast<const CGDwelling*>(obj);
 			return d->getArmyStrength();
@@ -332,7 +332,7 @@ bool isSafeToVisit(HeroPtr h, crint3 tile)
 	{
 		if(heroStrength / SAFE_ATTACK_CONSTANT > dangerStrength)
 		{
-            logAi->traceStream() << boost::format("It's safe for %s to visit tile %s") % h->name % tile;
+			logAi->trace("It's safe for %s to visit tile %s", h->name, tile.toString());
 			return true;
 		}
 		else
@@ -353,8 +353,10 @@ bool canBeEmbarkmentPoint(const TerrainTile *t, bool fromWater)
 int3 whereToExplore(HeroPtr h)
 {
 	TimeCheck tc ("where to explore");
-	int radius = h->getSightRadious();
+	int radius = h->getSightRadius();
 	int3 hpos = h->visitablePos();
+
+	auto sm = ai->getCachedSectorMap(h);
 
 	//look for nearby objs -> visit them if they're close enouh
 	const int DIST_LIMIT = 3;
@@ -367,9 +369,9 @@ int3 whereToExplore(HeroPtr h)
 			{
 				int3 op = obj->visitablePos();
 				CGPath p;
-				ai->myCb->getPathsInfo(h.get())->getPath(op, p);
+				ai->myCb->getPathsInfo(h.get())->getPath(p, op);
 				if (p.nodes.size() && p.endPos() == op && p.nodes.size() <= DIST_LIMIT)
-					if (ai->isGoodForVisit(obj, h))
+					if (ai->isGoodForVisit(obj, h, *sm))
 						nearbyVisitableObjs.push_back(obj);
 			}
 		}
@@ -390,10 +392,18 @@ int3 whereToExplore(HeroPtr h)
 	}
 }
 
-bool isBlockedBorderGate(int3 tileToHit)
+bool isBlockedBorderGate(int3 tileToHit) //TODO: is that function needed? should be handled by pathfinder
 {
     return cb->getTile(tileToHit)->topVisitableId() == Obj::BORDER_GATE &&
 	       (dynamic_cast <const CGKeys *>(cb->getTile(tileToHit)->visitableObjects.back()))->wasMyColorVisited (ai->playerID);
+}
+bool isBlockVisitObj(const int3 &pos)
+{
+	if (auto obj = cb->getTopObj(pos))
+		if (obj->blockVisit) //we can't stand on that object
+			return true;
+
+	return false;
 }
 
 int howManyTilesWillBeDiscovered(const int3 &pos, int radious, CCallback * cbp)
@@ -427,7 +437,7 @@ bool boundaryBetweenTwoPoints (int3 pos1, int3 pos2, CCallback * cbp) //determin
 		for (int y = yMin; y <= yMax; ++y)
 		{
 			int3 tile = int3(x, y, pos1.z); //use only on same level, ofc
-			if (abs(pos1.dist2d(tile) - pos2.dist2d(tile)) < 1.5)
+			if (std::abs(pos1.dist2d(tile) - pos2.dist2d(tile)) < 1.5)
 			{
 				if (!(cbp->isVisible(tile) && cbp->getTile(tile)->blocked)) //if there's invisible or unblocked tile between, it's good
 					return false;
@@ -493,4 +503,17 @@ bool compareHeroStrength(HeroPtr h1, HeroPtr h2)
 bool compareArmyStrength(const CArmedInstance *a1, const CArmedInstance *a2)
 {
 	return a1->getArmyStrength() < a2->getArmyStrength();
+}
+
+bool compareArtifacts(const CArtifactInstance *a1, const CArtifactInstance *a2)
+{
+	auto art1 = a1->artType;
+	auto art2 = a2->artType;
+
+	if(art1->price == art2->price)
+		return art1->valOfBonuses(Bonus::PRIMARY_SKILL) > art2->valOfBonuses(Bonus::PRIMARY_SKILL);
+	else if(art1->price > art2->price)
+		return true;
+	else
+		return false;
 }

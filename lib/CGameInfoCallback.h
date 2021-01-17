@@ -1,8 +1,3 @@
-#pragma once
-
-#include "ResourceSet.h" // for Res::ERes
-#include "CBattleCallback.h" //for CCallbackBase
-
 /*
  * CGameInfoCallback.h, part of VCMI engine
  *
@@ -12,6 +7,11 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "int3.h"
+#include "ResourceSet.h" // for Res::ERes
+#include "battle/CPlayerBattleCallback.h"
 
 class CGObjectInstance;
 struct InfoWindow;
@@ -25,15 +25,19 @@ struct InfoAboutTown;
 struct UpgradeInfo;
 struct SThievesGuildInfo;
 class CGDwelling;
+class CGTeleport;
 class CMapHeader;
 struct TeamState;
 struct QuestInfo;
-class int3;
+struct ShashInt3;
+class CGameState;
 
 
 class DLL_LINKAGE CGameInfoCallback : public virtual CCallbackBase
 {
 protected:
+	CGameState * gs;
+
 	CGameInfoCallback();
 	CGameInfoCallback(CGameState *GS, boost::optional<PlayerColor> Player);
 	bool hasAccess(boost::optional<PlayerColor> playerId) const;
@@ -69,9 +73,9 @@ public:
 	const CGHeroInstance* getHero(ObjectInstanceID objid) const;
 	const CGHeroInstance* getHeroWithSubid(int subid) const;
 	int getHeroCount(PlayerColor player, bool includeGarrisoned) const;
-	bool getHeroInfo(const CGObjectInstance *hero, InfoAboutHero &dest) const;
+	bool getHeroInfo(const CGObjectInstance * hero, InfoAboutHero & dest, const CGObjectInstance * selectedObject = nullptr) const;
 	int getSpellCost(const CSpell * sp, const CGHeroInstance * caster) const; //when called during battle, takes into account creatures' spell cost reduction
-	int estimateSpellDamage(const CSpell * sp, const CGHeroInstance * hero) const; //estimates damage of given spell; returns 0 if spell causes no dmg
+	int64_t estimateSpellDamage(const CSpell * sp, const CGHeroInstance * hero) const; //estimates damage of given spell; returns 0 if spell causes no dmg
 	const CArtifactInstance * getArtInstance(ArtifactInstanceID aid) const;
 	const CGObjectInstance * getObjInstance(ObjectInstanceID oid) const;
 
@@ -90,22 +94,34 @@ public:
 	const CMapHeader * getMapHeader()const;
 	int3 getMapSize() const; //returns size of map - z is 1 for one - level map and 2 for two level map
 	const TerrainTile * getTile(int3 tile, bool verbose = true) const;
+	std::shared_ptr<boost::multi_array<TerrainTile*, 3>> getAllVisibleTiles() const;
 	bool isInTheMap(const int3 &pos) const;
+	void getVisibleTilesInRange(std::unordered_set<int3, ShashInt3> &tiles, int3 pos, int radious, int3::EDistanceFormula distanceFormula = int3::DIST_2D) const;
 
 	//town
 	const CGTownInstance* getTown(ObjectInstanceID objid) const;
 	int howManyTowns(PlayerColor Player) const;
 	const CGTownInstance * getTownInfo(int val, bool mode)const; //mode = 0 -> val = player town serial; mode = 1 -> val = object id (serial)
 	std::vector<const CGHeroInstance *> getAvailableHeroes(const CGObjectInstance * townOrTavern) const; //heroes that can be recruited
-	std::string getTavernGossip(const CGObjectInstance * townOrTavern) const; 
+	std::string getTavernRumor(const CGObjectInstance * townOrTavern) const;
 	EBuildingState::EBuildingState canBuildStructure(const CGTownInstance *t, BuildingID ID);//// 0 - no more than one capitol, 1 - lack of water, 2 - forbidden, 3 - Add another level to Mage Guild, 4 - already built, 5 - cannot build, 6 - cannot afford, 7 - build, 8 - lack of requirements
-	virtual bool getTownInfo(const CGObjectInstance *town, InfoAboutTown &dest) const;
+	virtual bool getTownInfo(const CGObjectInstance * town, InfoAboutTown & dest, const CGObjectInstance * selectedObject = nullptr) const;
 	const CTown *getNativeTown(PlayerColor color) const;
 
 	//from gs
 	const TeamState *getTeam(TeamID teamID) const;
 	const TeamState *getPlayerTeam(PlayerColor color) const;
 	EBuildingState::EBuildingState canBuildStructure(const CGTownInstance *t, BuildingID ID) const;// 0 - no more than one capitol, 1 - lack of water, 2 - forbidden, 3 - Add another level to Mage Guild, 4 - already built, 5 - cannot build, 6 - cannot afford, 7 - build, 8 - lack of requirements
+
+	//teleport
+	std::vector<ObjectInstanceID> getVisibleTeleportObjects(std::vector<ObjectInstanceID> ids, PlayerColor player)  const;
+	std::vector<ObjectInstanceID> getTeleportChannelEntraces(TeleportChannelID id, PlayerColor Player = PlayerColor::UNFLAGGABLE) const;
+	std::vector<ObjectInstanceID> getTeleportChannelExits(TeleportChannelID id, PlayerColor Player = PlayerColor::UNFLAGGABLE) const;
+	ETeleportChannelType getTeleportChannelType(TeleportChannelID id, PlayerColor player = PlayerColor::UNFLAGGABLE) const;
+	bool isTeleportChannelImpassable(TeleportChannelID id, PlayerColor player = PlayerColor::UNFLAGGABLE) const;
+	bool isTeleportChannelBidirectional(TeleportChannelID id, PlayerColor player = PlayerColor::UNFLAGGABLE) const;
+	bool isTeleportChannelUnidirectional(TeleportChannelID id, PlayerColor player = PlayerColor::UNFLAGGABLE) const;
+	bool isTeleportEntrancePassable(const CGTeleport * obj, PlayerColor player) const;
 };
 
 class DLL_LINKAGE CPlayerSpecificInfoCallback : public CGameInfoCallback
@@ -113,7 +129,7 @@ class DLL_LINKAGE CPlayerSpecificInfoCallback : public CGameInfoCallback
 public:
 	int howManyTowns() const;
 	int howManyHeroes(bool includeGarrisoned = true) const;
-	int3 getGrailPos(double &outKnownRatio);
+	int3 getGrailPos(double *outKnownRatio);
 	boost::optional<PlayerColor> getMyColor() const;
 
 	std::vector <const CGTownInstance *> getTownsInfo(bool onlyOur = true) const; //true -> only owned; false -> all visible
@@ -127,7 +143,7 @@ public:
 
 	int getResourceAmount(Res::ERes type) const;
 	TResources getResourceAmount() const;
-	const std::vector< std::vector< std::vector<ui8> > > & getVisibilityMap()const; //returns visibility map 
+	const std::vector< std::vector< std::vector<ui8> > > & getVisibilityMap()const; //returns visibility map
 	const PlayerSettings * getPlayerSettings(PlayerColor color) const;
 };
 
@@ -142,4 +158,3 @@ public:
 
 	virtual void showInfoDialog(const std::string &msg, PlayerColor player);
 };
-

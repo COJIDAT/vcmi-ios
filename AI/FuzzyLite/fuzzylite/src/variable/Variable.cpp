@@ -1,45 +1,34 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/variable/Variable.h"
 
-#include "fl/defuzzifier/Centroid.h"
 #include "fl/imex/FllExporter.h"
 #include "fl/norm/Norm.h"
 #include "fl/term/Constant.h"
 #include "fl/term/Linear.h"
-#include "fl/term/Term.h"
 
-#include <algorithm>
-#include <map>
-#include <sstream>
+#include <queue>
 
 namespace fl {
 
     Variable::Variable(const std::string& name, scalar minimum, scalar maximum)
-    : _name(name), _minimum(minimum), _maximum(maximum), _enabled(true) {
-    }
+    : _name(name), _description(""),
+    _value(fl::nan), _minimum(minimum), _maximum(maximum),
+    _enabled(true), _lockValueInRange(false) { }
 
     Variable::Variable(const Variable& other) {
         copyFrom(other);
@@ -58,9 +47,12 @@ namespace fl {
 
     void Variable::copyFrom(const Variable& other) {
         _name = other._name;
-        _enabled = other._enabled;
+        _description = other._description;
+        _value = other._value;
         _minimum = other._minimum;
         _maximum = other._maximum;
+        _enabled = other._enabled;
+        _lockValueInRange = other._lockValueInRange;
         for (std::size_t i = 0; i < other._terms.size(); ++i) {
             _terms.push_back(other._terms.at(i)->clone());
         }
@@ -80,13 +72,31 @@ namespace fl {
         return this->_name;
     }
 
+    void Variable::setDescription(const std::string& description) {
+        this->_description = description;
+    }
+
+    std::string Variable::getDescription() const {
+        return this->_description;
+    }
+
+    void Variable::setValue(scalar value) {
+        this->_value = _lockValueInRange
+                ? Op::bound(value, _minimum, _maximum)
+                : value;
+    }
+
+    scalar Variable::getValue() const {
+        return this->_value;
+    }
+
     void Variable::setRange(scalar minimum, scalar maximum) {
         setMinimum(minimum);
         setMaximum(maximum);
     }
 
     scalar Variable::range() const {
-        return this->_maximum - this->_minimum;
+        return getMaximum() - getMinimum();
     }
 
     void Variable::setMinimum(scalar minimum) {
@@ -113,41 +123,65 @@ namespace fl {
         return this->_enabled;
     }
 
+    void Variable::setLockValueInRange(bool lockValueInRange) {
+        this->_lockValueInRange = lockValueInRange;
+    }
+
+    bool Variable::isLockValueInRange() const {
+        return this->_lockValueInRange;
+    }
+
+    Variable::Type Variable::type() const {
+        return None;
+    }
+
+    Complexity Variable::complexity() const {
+        Complexity result;
+        if (isEnabled()) {
+            for (std::size_t i = 0; i < _terms.size(); ++i) {
+                result += _terms.at(i)->complexity();
+            }
+        }
+        return result;
+    }
+
     std::string Variable::fuzzify(scalar x) const {
         std::ostringstream ss;
-        for (std::size_t i = 0; i < _terms.size(); ++i) {
+        for (std::size_t i = 0; i < terms().size(); ++i) {
+            Term* term = _terms.at(i);
             scalar fx = fl::nan;
             try {
-                fx = _terms.at(i)->membership(x);
+                fx = term->membership(x);
             } catch (...) {
                 //ignore
             }
             if (i == 0) {
-                ss << fl::Op::str(fx);
+                ss << Op::str(fx);
             } else {
-                if (fl::Op::isNaN(fx) or fl::Op::isGE(fx, 0.0))
-                    ss << " + " << fl::Op::str(fx);
+                if (Op::isNaN(fx) or Op::isGE(fx, 0.0))
+                    ss << " + " << Op::str(fx);
                 else
-                    ss << " - " << fl::Op::str(std::fabs(fx));
+                    ss << " - " << Op::str(std::abs(fx));
             }
-            ss << "/" << _terms.at(i)->getName();
+            ss << "/" << term->getName();
         }
         return ss.str();
     }
 
-    Term* Variable::highestMembership(scalar x, scalar* yhighest = NULL) const {
-        Term* result = NULL;
+    Term* Variable::highestMembership(scalar x, scalar* yhighest) const {
+        Term* result = fl::null;
         scalar ymax = 0.0;
         for (std::size_t i = 0; i < _terms.size(); ++i) {
             scalar y = fl::nan;
+            Term* term = _terms.at(i);
             try {
-                y = _terms.at(i)->membership(x);
+                y = term->membership(x);
             } catch (...) {
                 //ignore
             }
-            if (fl::Op::isGt(y, ymax)) {
+            if (Op::isGt(y, ymax)) {
                 ymax = y;
-                result = _terms.at(i);
+                result = term;
             }
         }
         if (yhighest) *yhighest = ymax;
@@ -162,70 +196,83 @@ namespace fl {
      * Operations for datatype _terms
      */
 
-    struct SortByCoG {
-        std::map<const Term*, scalar> centroids;
+    typedef std::pair<Term*, scalar> TermCentroid;
 
-        bool operator()(const Term* a, const Term * b) {
-            return fl::Op::isLt(
-                    centroids.find(a)->second,
-                    centroids.find(b)->second);
+    struct Ascending {
+
+        bool operator()(const TermCentroid& a, const TermCentroid& b) const {
+            return a.second > b.second;
         }
     };
 
     void Variable::sort() {
-        std::map<const Term*, scalar> centroids;
+        std::priority_queue <TermCentroid, std::vector<TermCentroid>, Ascending> termCentroids;
         Centroid defuzzifier;
+        FL_DBG("Sorting...");
         for (std::size_t i = 0; i < _terms.size(); ++i) {
             Term* term = _terms.at(i);
+            scalar centroid = fl::inf;
             try {
                 if (dynamic_cast<const Constant*> (term) or dynamic_cast<const Linear*> (term)) {
-                    centroids[term] = term->membership(0);
+                    centroid = term->membership(0);
                 } else {
-                    centroids[term] = defuzzifier.defuzzify(term, _minimum, _maximum);
+                    centroid = defuzzifier.defuzzify(term, getMinimum(), getMaximum());
                 }
             } catch (...) { //ignore error possibly due to Function not loaded
-                centroids[term] = fl::inf;
+                centroid = fl::inf;
             }
+            termCentroids.push(TermCentroid(term, centroid));
+            FL_DBG(term->toString() << " -> " << centroid)
         }
-        SortByCoG criterion;
-        criterion.centroids = centroids;
-        std::sort(_terms.begin(), _terms.end(), criterion);
+
+        std::vector<Term*> sortedTerms;
+        while (termCentroids.size() > 0) {
+            sortedTerms.push_back(termCentroids.top().first);
+            FL_DBG(termCentroids.top().first->toString() << " -> " << termCentroids.top().second);
+            termCentroids.pop();
+        }
+        setTerms(sortedTerms);
     }
 
     void Variable::addTerm(Term* term) {
-        this->_terms.push_back(term);
+        _terms.push_back(term);
     }
 
-    void Variable::insertTerm(Term* term, int index) {
-        this->_terms.insert(this->_terms.begin() + index, term);
+    void Variable::insertTerm(Term* term, std::size_t index) {
+        _terms.insert(_terms.begin() + index, term);
     }
 
-    Term* Variable::getTerm(int index) const {
-        return this->_terms.at(index);
+    Term* Variable::getTerm(std::size_t index) const {
+        return _terms.at(index);
     }
 
     Term* Variable::getTerm(const std::string& name) const {
-        for (std::size_t i = 0; i < _terms.size(); ++i) {
+        for (std::size_t i = 0; i < terms().size(); ++i) {
             if (_terms.at(i)->getName() == name) {
-                return _terms.at(i);
+                return terms().at(i);
             }
         }
-        throw fl::Exception("[variable error] term <" + name + "> "
-                "not found in variable <" + this->_name + ">", FL_AT);
+        throw Exception("[variable error] term <" + name + "> "
+                "not found in variable <" + getName() + ">", FL_AT);
     }
 
     bool Variable::hasTerm(const std::string& name) const {
-        return getTerm(name) != NULL;
+        for (std::size_t i = 0; i < _terms.size(); ++i) {
+            if (_terms.at(i)->getName() == name) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    Term* Variable::removeTerm(int index) {
-        Term* result = this->_terms.at(index);
-        this->_terms.erase(this->_terms.begin() + index);
+    Term* Variable::removeTerm(std::size_t index) {
+        Term* result = _terms.at(index);
+        _terms.erase(_terms.begin() + index);
         return result;
     }
 
-    int Variable::numberOfTerms() const {
-        return this->_terms.size();
+    std::size_t Variable::numberOfTerms() const {
+        return _terms.size();
     }
 
     const std::vector<Term*>& Variable::terms() const {
@@ -238,6 +285,10 @@ namespace fl {
 
     std::vector<Term*>& Variable::terms() {
         return this->_terms;
+    }
+
+    Variable* Variable::clone() const {
+        return new Variable(*this);
     }
 
 }

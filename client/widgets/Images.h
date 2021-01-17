@@ -1,3 +1,12 @@
+/*
+ * Images.h, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #pragma once
 
 #include "../gui/CIntObject.h"
@@ -8,28 +17,17 @@ struct Rect;
 class CAnimImage;
 class CLabel;
 class CAnimation;
-class CDefHandler;
-
-/*
- * Images.h, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
 
 // Image class
 class CPicture : public CIntObject
 {
 	void setSurface(SDL_Surface *to);
-public: 
+public:
 	SDL_Surface * bg;
 	Rect * srcRect; //if nullptr then whole surface will be used
 	bool freeSurf; //whether surface will be freed upon CPicture destruction
 	bool needRefresh;//Surface needs to be displayed each frame
-
+	bool visible;
 	operator SDL_Surface*()
 	{
 		return bg;
@@ -49,8 +47,8 @@ public:
 
 	void scaleTo(Point size);
 	void createSimpleRect(const Rect &r, bool screenFormat, ui32 color);
-	void show(SDL_Surface * to);
-	void showAll(SDL_Surface * to);
+	void show(SDL_Surface * to) override;
+	void showAll(SDL_Surface * to) override;
 	void convertToScreenBPP();
 	void colorizeAndConvert(PlayerColor player);
 	void colorize(PlayerColor player);
@@ -64,14 +62,14 @@ class CFilledTexture : CIntObject
 public:
 	CFilledTexture(std::string imageName, Rect position);
 	~CFilledTexture();
-	void showAll(SDL_Surface *to);
+	void showAll(SDL_Surface *to) override;
 };
 
 /// Class for displaying one image from animation
 class CAnimImage: public CIntObject
 {
 private:
-	CAnimation* anim;
+	std::shared_ptr<CAnimation> anim;
 	//displayed frame/group
 	size_t frame;
 	size_t group;
@@ -81,9 +79,11 @@ private:
 	void init();
 
 public:
-	CAnimImage(std::string name, size_t Frame, size_t Group=0, int x=0, int y=0, ui8 Flags=0);
-	CAnimImage(CAnimation* anim, size_t Frame, size_t Group=0, int x=0, int y=0, ui8 Flags=0);
-	~CAnimImage();//d-tor
+	bool visible;
+
+	CAnimImage(const std::string & name, size_t Frame, size_t Group=0, int x=0, int y=0, ui8 Flags=0);
+	CAnimImage(std::shared_ptr<CAnimation> Anim, size_t Frame, size_t Group=0, int x=0, int y=0, ui8 Flags=0);
+	~CAnimImage();
 
 	//size of animation
 	size_t size();
@@ -94,7 +94,7 @@ public:
 	//makes image player-colored
 	void playerColored(PlayerColor player);
 
-	void showAll(SDL_Surface * to);
+	void showAll(SDL_Surface * to) override;
 };
 
 /// Base class for displaying animation, used as superclass for different animations
@@ -155,8 +155,8 @@ public:
 	virtual void reset();
 
 	//show current frame and increase counter
-	void show(SDL_Surface * to);
-	void showAll(SDL_Surface * to);
+	void show(SDL_Surface * to) override;
+	void showAll(SDL_Surface * to) override;
 };
 
 /// Creature-dependend animations like attacking, moving,...
@@ -181,7 +181,7 @@ public:
 		HITTED=3,
 		DEFENCE=4,
 		DEATH=5,
-		//DEATH2=6, //unused?
+		DEATH_RANGED=6,
 		TURN_L=7,
 		TURN_R=8, //same
 		//TURN_L2=9, //identical to previous?
@@ -197,8 +197,16 @@ public:
 		CAST_DOWN=19,
 		MOVE_START=20,
 		MOVE_END=21,
-		DEAD = 22 // new group, used to show dead stacks. If empty - last frame from "DEATH" will be copied here
 
+		DEAD = 22, // new group, used to show dead stacks. If empty - last frame from "DEATH" will be copied here
+		DEAD_RANGED = 23, // new group, used to show dead stacks (if DEATH_RANGED was used). If empty - last frame from "DEATH_RANGED" will be copied here
+
+		VCMI_CAST_UP    = 30,
+		VCMI_CAST_FRONT = 31,
+		VCMI_CAST_DOWN  = 32,
+		VCMI_2HEX_UP    = 40,
+		VCMI_2HEX_FRONT = 41,
+		VCMI_2HEX_DOWN  = 42
 	};
 
 private:
@@ -210,7 +218,7 @@ private:
 
 public:
 	//change anim to next if queue is not empty, call callback othervice
-	void reset();
+	void reset() override;
 
 	//add sequence to the end of queue
 	void addLast(EAnimType newType);

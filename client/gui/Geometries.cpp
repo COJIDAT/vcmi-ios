@@ -1,3 +1,12 @@
+/*
+ * Geometries.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "Geometries.h"
 #include "../CMT.h"
@@ -12,7 +21,7 @@ Rect Rect::createCentered( int w, int h )
 	return Rect(screen->w/2 - w/2, screen->h/2 - h/2, w, h);
 }
 
-Rect Rect::around(const Rect &r, int width /*= 1*/) /*creates rect around another */
+Rect Rect::around(const Rect &r, int width) /*creates rect around another */
 {
 	return Rect(r.x - width, r.y - width, r.w + width * 2, r.h + width * 2);
 }

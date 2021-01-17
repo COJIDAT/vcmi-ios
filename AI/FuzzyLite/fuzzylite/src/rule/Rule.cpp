@@ -1,55 +1,43 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/rule/Rule.h"
 
 #include "fl/Exception.h"
-#include "fl/hedge/Hedge.h"
 #include "fl/imex/FllExporter.h"
 #include "fl/norm/Norm.h"
-#include "fl/rule/Antecedent.h"
-#include "fl/rule/Consequent.h"
-
-#include <sstream>
-#include <vector>
+#include "fl/Operation.h"
 
 namespace fl {
 
     Rule::Rule(const std::string& text, scalar weight)
-    : _text(text), _weight(weight), _antecedent(new Antecedent), _consequent(new Consequent) {
-    }
+    : _enabled(true), _text(text), _weight(weight), _activationDegree(0.0), _triggered(false),
+    _antecedent(new Antecedent), _consequent(new Consequent) { }
 
-    Rule::Rule(const Rule& other) : _text(other._text), _weight(other._weight),
-    _antecedent(new Antecedent), _consequent(new Consequent) {
-    }
+    Rule::Rule(const Rule& other) : _enabled(other._enabled), _text(other._text),
+    _weight(other._weight), _activationDegree(other._activationDegree), _triggered(false),
+    _antecedent(new Antecedent), _consequent(new Consequent) { }
 
     Rule& Rule::operator=(const Rule& other) {
         if (this != &other) {
-            unload();
-
+            _enabled = other._enabled;
             _text = other._text;
             _weight = other._weight;
+            _activationDegree = other._activationDegree;
+            _triggered = other._triggered;
             _antecedent.reset(new Antecedent);
             _consequent.reset(new Consequent);
         }
@@ -57,7 +45,8 @@ namespace fl {
     }
 
     Rule::~Rule() {
-        unload();
+        if (_antecedent.get()) _antecedent->unload();
+        if (_consequent.get()) _consequent->unload();
     }
 
     void Rule::setText(const std::string& text) {
@@ -92,87 +81,93 @@ namespace fl {
         return this->_consequent.get();
     }
 
-    /**
-     * Operations for std::vector _hedges
-     */
-    void Rule::addHedge(Hedge* hedge) {
-        this->_hedges[hedge->name()] = hedge;
+    void Rule::setEnabled(bool active) {
+        this->_enabled = active;
     }
 
-    Hedge* Rule::getHedge(const std::string& name) const {
-        std::map<std::string, Hedge*>::const_iterator it = this->_hedges.find(name);
-        if (it != this->_hedges.end()) {
-            if (it->second) return it->second;
+    bool Rule::isEnabled() const {
+        return this->_enabled;
+    }
+
+    void Rule::setActivationDegree(scalar activationDegree) {
+        this->_activationDegree = activationDegree;
+    }
+
+    scalar Rule::getActivationDegree() const {
+        return this->_activationDegree;
+    }
+
+    void Rule::deactivate() {
+        _activationDegree = 0.0;
+        _triggered = false;
+    }
+
+    scalar Rule::activateWith(const TNorm* conjunction, const SNorm* disjunction) {
+        if (not isLoaded()) {
+            throw Exception("[rule error] the following rule is not loaded: " + getText(), FL_AT);
         }
-        return NULL;
+        _activationDegree = _weight * _antecedent->activationDegree(conjunction, disjunction);
+        return _activationDegree;
     }
 
-    Hedge* Rule::removeHedge(const std::string& name) {
-        Hedge* result = NULL;
-        std::map<std::string, Hedge*>::iterator it = this->_hedges.find(name);
-        if (it != this->_hedges.end()) {
-            result = it->second;
-            this->_hedges.erase(it);
+    void Rule::trigger(const TNorm* implication) {
+        if (not isLoaded()) {
+            throw Exception("[rule error] the following rule is not loaded: " + getText(), FL_AT);
+        }
+        if (_enabled and Op::isGt(_activationDegree, 0.0)) {
+            FL_DBG("[firing with " << Op::str(_activationDegree) << "] " << toString());
+            _consequent->modify(_activationDegree, implication);
+            _triggered = true;
+        }
+    }
+
+    bool Rule::isTriggered() const {
+        return this->_triggered;
+    }
+
+    Complexity Rule::complexityOfActivation(const TNorm* conjunction, const SNorm* disjunction) const {
+        Complexity result;
+        result.comparison(1).arithmetic(1);
+        if (isLoaded()) {
+            result += _antecedent->complexity(conjunction, disjunction);
         }
         return result;
     }
 
-    bool Rule::hasHedge(const std::string& name) const {
-        std::map<std::string, Hedge*>::const_iterator it = this->_hedges.find(name);
-        return (it != this->_hedges.end());
-    }
-
-    int Rule::numberOfHedges() const {
-        return this->_hedges.size();
-    }
-
-    void Rule::setHedges(const std::map<std::string, Hedge*>& hedges) {
-        this->_hedges = hedges;
-    }
-
-    const std::map<std::string, Hedge*>& Rule::hedges() const {
-        return this->_hedges;
-    }
-
-    std::map<std::string, Hedge*>& Rule::hedges() {
-        return this->_hedges;
-    }
-
-    scalar Rule::activationDegree(const TNorm* conjunction, const SNorm* disjunction) const {
-        if (not isLoaded()) {
-            throw fl::Exception("[rule error] the following rule is not loaded: " + _text, FL_AT);
+    Complexity Rule::complexityOfFiring(const TNorm* implication) const {
+        Complexity result;
+        result.comparison(3);
+        if (isLoaded()) {
+            result += _consequent->complexity(implication);
         }
-        return _weight * getAntecedent()->activationDegree(conjunction, disjunction);
+        return result;
     }
 
-    void Rule::activate(scalar degree, const TNorm* activation) const {
-        if (not isLoaded()) {
-            throw fl::Exception("[rule error] the following rule is not loaded: " + _text, FL_AT);
-        }
-        getConsequent()->modify(degree, activation);
+    Complexity Rule::complexity(const TNorm* conjunction, const SNorm* disjunction,
+            const TNorm* implication) const {
+        return complexityOfActivation(conjunction, disjunction)
+                + complexityOfFiring(implication);
     }
 
     bool Rule::isLoaded() const {
-        return _antecedent->isLoaded() and _consequent->isLoaded();
+        return _antecedent.get() and _consequent.get()
+                and _antecedent->isLoaded() and _consequent->isLoaded();
     }
 
     void Rule::unload() {
-        _antecedent->unload();
-        _consequent->unload();
-
-        for (std::map<std::string, Hedge*>::const_iterator it = _hedges.begin();
-                it != _hedges.end(); ++it) {
-            delete it->second;
-        }
-        _hedges.clear();
+        deactivate();
+        if (getAntecedent()) getAntecedent()->unload();
+        if (getConsequent()) getConsequent()->unload();
     }
 
     void Rule::load(const Engine* engine) {
-        load(_text, engine);
+        load(getText(), engine);
     }
 
     void Rule::load(const std::string& rule, const Engine* engine) {
-        this->_text = rule;
+        deactivate();
+        setEnabled(true);
+        setText(rule);
         std::istringstream tokenizer(rule.substr(0, rule.find_first_of('#')));
         std::string token;
         std::ostringstream ossAntecedent, ossConsequent;
@@ -192,7 +187,7 @@ namespace fl {
                             std::ostringstream ex;
                             ex << "[syntax error] expected keyword <" << Rule::ifKeyword() <<
                                     ">, but found <" << token << "> in rule: " << rule;
-                            throw fl::Exception(ex.str(), FL_AT);
+                            throw Exception(ex.str(), FL_AT);
                         }
                         break;
                     case S_IF:
@@ -205,39 +200,46 @@ namespace fl {
                         break;
                     case S_WITH:
                         try {
-                            weight = fl::Op::toScalar(token);
+                            weight = Op::toScalar(token);
                             state = S_END;
-                        } catch (fl::Exception& e) {
+                        } catch (Exception& e) {
                             std::ostringstream ex;
                             ex << "[syntax error] expected a numeric value as the weight of the rule: "
                                     << rule;
                             e.append(ex.str(), FL_AT);
-                            throw e;
+                            throw;
                         }
                         break;
                     case S_END:
+                    {
                         std::ostringstream ex;
                         ex << "[syntax error] unexpected token <" << token << "> at the end of rule";
-                        throw fl::Exception(ex.str(), FL_AT);
+                        throw Exception(ex.str(), FL_AT);
+                    }
+
+                    default:
+                        std::ostringstream ex;
+                        ex << "[syntax error] unexpected state <" << state << ">";
+                        throw Exception(ex.str(), FL_AT);
                 }
             }
             if (state == S_NONE) {
                 std::ostringstream ex;
-                ex << "[syntax error] " << (rule.empty() ? "empty rule" : "ignored rule: " + rule);
-                throw fl::Exception(ex.str(), FL_AT);
+                ex << "[syntax error] " << (rule.empty() ? "empty rule" : ("ignored rule: " + rule));
+                throw Exception(ex.str(), FL_AT);
             } else if (state == S_IF) {
                 std::ostringstream ex;
                 ex << "[syntax error] keyword <" << Rule::thenKeyword() << "> not found in rule: " << rule;
-                throw fl::Exception(ex.str(), FL_AT);
+                throw Exception(ex.str(), FL_AT);
             } else if (state == S_WITH) {
                 std::ostringstream ex;
                 ex << "[syntax error] expected a numeric value as the weight of the rule: " << rule;
-                throw fl::Exception(ex.str(), FL_AT);
+                throw Exception(ex.str(), FL_AT);
             }
 
-            _antecedent->load(ossAntecedent.str(), this, engine);
-            _consequent->load(ossConsequent.str(), this, engine);
-            _weight = weight;
+            getAntecedent()->load(ossAntecedent.str(), engine);
+            getConsequent()->load(ossConsequent.str(), engine);
+            setWeight(weight);
 
         } catch (...) {
             unload();
@@ -247,6 +249,10 @@ namespace fl {
 
     std::string Rule::toString() const {
         return FllExporter().toString(this);
+    }
+
+    Rule* Rule::clone() const {
+        return new Rule(*this);
     }
 
     Rule* Rule::parse(const std::string& rule, const Engine* engine) {

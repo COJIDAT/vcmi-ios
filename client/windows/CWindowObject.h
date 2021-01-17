@@ -1,17 +1,3 @@
-#pragma once
-
-#include "../gui/CIntObject.h"
-//#include "../gui/SDL_Extensions.h"
-
-//#include "../../lib/FunctionList.h"
-
-struct SDL_Surface;
-struct Rect;
-class CAnimImage;
-class CLabel;
-class CAnimation;
-class CDefHandler;
-
 /*
  * CWindowObject.h, part of VCMI engine
  *
@@ -21,6 +7,9 @@ class CDefHandler;
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "../gui/CIntObject.h"
 
 /// Basic class for windows
 class CWindowObject : public CIntObject
@@ -39,9 +28,9 @@ protected:
 	//Simple function with call to GH.popInt
 	void close();
 	//Used only if RCLICK_POPUP was set
-	void clickRight(tribool down, bool previousState);
+	void clickRight(tribool down, bool previousState) override;
 	//To display border
-	void showAll(SDL_Surface *to);
+	void showAll(SDL_Surface *to) override;
 	//change or set background image
 	void setBackground(std::string filename);
 	void updateShadow();

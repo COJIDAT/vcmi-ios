@@ -1,9 +1,4 @@
-﻿#pragma once
-
-#include "CObjectHandler.h"
-#include "CArmedInstance.h"
-
-/*
+﻿/*
  * CBank.h, part of VCMI engine
  *
  * Authors: listed in file AUTHORS in main folder
@@ -12,6 +7,10 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "CObjectHandler.h"
+#include "CArmedInstance.h"
 
 struct BankConfig;
 class CBankInstanceConstructor;
@@ -31,9 +30,9 @@ public:
 
 	void setConfig(const BankConfig & bc);
 
-	void initObj() override;
+	void initObj(CRandomGenerator & rand) override;
 	std::string getHoverText(PlayerColor player) const override;
-	void newTurn() const override;
+	void newTurn(CRandomGenerator & rand) const override;
 	bool wasVisited (PlayerColor player) const override;
 	void onHeroVisit(const CGHeroInstance * h) const override;
 	void battleFinished(const CGHeroInstance *hero, const BattleResult &result) const override;
@@ -42,7 +41,9 @@ public:
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
 		h & static_cast<CArmedInstance&>(*this);
-		h & daycounter & bc & resetDuration;
+		h & daycounter;
+		h & bc;
+		h & resetDuration;
 	}
 
 	friend class CBankInstanceConstructor;

@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * CArchiveLoader.h, part of VCMI engine
  *
@@ -9,11 +7,11 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 #include "ISimpleResourceLoader.h"
 #include "ResourceID.h"
 
-class CFileInfo;
 class CFileInputStream;
 
 /**
@@ -62,7 +60,8 @@ public:
 	std::unique_ptr<CInputStream> load(const ResourceID & resourceName) const override;
 	bool existsResource(const ResourceID & resourceName) const override;
 	std::string getMountPoint() const override;
-	std::unordered_set<ResourceID> getFilteredFiles(std::function<bool(const ResourceID &)> filter) const;
+	void updateFilteredFiles(std::function<bool(const std::string &)> filter) const override {}
+	std::unordered_set<ResourceID> getFilteredFiles(std::function<bool(const ResourceID &)> filter) const override;
 
 private:
 	/**

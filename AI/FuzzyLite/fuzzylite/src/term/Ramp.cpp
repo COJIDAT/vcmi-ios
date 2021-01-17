@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/term/Ramp.h"
@@ -27,35 +19,52 @@
 namespace fl {
 
     Ramp::Ramp(const std::string& name, scalar start, scalar end, scalar height)
-    : Term(name, height), _start(start), _end(end) {
-    }
+    : Term(name, height), _start(start), _end(end) { }
 
-    Ramp::~Ramp() {
-    }
+    Ramp::~Ramp() { }
 
     std::string Ramp::className() const {
         return "Ramp";
     }
 
-    scalar Ramp::membership(scalar x) const {
-        if (fl::Op::isNaN(x)) return fl::nan;
+    Complexity Ramp::complexity() const {
+        return Complexity().comparison(1 + 4).arithmetic(1 + 3);
+    }
 
-        if (Op::isEq(_start, _end)) return _height * 0.0;
+    scalar Ramp::membership(scalar x) const {
+        if (Op::isNaN(x)) return fl::nan;
+
+        if (Op::isEq(_start, _end))
+            return Term::_height * 0.0;
 
         if (Op::isLt(_start, _end)) {
-            if (Op::isLE(x, _start)) return _height * 0.0;
-            if (Op::isGE(x, _end)) return _height * 1.0;
-            return _height * (x - _start) / (_end - _start);
+            if (Op::isLE(x, _start))
+                return Term::_height * 0.0;
+            if (Op::isGE(x, _end))
+                return Term::_height * 1.0;
+            return Term::_height * (x - _start) / (_end - _start);
         } else {
-            if (Op::isGE(x, _start)) return _height * 0.0;
-            if (Op::isLE(x, _end)) return _height * 1.0;
-            return _height * (_start - x) / (_start - _end);
+            if (Op::isGE(x, _start))
+                return Term::_height * 0.0;
+            if (Op::isLE(x, _end))
+                return Term::_height * 1.0;
+            return Term::_height * (_start - x) / (_start - _end);
         }
+    }
+
+    scalar Ramp::tsukamoto(scalar activationDegree, scalar minimum, scalar maximum) const {
+        FL_IUNUSED(minimum);
+        FL_IUNUSED(maximum);
+        return Op::scale(activationDegree, 0, 1, _start, _end);
+    }
+
+    bool Ramp::isMonotonic() const {
+        return true;
     }
 
     std::string Ramp::parameters() const {
         return Op::join(2, " ", _start, _end) +
-                (not Op::isEq(_height, 1.0) ? " " + Op::str(_height) : "");
+                (not Op::isEq(getHeight(), 1.0) ? " " + Op::str(getHeight()) : "");
     }
 
     void Ramp::configure(const std::string& parameters) {
@@ -66,7 +75,7 @@ namespace fl {
             std::ostringstream ex;
             ex << "[configuration error] term <" << className() << ">"
                     << " requires <" << required << "> parameters";
-            throw fl::Exception(ex.str(), FL_AT);
+            throw Exception(ex.str(), FL_AT);
         }
         setStart(Op::toScalar(values.at(0)));
         setEnd(Op::toScalar(values.at(1)));
@@ -92,11 +101,11 @@ namespace fl {
 
     Ramp::Direction Ramp::direction() const {
         scalar range = this->_end - this->_start;
-        if (not fl::Op::isFinite(range) or fl::Op::isEq(range, 0.0)) return ZERO;
+        if (not Op::isFinite(range) or Op::isEq(range, 0.0)) return Zero;
 
-        if (fl::Op::isGt(range, 0.0)) return POSITIVE;
+        if (Op::isGt(range, 0.0)) return Positive;
 
-        return NEGATIVE;
+        return Negative;
     }
 
     Ramp* Ramp::clone() const {

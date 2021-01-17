@@ -1,12 +1,20 @@
+/*
+ * main.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
+#include <QApplication>
 #include "StdInc.h"
 #include "mainwindow_moc.h"
-#include <QApplication>
 
-int main(int argc, char *argv[])
+int main(int argc, char * argv[])
 {
-	QApplication a(argc, argv);
-	MainWindow w;
-	w.show();
-	
-	return a.exec();
+	QApplication vcmilauncher(argc, argv);
+	MainWindow mainWindow;
+	mainWindow.show();
+	return vcmilauncher.exec();
 }

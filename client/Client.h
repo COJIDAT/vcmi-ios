@@ -1,11 +1,3 @@
-#pragma once
-
-
-#include "../lib/IGameCallback.h"
-#include "../lib/BattleAction.h"
-#include "../lib/CStopWatch.h"
-#include "../lib/int3.h"
-
 /*
  * Client.h, part of VCMI engine
  *
@@ -15,8 +7,15 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
-class CPack;
+
+#include "../lib/IGameCallback.h"
+#include "../lib/battle/BattleAction.h"
+#include "../lib/CStopWatch.h"
+#include "../lib/int3.h"
+
+struct CPack;
 class CCampaignState;
 class CBattleCallback;
 class IGameEventsReceiver;
@@ -27,11 +26,13 @@ class CGameState;
 class CGameInterface;
 class CConnection;
 class CCallback;
-struct BattleAction;
-struct SharedMem;
+class BattleAction;
+struct SharedMemory;
 class CClient;
 class CScriptingModule;
 struct CPathsInfo;
+class BinaryDeserializer;
+class BinarySerializer;
 namespace boost { class thread; }
 
 /// structure to handle running server and connecting to it
@@ -42,9 +43,9 @@ private:
 public:
 	CStopWatch th;
 	boost::thread *serverThread; //thread that called system to run server
-	SharedMem *shared; //interprocess memory (for waiting for server)
+	SharedMemory * shared;
+	std::string uuid;
 	bool verbose; //whether to print log msgs
-	std::string port; //port number in text form
 
 	//functions setting up local server
 	void startServer(); //creates a thread with callServer
@@ -52,10 +53,12 @@ public:
 	CConnection * connectToServer(); //connects to server
 
 	//////////////////////////////////////////////////////////////////////////
-	static CConnection * justConnectToServer(const std::string &host = "", const std::string &port = ""); //connects to given host without taking any other actions (like setting up server)
+	static CConnection * justConnectToServer(const std::string &host = "", const ui16 port = 0); //connects to given host without taking any other actions (like setting up server)
+	static ui16 getDefaultPort();
+	static std::string getDefaultPortStr();
 
 	CServerHandler(bool runServer = false);
-	~CServerHandler();
+	virtual ~CServerHandler();
 };
 
 template<typename T>
@@ -68,6 +71,12 @@ class ThreadSafeVector
 	boost::condition_variable cond;
 
 public:
+	void clear()
+	{
+		TLock lock(mx);
+		items.clear();
+		cond.notify_all();
+	}
 
 	void pushBack(const T &item)
 	{
@@ -113,17 +122,19 @@ public:
 /// Class which handles client - server logic
 class CClient : public IGameCallback
 {
-	unique_ptr<CPathsInfo> pathInfo;
-public:
-	std::map<PlayerColor,shared_ptr<CCallback> > callbacks; //callbacks given to player interfaces
-	std::map<PlayerColor,shared_ptr<CBattleCallback> > battleCallbacks; //callbacks given to player interfaces
-	std::vector<shared_ptr<IGameEventsReceiver>> privilagedGameEventReceivers; //scripting modules, spectator interfaces
-	std::vector<shared_ptr<IBattleEventsReceiver>> privilagedBattleEventReceivers; //scripting modules, spectator interfaces
-	std::map<PlayerColor, shared_ptr<CGameInterface>> playerint;
-	std::map<PlayerColor, shared_ptr<CBattleGameInterface>> battleints;
+	std::unique_ptr<CPathsInfo> pathInfo;
 
-	std::map<PlayerColor,std::vector<shared_ptr<IGameEventsReceiver>>> additionalPlayerInts;
-	std::map<PlayerColor,std::vector<shared_ptr<IBattleEventsReceiver>>> additionalBattleInts;
+	std::map<PlayerColor, std::shared_ptr<boost::thread>> playerActionThreads;
+public:
+	std::map<PlayerColor,std::shared_ptr<CCallback> > callbacks; //callbacks given to player interfaces
+	std::map<PlayerColor,std::shared_ptr<CBattleCallback> > battleCallbacks; //callbacks given to player interfaces
+	std::vector<std::shared_ptr<IGameEventsReceiver>> privilegedGameEventReceivers; //scripting modules, spectator interfaces
+	std::vector<std::shared_ptr<IBattleEventsReceiver>> privilegedBattleEventReceivers; //scripting modules, spectator interfaces
+	std::map<PlayerColor, std::shared_ptr<CGameInterface>> playerint;
+	std::map<PlayerColor, std::shared_ptr<CBattleGameInterface>> battleints;
+
+	std::map<PlayerColor,std::vector<std::shared_ptr<IGameEventsReceiver>>> additionalPlayerInts;
+	std::map<PlayerColor,std::vector<std::shared_ptr<IBattleEventsReceiver>>> additionalBattleInts;
 
 	bool hotSeat;
 	CConnection *serv;
@@ -132,36 +143,38 @@ public:
 
 	CScriptingModule *erm;
 
-	ThreadSafeVector<int> waitingRequest;
+	static ThreadSafeVector<int> waitingRequest;//FIXME: make this normal field (need to join all threads before client destruction)
 
-	void waitForMoveAndSend(PlayerColor color);
+
 	//void sendRequest(const CPackForServer *request, bool waitForRealization);
-	CClient(void);
+	CClient();
 	CClient(CConnection *con, StartInfo *si);
-	~CClient(void);
+	~CClient();
 
 	void init();
 	void newGame(CConnection *con, StartInfo *si); //con - connection to server
 
 	void loadNeutralBattleAI();
-	void installNewPlayerInterface(shared_ptr<CGameInterface> gameInterface, boost::optional<PlayerColor> color);
-	void installNewBattleInterface(shared_ptr<CBattleGameInterface> battleInterface, boost::optional<PlayerColor> color, bool needCallback = true);
+	void installNewPlayerInterface(std::shared_ptr<CGameInterface> gameInterface, boost::optional<PlayerColor> color, bool battlecb = false);
+	void installNewBattleInterface(std::shared_ptr<CBattleGameInterface> battleInterface, boost::optional<PlayerColor> color, bool needCallback = true);
 	std::string aiNameForPlayer(const PlayerSettings &ps, bool battleAI); //empty means no AI -> human
+	std::string aiNameForPlayer(bool battleAI);
 
 	void endGame(bool closeConnection = true);
 	void stopConnection();
 	void save(const std::string & fname);
-	void loadGame(const std::string & fname, const bool server = true, const std::vector<int>& humanplayerindices = std::vector<int>(), const int loadnumplayers = 1, int player_ = -1, const std::string & ipaddr = "", const std::string & port = "");
+	void loadGame(const std::string & fname, const bool server = true, const std::vector<int>& humanplayerindices = std::vector<int>(), const int loadnumplayers = 1, int player_ = -1, const std::string & ipaddr = "", const ui16 port = 0);
 	void run();
-	void campaignMapFinished( shared_ptr<CCampaignState> camp );
-	void finishCampaign( shared_ptr<CCampaignState> camp );
-	void proposeNextMission(shared_ptr<CCampaignState> camp);
+	void campaignMapFinished( std::shared_ptr<CCampaignState> camp );
+	void finishCampaign( std::shared_ptr<CCampaignState> camp );
+	void proposeNextMission(std::shared_ptr<CCampaignState> camp);
 
 	void invalidatePaths();
 	const CPathsInfo * getPathsInfo(const CGHeroInstance *h);
 
 	bool terminate;	// tell to terminate
-	boost::thread *connectionHandler; //thread running run() method
+	std::unique_ptr<boost::thread> connectionHandler; //thread running run() method
+	boost::mutex connectionHandlerMutex;
 
 	//////////////////////////////////////////////////////////////////////////
 	virtual PlayerColor getLocalPlayer() const override;
@@ -173,30 +186,31 @@ public:
 	void setBlockVis(ObjectInstanceID objid, bool bv) override {};
 	void setOwner(const CGObjectInstance * obj, PlayerColor owner) override {};
 	void changePrimSkill(const CGHeroInstance * hero, PrimarySkill::PrimarySkill which, si64 val, bool abs=false) override {};
-	void changeSecSkill(const CGHeroInstance * hero, SecondarySkill which, int val, bool abs=false) override {}; 
+	void changeSecSkill(const CGHeroInstance * hero, SecondarySkill which, int val, bool abs=false) override {};
 
-	void showBlockingDialog(BlockingDialog *iw) override {}; 
+	void showBlockingDialog(BlockingDialog *iw) override {};
 	void showGarrisonDialog(ObjectInstanceID upobj, ObjectInstanceID hid, bool removableUnits) override {};
+	void showTeleportDialog(TeleportDialog *iw) override {};
 	void showThievesGuildWindow(PlayerColor player, ObjectInstanceID requestingObjId) override {};
 	void giveResource(PlayerColor player, Res::ERes which, int val) override {};
 	virtual void giveResources(PlayerColor player, TResources resources) override {};
 
 	void giveCreatures(const CArmedInstance * objid, const CGHeroInstance * h, const CCreatureSet &creatures, bool remove) override {};
 	void takeCreatures(ObjectInstanceID objid, const std::vector<CStackBasicDescriptor> &creatures) override {};
-	bool changeStackType(const StackLocation &sl, CCreature *c) override {return false;};
+	bool changeStackType(const StackLocation &sl, const CCreature *c) override {return false;};
 	bool changeStackCount(const StackLocation &sl, TQuantity count, bool absoluteValue = false) override {return false;};
 	bool insertNewStack(const StackLocation &sl, const CCreature *c, TQuantity count) override {return false;};
-	bool eraseStack(const StackLocation &sl, bool forceRemoval = false){return false;};
+	bool eraseStack(const StackLocation &sl, bool forceRemoval = false) override{return false;};
 	bool swapStacks(const StackLocation &sl1, const StackLocation &sl2) override {return false;}
 	bool addToSlot(const StackLocation &sl, const CCreature *c, TQuantity count) override {return false;}
 	void tryJoiningArmy(const CArmedInstance *src, const CArmedInstance *dst, bool removeObjWhenFinished, bool allowMerging) override {}
 	bool moveStack(const StackLocation &src, const StackLocation &dst, TQuantity count = -1) override {return false;}
-	
+
 	void removeAfterVisit(const CGObjectInstance *object) override {};
 
 	void giveHeroNewArtifact(const CGHeroInstance *h, const CArtifact *artType, ArtifactPosition pos) override {};
 	void giveHeroArtifact(const CGHeroInstance *h, const CArtifactInstance *a, ArtifactPosition pos) override {};
-	void putArtifact(const ArtifactLocation &al, const CArtifactInstance *a) override {}; 
+	void putArtifact(const ArtifactLocation &al, const CArtifactInstance *a) override {};
 	void removeArtifact(const ArtifactLocation &al) override {};
 	bool moveArtifact(const ArtifactLocation &al1, const ArtifactLocation &al2) override {return false;};
 	void synchronizeArtifactHandlerLists() override {};
@@ -204,13 +218,11 @@ public:
 	void showCompInfo(ShowInInfobox * comp) override {};
 	void heroVisitCastle(const CGTownInstance * obj, const CGHeroInstance * hero) override {};
 	void stopHeroVisitCastle(const CGTownInstance * obj, const CGHeroInstance * hero) override {};
-	//void giveHeroArtifact(int artid, int hid, int position){}; 
-	//void giveNewArtifact(int hid, int position){};
 	void startBattlePrimary(const CArmedInstance *army1, const CArmedInstance *army2, int3 tile, const CGHeroInstance *hero1, const CGHeroInstance *hero2, bool creatureBank = false, const CGTownInstance *town = nullptr) override {}; //use hero=nullptr for no hero
 	void startBattleI(const CArmedInstance *army1, const CArmedInstance *army2, int3 tile, bool creatureBank = false) override {}; //if any of armies is hero, hero will be used
 	void startBattleI(const CArmedInstance *army1, const CArmedInstance *army2, bool creatureBank = false) override {}; //if any of armies is hero, hero will be used, visitable tile of second obj is place of battle
 	void setAmount(ObjectInstanceID objid, ui32 val) override {};
-	bool moveHero(ObjectInstanceID hid, int3 dst, ui8 teleporting, PlayerColor asker = PlayerColor::NEUTRAL) override {return false;};
+	bool moveHero(ObjectInstanceID hid, int3 dst, ui8 teleporting, bool transit = false, PlayerColor asker = PlayerColor::NEUTRAL) override {return false;};
 	void giveHeroBonus(GiveBonus * bonus) override {};
 	void setMovePoints(SetMovePoints * smp) override {};
 	void setManaPoints(ObjectInstanceID hid, int val) override {};
@@ -230,13 +242,23 @@ public:
 
 	void handlePack( CPack * pack ); //applies the given pack and deletes it
 	void battleStarted(const BattleInfo * info);
-	void commenceTacticPhaseForInt(shared_ptr<CBattleGameInterface> battleInt); //will be called as separate thread
+	void commenceTacticPhaseForInt(std::shared_ptr<CBattleGameInterface> battleInt); //will be called as separate thread
 
 	void commitPackage(CPackForClient *pack) override;
 
 	//////////////////////////////////////////////////////////////////////////
 
-	template <typename Handler> void serialize(Handler &h, const int version);
-	template <typename Handler> void serialize(Handler &h, const int version, const std::set<PlayerColor>& playerIDs);
+	void serialize(BinarySerializer & h, const int version);
+	void serialize(BinaryDeserializer & h, const int version);
+
+	void serialize(BinarySerializer & h, const int version, const std::set<PlayerColor>& playerIDs);
+	void serialize(BinaryDeserializer & h, const int version, const std::set<PlayerColor>& playerIDs);
 	void battleFinished();
+
+    void startPlayerBattleAction(PlayerColor color);
+
+    void stopPlayerBattleAction(PlayerColor color);
+    void stopAllBattleActions();
+private:
+	void waitForMoveAndSend(PlayerColor color);
 };

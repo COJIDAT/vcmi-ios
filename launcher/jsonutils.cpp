@@ -1,5 +1,15 @@
+/*
+ * jsonutils.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "jsonutils.h"
+#include "../lib/filesystem/FileStream.h"
 
 static QVariantMap JsonToMap(const JsonMap & json)
 {
@@ -48,12 +58,12 @@ QVariant toVariant(const JsonNode & node)
 {
 	switch (node.getType())
 	{
-		break; case JsonNode::DATA_NULL:   return QVariant();
-		break; case JsonNode::DATA_BOOL:   return QVariant(node.Bool());
-		break; case JsonNode::DATA_FLOAT:  return QVariant(node.Float());
-		break; case JsonNode::DATA_STRING: return QVariant(QString::fromUtf8(node.String().c_str()));
-		break; case JsonNode::DATA_VECTOR: return JsonToList(node.Vector());
-		break; case JsonNode::DATA_STRUCT: return JsonToMap(node.Struct());
+		break; case JsonNode::JsonType::DATA_NULL:   return QVariant();
+		break; case JsonNode::JsonType::DATA_BOOL:   return QVariant(node.Bool());
+		break; case JsonNode::JsonType::DATA_FLOAT:  return QVariant(node.Float());
+		break; case JsonNode::JsonType::DATA_STRING: return QVariant(QString::fromUtf8(node.String().c_str()));
+		break; case JsonNode::JsonType::DATA_VECTOR: return JsonToList(node.Vector());
+		break; case JsonNode::JsonType::DATA_STRUCT: return JsonToMap(node.Struct());
 	}
 	return QVariant();
 }
@@ -66,7 +76,7 @@ QVariant JsonFromFile(QString filename)
 
 	if (data.size() == 0)
 	{
-		logGlobal->errorStream() << "Failed to open file " << filename.toUtf8().data();
+		logGlobal->error("Failed to open file %s", filename.toUtf8().data());
 		return QVariant();
 	}
 	else
@@ -96,9 +106,8 @@ JsonNode toJson(QVariant object)
 
 void JsonToFile(QString filename, QVariant object)
 {
-	std::ofstream file(filename.toUtf8().data(), std::ofstream::binary);
-
-	file << toJson(object);
+	FileStream file(qstringToPath(filename), std::ios::out | std::ios_base::binary);
+	file << toJson(object).toJson();
 }
 
 }

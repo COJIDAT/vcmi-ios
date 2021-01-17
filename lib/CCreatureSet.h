@@ -1,10 +1,3 @@
-#pragma once
-
-
-#include "HeroBonus.h"
-#include "GameConstants.h"
-#include "CArtHandler.h"
-
 /*
  * CCreatureSet.h, part of VCMI engine
  *
@@ -14,11 +7,18 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
+#include "HeroBonus.h"
+#include "GameConstants.h"
+#include "CArtHandler.h"
+
+class JsonNode;
 class CCreature;
 class CGHeroInstance;
 class CArmedInstance;
 class CCreatureArtifactSet;
+class JsonSerializeFormat;
 
 class DLL_LINKAGE CStackBasicDescriptor
 {
@@ -29,11 +29,17 @@ public:
 	CStackBasicDescriptor();
 	CStackBasicDescriptor(CreatureID id, TQuantity Count);
 	CStackBasicDescriptor(const CCreature *c, TQuantity Count);
+	virtual ~CStackBasicDescriptor() = default;
+
+	virtual void setType(const CCreature * c);
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & type & count;
+		h & type;
+		h & count;
 	}
+
+	void serializeJson(JsonSerializeFormat & handler);
 };
 
 class DLL_LINKAGE CStackInstance : public CBonusSystemNode, public CStackBasicDescriptor, public CArtifactSet
@@ -55,33 +61,37 @@ public:
 		h & static_cast<CBonusSystemNode&>(*this);
 		h & static_cast<CStackBasicDescriptor&>(*this);
 		h & static_cast<CArtifactSet&>(*this);
-		h & _armyObj & experience;
+		h & _armyObj;
+		h & experience;
 		BONUS_TREE_DESERIALIZATION_FIX
 	}
 
+	void serializeJson(JsonSerializeFormat & handler);
+
 	//overrides CBonusSystemNode
-	std::string bonusToString(const Bonus *bonus, bool description) const override; // how would bonus description look for this particular type of node
-	std::string bonusToGraphics(const Bonus *bonus) const; //file name of graphics from StackSkills , in future possibly others
+	std::string bonusToString(const std::shared_ptr<Bonus>& bonus, bool description) const override; // how would bonus description look for this particular type of node
+	std::string bonusToGraphics(const std::shared_ptr<Bonus>& bonus) const; //file name of graphics from StackSkills , in future possibly others
 
 	virtual ui64 getPower() const;
 	int getQuantityID() const;
 	std::string getQuantityTXT(bool capitalized = true) const;
 	virtual int getExpRank() const;
 	virtual int getLevel() const; //different for regular stack and commander
-	si32 magicResistance() const;
+	si32 magicResistance() const override;
 	CreatureID getCreatureID() const; //-1 if not available
 	std::string getName() const; //plural or singular
 	virtual void init();
 	CStackInstance();
 	CStackInstance(CreatureID id, TQuantity count);
 	CStackInstance(const CCreature *cre, TQuantity count);
-	~CStackInstance();
+	virtual ~CStackInstance();
 
 	void setType(CreatureID creID);
-	void setType(const CCreature *c);
+	void setType(const CCreature * c) override;
 	void setArmyObj(const CArmedInstance *ArmyObj);
 	virtual void giveStackExp(TExpType exp);
 	bool valid(bool allowUnrandomized) const;
+	void putArtifact(ArtifactPosition pos, CArtifactInstance * art) override;//from CArtifactSet
 	ArtBearer::ArtBearer bearerType() const override; //from CArtifactSet
 	virtual std::string nodeName() const override; //from CBonusSystemnode
 	void deserializationFix();
@@ -93,7 +103,7 @@ public:
 	//TODO: what if Commander is not a part of creature set?
 
 	//commander class is determined by its base creature
-	ui8 alive;
+	ui8 alive; //maybe change to bool when breaking save compatibility?
 	ui8 level; //required only to count callbacks
 	std::string name; // each Commander has different name
 	std::vector <ui8> secondarySkills; //ID -> level
@@ -102,25 +112,27 @@ public:
 	void init() override;
 	CCommanderInstance();
 	CCommanderInstance (CreatureID id);
-	~CCommanderInstance();
+	virtual ~CCommanderInstance();
 	void setAlive (bool alive);
-	void giveStackExp (TExpType exp);
+	void giveStackExp (TExpType exp) override;
 	void levelUp ();
 
 	bool gainsLevel() const; //true if commander has lower level than should upon his experience
-	ui64 getPower() const {return 0;};
-	int getExpRank() const;
-	int getLevel() const override; 
+	ui64 getPower() const override {return 0;};
+	int getExpRank() const override;
+	int getLevel() const override;
 	ArtBearer::ArtBearer bearerType() const override; //from CArtifactSet
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
 		h & static_cast<CStackInstance&>(*this);
-		h & alive & level & name & secondarySkills & specialSKills;
+		h & alive;
+		h & level;
+		h & name;
+		h & secondarySkills;
+		h & specialSKills;
 	}
 };
-
-DLL_LINKAGE std::ostream & operator<<(std::ostream & str, const CStackInstance & sth);
 
 typedef std::map<SlotID, CStackInstance*> TSlots;
 typedef std::map<SlotID, CStackBasicDescriptor> TSimpleSlots;
@@ -200,7 +212,8 @@ public:
 	virtual bool needsLastStack() const; //true if last stack cannot be taken
 	ui64 getArmyStrength() const; //sum of AI values of creatures
 	ui64 getPower (SlotID slot) const; //value of specific stack
-	std::string getRoughAmount (SlotID slot) const; //rough size of specific stack
+	std::string getRoughAmount(SlotID slot, int mode = 0) const; //rough size of specific stack
+	std::string getArmyDescription() const;
 	bool hasStackAtSlot(SlotID slot) const;
 
 	bool contains(const CStackInstance *stack) const;
@@ -208,8 +221,12 @@ public:
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & stacks & formation;
+		h & stacks;
+		h & formation;
 	}
+
+	void serializeJson(JsonSerializeFormat & handler, const std::string & fieldName, const boost::optional<int> fixedSize = boost::none);
+
 	operator bool() const
 	{
 		return !stacks.empty();

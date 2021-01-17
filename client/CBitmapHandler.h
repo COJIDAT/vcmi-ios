@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * CBitmapHandler.h, part of VCMI engine
  *
@@ -9,14 +7,12 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 struct SDL_Surface;
 
 namespace BitmapHandler
 {
-	SDL_Surface * loadH3PCX(ui8 * data, size_t size);
-	//Load file from specific LOD
-	SDL_Surface * loadBitmapFromDir(std::string path, std::string fname, bool setKey=true);
-	//Load file from any LODs
+	//Load file from /DATA or /SPRITES
 	SDL_Surface * loadBitmap(std::string fname, bool setKey=true);
 }

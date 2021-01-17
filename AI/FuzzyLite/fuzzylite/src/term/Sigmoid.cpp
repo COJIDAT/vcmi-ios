@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/term/Sigmoid.h"
@@ -27,24 +19,58 @@
 namespace fl {
 
     Sigmoid::Sigmoid(const std::string& name, scalar inflection, scalar slope, scalar height)
-    : Term(name, height), _inflection(inflection), _slope(slope) {
-    }
+    : Term(name, height), _inflection(inflection), _slope(slope) { }
 
-    Sigmoid::~Sigmoid() {
-    }
+    Sigmoid::~Sigmoid() { }
 
     std::string Sigmoid::className() const {
         return "Sigmoid";
     }
 
+    Complexity Sigmoid::complexity() const {
+        return Complexity().comparison(1).arithmetic(1 + 4).function(1);
+    }
+
     scalar Sigmoid::membership(scalar x) const {
-        if (fl::Op::isNaN(x)) return fl::nan;
-        return _height * 1.0 / (1.0 + std::exp(-_slope * (x - _inflection)));
+        if (Op::isNaN(x)) return fl::nan;
+        return Term::_height * 1.0 / (1.0 + std::exp(-_slope * (x - _inflection)));
+    }
+
+    scalar Sigmoid::tsukamoto(scalar activationDegree,
+            scalar minimum, scalar maximum) const {
+
+        scalar w = activationDegree;
+        scalar z = fl::nan;
+
+        if (Op::isEq(w, 1.0)) {
+            if (Op::isGE(_slope, 0.0)) {
+                z = maximum;
+            } else {
+                z = minimum;
+            }
+
+        } else if (Op::isEq(w, 0.0)) {
+            if (Op::isGE(_slope, 0.0)) {
+                z = minimum;
+            } else {
+                z = maximum;
+            }
+        } else {
+            scalar a = _slope;
+            scalar b = _inflection;
+            z = b + (std::log(1.0 / w - 1.0) / -a);
+        }
+
+        return z;
+    }
+
+    bool Sigmoid::isMonotonic() const {
+        return true;
     }
 
     std::string Sigmoid::parameters() const {
         return Op::join(2, " ", _inflection, _slope) +
-                (not Op::isEq(_height, 1.0) ? " " + Op::str(_height) : "");
+                (not Op::isEq(getHeight(), 1.0) ? " " + Op::str(getHeight()) : "");
     }
 
     void Sigmoid::configure(const std::string& parameters) {
@@ -55,7 +81,7 @@ namespace fl {
             std::ostringstream ex;
             ex << "[configuration error] term <" << className() << ">"
                     << " requires <" << required << "> parameters";
-            throw fl::Exception(ex.str(), FL_AT);
+            throw Exception(ex.str(), FL_AT);
         }
         setInflection(Op::toScalar(values.at(0)));
         setSlope(Op::toScalar(values.at(1)));
@@ -80,11 +106,11 @@ namespace fl {
     }
 
     Sigmoid::Direction Sigmoid::direction() const {
-        if (not fl::Op::isFinite(_slope) or fl::Op::isEq(_slope, 0.0)) return ZERO;
+        if (not Op::isFinite(_slope) or Op::isEq(_slope, 0.0)) return Zero;
 
-        if (fl::Op::isGt(_slope, 0.0)) return POSITIVE;
+        if (Op::isGt(_slope, 0.0)) return Positive;
 
-        return NEGATIVE;
+        return Negative;
     }
 
     Sigmoid* Sigmoid::clone() const {

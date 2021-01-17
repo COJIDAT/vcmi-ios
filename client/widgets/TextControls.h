@@ -1,9 +1,3 @@
-#pragma once
-
-#include "../gui/CIntObject.h"
-#include "../gui/SDL_Extensions.h"
-#include "../../lib/FunctionList.h"
-
 /*
  * TextControls.h, part of VCMI engine
  *
@@ -13,6 +7,11 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "../gui/CIntObject.h"
+#include "../gui/SDL_Extensions.h"
+#include "../../lib/FunctionList.h"
 
 class CSlider;
 
@@ -52,7 +51,7 @@ public:
 
 	CLabel(int x=0, int y=0, EFonts Font = FONT_SMALL, EAlignment Align = TOPLEFT,
 	       const SDL_Color &Color = Colors::WHITE, const std::string &Text =  "");
-	void showAll(SDL_Surface * to); //shows statusbar (with current text)
+	void showAll(SDL_Surface * to) override; //shows statusbar (with current text)
 };
 
 /// Small helper class to manage group of similar labels
@@ -85,8 +84,8 @@ public:
 
 	CMultiLineLabel(Rect position, EFonts Font = FONT_SMALL, EAlignment Align = TOPLEFT, const SDL_Color &Color = Colors::WHITE, const std::string &Text =  "");
 
-	void setText(const std::string &Txt);
-	void showAll(SDL_Surface * to);
+	void setText(const std::string &Txt) override;
+	void showAll(SDL_Surface * to) override;
 
 	void setVisibleSize(Rect visibleSize);
 	// scrolls text visible in widget. Positive value will move text up
@@ -125,7 +124,7 @@ public:
 	void clear();//clears statusbar and refreshes
 	void setText(const std::string & Text) override; //prints text and refreshes statusbar
 
-	void show(SDL_Surface * to); //shows statusbar (with current text)
+	void show(SDL_Surface * to) override; //shows statusbar (with current text)
 
 	CGStatusBar(CPicture *BG, EFonts Font = FONT_SMALL, EAlignment Align = CENTER, const SDL_Color &Color = Colors::WHITE); //given CPicture will be captured by created sbar and it's pos will be used as pos for sbar
 	CGStatusBar(int x, int y, std::string name, int maxw=-1);
@@ -161,6 +160,10 @@ protected:
 
 	void focusGot() override;
 	void focusLost() override;
+
+#ifdef VCMI_ANDROID
+	void notifyAndroidTextInputChanged(std::string & text);
+#endif
 public:
 	CFunctionList<void(const std::string &)> cb;
 	CFunctionList<void(std::string &, const std::string &)> filters;
@@ -174,12 +177,8 @@ public:
 	void keyPressed(const SDL_KeyboardEvent & key) override;
 	bool captureThisEvent(const SDL_KeyboardEvent & key) override;
 	
-#ifndef VCMI_SDL1
 	void textInputed(const SDL_TextInputEvent & event) override;
 	void textEdited(const SDL_TextEditingEvent & event) override;
-	
-	
-#endif // VCMI_SDL1	
 
 	//Filter that will block all characters not allowed in filenames
 	static void filenameFilter(std::string &text, const std::string & oldText);

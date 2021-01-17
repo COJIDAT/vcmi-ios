@@ -1,3 +1,107 @@
+0.99 -> 1.00
+
+GENERAL:
+* Spectator mode was implemented through command-line options
+* Some main menu settings get saved after returning to main menu - last selected map, save etc.
+* Restart scenario button should work correctly now
+* New bonuses:
+- SOUL_STEAL - "WoG ghost" ability, should work somewhat same as in H3
+- TRANSMUTATION - "WoG werewolf"-like ability
+- SUMMON_GUARDIANS - "WoG santa gremlin"-like ability + two-hex unit extension
+- CATAPULT_EXTRA_SHOTS - defines number of extra wall attacks for units that can do so
+- RANGED_RETALIATION - allows ranged counterattack
+- BLOCKS_RANGED_RETALIATION - disallow enemy ranged counterattack
+- SECONDARY_SKILL_VAL2 - set additional parameter for certain secondary skills
+- MANUAL_CONTROL - grant manual control over war machine
+- WIDE_BREATH - melee creature attacks affect many nearby hexes
+- FIRST_STRIKE - creature counterattacks before attack if possible
+- SYNERGY_TARGET - placeholder bonus for Mod Design Team (subject to removal in future)
+- SHOOTS_ALL_ADJACENT - makes creature shots affect all neighbouring hexes
+- BLOCK_MAGIC_BELOW - allows blocking spells below particular spell level. HotA cape artifact can be implemented with this
+- DESTRUCTION - creature ability for killing extra units after hit, configurable
+
+SPELLS:
+* Implemented cumulative effects for spells
+
+MODS:
+* Improve support for WoG commander artifacts and skill descriptions
+* Added basic support for secondary skill modding
+* Map object sounds can now be configured via json
+
+SOUND:
+* Fixed many mising or wrong pickup and visit sounds for map objects
+* All map objects now have ambient sounds identical to OH3
+
+0.98 -> 0.99
+
+GENERAL:
+* New Bonus NO_TERRAIN_PENALTY
+* Nomads will remove Sand movement penalty from army
+* Flying and water walking is now supported in pathfinder
+* New artifacts supported
+- Angel Wings
+- Boots of Levitation
+* Implemented rumors in tavern window
+* New cheat codes:
+- vcmiglaurung - gives 5000 crystal dragons into each slot
+- vcmiungoliant - conceal fog of war for current player
+* New console commands:
+- gosolo - AI take control over human players and vice versa
+- controlai - give control of one or all AIs to player
+- set hideSystemMessages on/off - supress server messages in chat
+
+BATTLES:
+* Drawbridge mechanics implemented (animation still missing)
+* Merging of town and visiting hero armies on siege implemented
+* Hero info tooltip for skills and mana implemented
+
+ADVENTURE AI:
+* Fixed AI trying to go through underground rock
+* Fixed several cases causing AI wandering aimlessly
+* AI can again pick best artifacts and exchange artifacts between heroes
+* AI heroes with patrol enabled won't leave patrol area anymore
+
+RANDOM MAP GENERATOR:
+* Changed fractalization algorithm so it can create cycles
+* Zones will not have straight paths anymore, they are totally random
+* Generated zones will have different size depending on template setting
+* Added Thieves Guild random object (1 per zone)
+* Added Seer Huts with quests that match OH3
+* RMG will guarantee at least 100 pairs of Monoliths are available even if there are not enough different defs
+
+0.97 -> 0.98
+GENERAL:
+* Pathfinder can now find way using Monoliths and Whirlpools (only used if hero has protection)
+
+ADVENTURE AI:
+* AI will try to use Monolith entrances for exploration
+* AI will now always revisit each exit of two way monolith if exit no longer visible
+* AI will eagerly pick guarded and blocked treasures
+
+ADVENTURE MAP:
+* Implemented world view
+* Added graphical fading effects
+
+SPELLS:
+* New spells handled:
+- Earthquake
+- View Air
+- View Earth
+- Visions
+- Disguise
+* Implemented CURE spell negative dispell effect
+* Added LOCATION target for spells castable on any hex with new target modifiers
+
+BATTLES:
+* Implemented OH3 stack split / upgrade formulas according to AlexSpl
+
+RANDOM MAP GENERATOR:
+* Underground tunnels are working now
+* Implemented "junction" zone type
+* Improved zone placing algorithm
+* More balanced distribution of treasure piles
+* More obstacles within zones
+
 0.96 -> 0.97 (Nov 01 2014)
 GENERAL:
 * (windows) Moved VCMI data directory from '%userprofile%\vcmi' to '%userprofile%\Documents\My Games\vcmi'

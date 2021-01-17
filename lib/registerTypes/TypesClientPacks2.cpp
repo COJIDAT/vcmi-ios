@@ -1,9 +1,18 @@
+/*
+ * TypesClientPacks2.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "RegisterTypes.h"
 
-#include "../mapping/CMapInfo.h"
 #include "../StartInfo.h"
-#include "../BattleState.h"
+#include "../CStack.h"
+#include "../battle/BattleInfo.h"
 #include "../CGameState.h"
 #include "../mapping/CMap.h"
 #include "../CModHandler.h"
@@ -12,18 +21,19 @@
 #include "../VCMI_Lib.h"
 #include "../CArtHandler.h"
 #include "../CHeroHandler.h"
-#include "../CSpellHandler.h"
+#include "../spells/CSpellHandler.h"
 #include "../CTownHandler.h"
 #include "../mapping/CCampaignHandler.h"
 #include "../NetPacks.h"
 #include "../mapObjects/CObjectClassesHandler.h"
 
+#include "../serializer/BinaryDeserializer.h"
+#include "../serializer/BinarySerializer.h"
+#include "../serializer/CTypeList.h"
 
-template void registerTypesClientPacks2<CISer<CConnection>>(CISer<CConnection>& s);
-template void registerTypesClientPacks2<COSer<CConnection>>(COSer<CConnection>& s);
-template void registerTypesClientPacks2<CISer<CMemorySerializer>>(CISer<CMemorySerializer>& s);
-template void registerTypesClientPacks2<COSer<CMemorySerializer>>(COSer<CMemorySerializer>& s);
-template void registerTypesClientPacks2<CSaveFile>(CSaveFile & s);
-template void registerTypesClientPacks2<CLoadFile>(CLoadFile & s);
+
+template void registerTypesClientPacks2<BinaryDeserializer>(BinaryDeserializer & s);
+template void registerTypesClientPacks2<BinarySerializer>(BinarySerializer & s);
 template void registerTypesClientPacks2<CTypeList>(CTypeList & s);
-template void registerTypesClientPacks2<CLoadIntegrityValidator>(CLoadIntegrityValidator & s);
+
+

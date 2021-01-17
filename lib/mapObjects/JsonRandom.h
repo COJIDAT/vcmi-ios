@@ -1,8 +1,3 @@
-#pragma once
-
-#include "../GameConstants.h"
-#include "../ResourceSet.h"
-
 /*
  * JsonRandom.h, part of VCMI engine
  *
@@ -12,13 +7,17 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "../GameConstants.h"
+#include "../ResourceSet.h"
 
 class JsonNode;
 typedef std::vector<JsonNode> JsonVector;
 class CRandomGenerator;
 
-class Bonus;
-class Component;
+struct Bonus;
+struct Component;
 class CStackBasicDescriptor;
 
 namespace JsonRandom

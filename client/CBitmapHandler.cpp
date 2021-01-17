@@ -1,14 +1,3 @@
-#include "StdInc.h"
-
-#include "../lib/filesystem/Filesystem.h"
-#include "../lib/filesystem/CFileInfo.h"
-#include "SDL.h"
-#include "SDL_image.h"
-#include "CBitmapHandler.h"
-#include "CDefHandler.h"
-#include "gui/SDL_Extensions.h"
-#include "../lib/vcmi_endian.h"
-
 /*
  * CBitmapHandler.cpp, part of VCMI engine
  *
@@ -18,6 +7,21 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+
+#include "../lib/filesystem/Filesystem.h"
+#include "SDL.h"
+#include "SDL_image.h"
+#include "CBitmapHandler.h"
+#include "gui/SDL_Extensions.h"
+#include "../lib/vcmi_endian.h"
+
+namespace BitmapHandler
+{
+	SDL_Surface * loadH3PCX(ui8 * data, size_t size);
+
+	SDL_Surface * loadBitmapFromDir(std::string path, std::string fname, bool setKey=true);
+}
 
 bool isPCX(const ui8 *header)//check whether file can be PCX according to header
 {
@@ -70,7 +74,7 @@ SDL_Surface * BitmapHandler::loadH3PCX(ui8 * pcx, size_t size)
 			tp.r = pcx[it++];
 			tp.g = pcx[it++];
 			tp.b = pcx[it++];
-			CSDL_Ext::colorSetAlpha(tp,SDL_ALPHA_OPAQUE);
+			tp.a = SDL_ALPHA_OPAQUE;
 			ret->format->palette->colors[i] = tp;
 		}
 	}
@@ -102,7 +106,7 @@ SDL_Surface * BitmapHandler::loadBitmapFromDir(std::string path, std::string fna
 {
 	if(!fname.size())
 	{
-        logGlobal->warnStream() << "Call to loadBitmap with void fname!";
+		logGlobal->warn("Call to loadBitmap with void fname!");
 		return nullptr;
 	}
 	if (!CResourceHandler::get()->existsResource(ResourceID(path + fname, EResType::IMAGE)))
@@ -126,7 +130,7 @@ SDL_Surface * BitmapHandler::loadBitmapFromDir(std::string path, std::string fna
 		}
 		else
 		{
-			logGlobal->errorStream()<<"Failed to open "<<fname<<" as H3 PCX!";
+			logGlobal->error("Failed to open %s as H3 PCX!", fname);
 			return nullptr;
 		}
 	}
@@ -142,13 +146,13 @@ SDL_Surface * BitmapHandler::loadBitmapFromDir(std::string path, std::string fna
 			{
 				//set correct value for alpha\unused channel
 				for (int i=0; i < ret->format->palette->ncolors; i++)
-					CSDL_Ext::colorSetAlpha(ret->format->palette->colors[i],SDL_ALPHA_OPAQUE);				
+					ret->format->palette->colors[i].a = SDL_ALPHA_OPAQUE;
 			}
 		}
 		else
 		{
-            logGlobal->errorStream()<<"Failed to open "<<fname<<" via SDL_Image";
-			logGlobal->errorStream()<<"Reason: " << IMG_GetError();
+			logGlobal->error("Failed to open %s via SDL_Image", fname);
+			logGlobal->error("Reason: %s", IMG_GetError());
 			return nullptr;
 		}
 	}
@@ -161,6 +165,10 @@ SDL_Surface * BitmapHandler::loadBitmapFromDir(std::string path, std::string fna
 	{
 		CSDL_Ext::setDefaultColorKeyPresize(ret);
 	}
+	else if (ret->format->Amask)
+	{
+		SDL_SetSurfaceBlendMode(ret, SDL_BLENDMODE_BLEND);
+	}
 	else // always set
 	{
 		CSDL_Ext::setDefaultColorKey(ret);
@@ -170,11 +178,13 @@ SDL_Surface * BitmapHandler::loadBitmapFromDir(std::string path, std::string fna
 
 SDL_Surface * BitmapHandler::loadBitmap(std::string fname, bool setKey)
 {
-	SDL_Surface *bitmap;
+	SDL_Surface * bitmap = nullptr;
 
 	if (!(bitmap = loadBitmapFromDir("DATA/", fname, setKey)) &&
 		!(bitmap = loadBitmapFromDir("SPRITES/", fname, setKey)))
-        logGlobal->errorStream()<<"Error: Failed to find file "<<fname;
+	{
+		logGlobal->error("Error: Failed to find file %s", fname);
+	}
 
 	return bitmap;
 }

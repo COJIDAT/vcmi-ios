@@ -1,16 +1,24 @@
+/*
+ * CPreGame.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CPreGame.h"
 
 #include "../lib/filesystem/Filesystem.h"
-#include "../lib/filesystem/CFileInfo.h"
 #include "../lib/filesystem/CCompressedStream.h"
 
 #include "../lib/CStopWatch.h"
 #include "gui/SDL_Extensions.h"
 #include "CGameInfo.h"
 #include "gui/CCursorHandler.h"
-#include "CDefHandler.h"
 #include "../lib/CGeneralTextHandler.h"
+#include "../lib/CSkillHandler.h"
 #include "../lib/CTownHandler.h"
 #include "../lib/CHeroHandler.h"
 #include "../lib/mapping/CCampaignHandler.h"
@@ -19,14 +27,15 @@
 #include "CMusicHandler.h"
 #include "CVideoHandler.h"
 #include "Graphics.h"
-#include "../lib/Connection.h"
+#include "../lib/serializer/Connection.h"
+#include "../lib/serializer/CTypeList.h"
 #include "../lib/VCMIDirs.h"
 #include "../lib/mapping/CMap.h"
 #include "windows/GUIClasses.h"
 #include "CPlayerInterface.h"
 #include "../CCallback.h"
 #include "CMessage.h"
-#include "../lib/CSpellHandler.h" /*for campaign bonuses*/
+#include "../lib/spells/CSpellHandler.h" /*for campaign bonuses*/
 #include "../lib/CArtHandler.h" /*for campaign bonuses*/
 #include "../lib/CBuildingHandler.h" /*for campaign bonuses*/
 #include "CBitmapHandler.h"
@@ -45,18 +54,9 @@
 #include "widgets/TextControls.h"
 #include "windows/InfoWindows.h"
 #include "../lib/mapping/CMapService.h"
-#include "../lib/mapping/CMap.h"
 #include "../lib/CRandomGenerator.h"
+#include "../lib/CondSh.h"
 
-/*
- * CPreGame.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
 namespace fs = boost::filesystem;
 
 void startGame(StartInfo * options, CConnection *serv = nullptr);
@@ -82,18 +82,10 @@ struct EvilHlpStruct
 	CConnection *serv;
 	StartInfo *sInfo;
 
-	void reset(bool strong = true)
+	void reset()
 	{
-		if(strong)
-		{
-			vstd::clear_pointer(serv);
-			vstd::clear_pointer(sInfo);
-		}
-		else
-		{
-			serv = nullptr;
-			sInfo = nullptr;
-		}
+//		vstd::clear_pointer(serv);
+		vstd::clear_pointer(sInfo);
 	}
 
 } startingInfo;
@@ -140,10 +132,10 @@ void setPlayer(PlayerSettings &pset, ui8 player, const std::map<ui8, std::string
 		playerColor = pset.color;
 }
 
-void updateStartInfo(std::string filename, StartInfo & sInfo, const CMapHeader * mapHeader, const std::map<ui8, std::string> &playerNames)
+void updateStartInfo(std::string filename, StartInfo & sInfo, const std::unique_ptr<CMapHeader> & mapHeader, const std::map<ui8, std::string> &playerNames)
 {
 	sInfo.playerInfos.clear();
-	if(!mapHeader)
+	if(!mapHeader.get())
 	{
 		return;
 	}
@@ -199,14 +191,14 @@ public:
 	virtual ~CBaseForPGApply(){};
 	template<typename U> static CBaseForPGApply *getApplier(const U * t=nullptr)
 	{
-		return new CApplyOnPG<U>;
+		return new CApplyOnPG<U>();
 	}
 };
 
 template <typename T> class CApplyOnPG : public CBaseForPGApply
 {
 public:
-	void applyOnPG(CSelectionScreen *selScr, void *pack) const
+	void applyOnPG(CSelectionScreen *selScr, void *pack) const override
 	{
 		T *ptr = static_cast<T*>(pack);
 		ptr->apply(selScr);
@@ -216,9 +208,9 @@ public:
 template <> class CApplyOnPG<CPack> : public CBaseForPGApply
 {
 public:
-	void applyOnPG(CSelectionScreen *selScr, void *pack) const
+	void applyOnPG(CSelectionScreen *selScr, void *pack) const override
 	{
-			logGlobal->errorStream() << "Cannot apply on PG plain CPack!";
+			logGlobal->error("Cannot apply on PG plain CPack!");
 			assert(0);
 	}
 };
@@ -306,10 +298,10 @@ void CMenuScreen::switchToTab(size_t index)
 //funciton for std::string -> std::function conversion for main menu
 static std::function<void()> genCommand(CMenuScreen* menu, std::vector<std::string> menuType, const std::string &string)
 {
-	static const std::vector<std::string> commandType  = 
+	static const std::vector<std::string> commandType  =
 		{"to", "campaigns", "start", "load", "exit", "highscores"};
 
-	static const std::vector<std::string> gameType = 
+	static const std::vector<std::string> gameType =
 		{"single", "multi", "campaign", "tutorial"};
 
 	std::list<std::string> commands;
@@ -348,10 +340,9 @@ static std::function<void()> genCommand(CMenuScreen* menu, std::vector<std::stri
 				{
 					switch (std::find(gameType.begin(), gameType.end(), commands.front()) - gameType.begin())
 					{
-                        case 0: return std::bind(&CGPreGame::openSel, CGP, CMenuScreen::loadGame, CMenuScreen::SINGLE_PLAYER);
-                        case 1: return std::bind(&CGPreGame::openSel, CGP, CMenuScreen::loadGame, CMenuScreen::MULTI_HOT_SEAT);
-						//TODO: load campaign
-                        case 2: return std::bind(CInfoWindow::showInfoDialog, "This function is not implemented yet. Campaign saves can be loaded from \"Single Player\" menu", (const std::vector<CComponent*>*)nullptr, false, PlayerColor(1));
+						case 0: return std::bind(&CGPreGame::openSel, CGP, CMenuScreen::loadGame, CMenuScreen::SINGLE_PLAYER);
+						case 1: return std::bind(&CGPreGame::openSel, CGP, CMenuScreen::loadGame, CMenuScreen::MULTI_HOT_SEAT);
+						case 2: return std::bind(&CGPreGame::openSel, CGP, CMenuScreen::loadGame, CMenuScreen::SINGLE_CAMPAIGN);
 						//TODO: load tutorial
                         case 3: return std::bind(CInfoWindow::showInfoDialog, "Sorry, tutorial is not implemented yet\n", (const std::vector<CComponent*>*)nullptr, false, PlayerColor(1));
 					}
@@ -368,7 +359,7 @@ static std::function<void()> genCommand(CMenuScreen* menu, std::vector<std::stri
 			}
 		}
 	}
-    logGlobal->errorStream()<<"Failed to parse command: "<<string;
+	logGlobal->error("Failed to parse command: %s", string);
 	return std::function<void()>();
 }
 
@@ -494,9 +485,9 @@ CGPreGame::~CGPreGame()
 		GH.curInt = nullptr;
 }
 
-void CGPreGame::openSel(CMenuScreen::EState screenType, CMenuScreen::EMultiMode multi /*= CMenuScreen::SINGLE_PLAYER*/)
+void CGPreGame::openSel(CMenuScreen::EState screenType, CMenuScreen::EGameMode gameMode)
 {
-	GH.pushInt(new CSelectionScreen(screenType, multi));
+	GH.pushInt(new CSelectionScreen(screenType, gameMode));
 }
 
 void CGPreGame::loadGraphics()
@@ -504,19 +495,20 @@ void CGPreGame::loadGraphics()
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 	new CFilledTexture("DIBOXBCK", pos);
 
-	victory = CDefHandler::giveDef("SCNRVICT.DEF");
-	loss = CDefHandler::giveDef("SCNRLOSS.DEF");
+	victoryIcons = std::make_shared<CAnimation>("SCNRVICT.DEF");
+	victoryIcons->load();
+	lossIcons = std::make_shared<CAnimation>("SCNRLOSS.DEF");
+	lossIcons->load();
 }
 
 void CGPreGame::disposeGraphics()
 {
-	delete victory;
-	delete loss;
+	victoryIcons->unload();
+	lossIcons->unload();
 }
 
 void CGPreGame::update()
 {
-	boost::unique_lock<boost::recursive_mutex> lock(*CPlayerInterface::pim);
 	if(CGP != this) //don't update if you are not a main interface
 		return;
 
@@ -538,15 +530,6 @@ void CGPreGame::update()
 	// /FIXME: find out why GH.listInt is empty to begin with
 	if (GH.topInt() != nullptr)
 		GH.topInt()->show(screen);
-
-	if (settings["general"]["showfps"].Bool())
-		GH.drawFPSCounter();
-}
-
-void CGPreGame::runLocked(std::function<void(IUpdateable * )> cb)
-{
-	boost::unique_lock<boost::recursive_mutex> lock(*CPlayerInterface::pim);
-	cb(this);	
 }
 
 void CGPreGame::openCampaignScreen(std::string name)
@@ -556,13 +539,15 @@ void CGPreGame::openCampaignScreen(std::string name)
 		GH.pushInt(new CCampaignScreen(CGPreGameConfig::get().getCampaigns()[name]));
 		return;
 	}
-	logGlobal->errorStream()<<"Unknown campaign set: "<<name;
+	logGlobal->error("Unknown campaign set: %s", name);
 }
 
 CGPreGame *CGPreGame::create()
 {
 	if(!CGP)
 		CGP = new CGPreGame();
+
+	GH.terminate_cond->set(false);
 	return CGP;
 }
 
@@ -574,22 +559,22 @@ void CGPreGame::removeFromGui()
 	GH.popInt(GH.topInt()); //remove background
 }
 
-CSelectionScreen::CSelectionScreen(CMenuScreen::EState Type, CMenuScreen::EMultiMode MultiPlayer /*= CMenuScreen::SINGLE_PLAYER*/, const std::map<ui8, std::string> * Names /*= nullptr*/, const std::string & Address /*=""*/, const std::string & Port /*= ""*/)
+CSelectionScreen::CSelectionScreen(CMenuScreen::EState Type, CMenuScreen::EGameMode GameMode, const std::map<ui8, std::string> * Names, const std::string & Address, const ui16 Port)
 	: ISelectionScreenInfo(Names), serverHandlingThread(nullptr), mx(new boost::recursive_mutex),
 	  serv(nullptr), ongoingClosing(false), myNameID(255)
 {
 	CGPreGame::create(); //we depend on its graphics
 	screenType = Type;
-	multiPlayer = MultiPlayer;
+	gameMode = GameMode;
 
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 
-	bool network = (MultiPlayer == CMenuScreen::MULTI_NETWORK_GUEST || MultiPlayer == CMenuScreen::MULTI_NETWORK_HOST);
+	bool network = (isGuest() || isHost());
 
 	CServerHandler *sh = nullptr;
-	if(multiPlayer == CMenuScreen::MULTI_NETWORK_HOST)
+	if(isHost())
 	{
-		sh = new CServerHandler;
+		sh = new CServerHandler();
 		sh->startServer();
 	}
 
@@ -627,6 +612,7 @@ CSelectionScreen::CSelectionScreen(CMenuScreen::EState Type, CMenuScreen::EMulti
 	if (screenType == CMenuScreen::campaignList)
 	{
 		opt = nullptr;
+		randMapTab = nullptr;
 	}
 	else
 	{
@@ -637,7 +623,7 @@ CSelectionScreen::CSelectionScreen(CMenuScreen::EState Type, CMenuScreen::EMulti
         randMapTab->getMapInfoChanged() += std::bind(&CSelectionScreen::changeSelection, this, _1);
 		randMapTab->recActions = DISPOSE;
 	}
-    sel = new SelectionTab(screenType, std::bind(&CSelectionScreen::changeSelection, this, _1), multiPlayer); //scenario selection tab
+	sel = new SelectionTab(screenType, std::bind(&CSelectionScreen::changeSelection, this, _1), gameMode); //scenario selection tab
 	sel->recActions = DISPOSE;
 
 	switch(screenType)
@@ -645,7 +631,7 @@ CSelectionScreen::CSelectionScreen(CMenuScreen::EState Type, CMenuScreen::EMulti
 	case CMenuScreen::newGame:
 		{
 			SDL_Color orange = {232, 184, 32, 0};
-			SDL_Color overlayColor = multiPlayer == CMenuScreen::MULTI_NETWORK_GUEST ? orange : Colors::WHITE;
+			SDL_Color overlayColor = isGuest() ? orange : Colors::WHITE;
 
 			card->difficulty->addCallback(std::bind(&CSelectionScreen::difficultyChange, this, _1));
 			card->difficulty->setSelected(1);
@@ -675,7 +661,7 @@ CSelectionScreen::CSelectionScreen(CMenuScreen::EState Type, CMenuScreen::EMulti
 				CButton *hideChat = new CButton(Point(619, 83), "GSPBUT2.DEF", CGI->generaltexth->zelp[48], std::bind(&InfoCard::toggleChat, card), SDLK_h);
 				hideChat->addTextOverlay(CGI->generaltexth->allTexts[531], FONT_SMALL);
 
-				if(multiPlayer == CMenuScreen::MULTI_NETWORK_GUEST)
+				if(isGuest())
 				{
 					select->block(true);
 					opts->block(true);
@@ -705,41 +691,39 @@ CSelectionScreen::CSelectionScreen(CMenuScreen::EState Type, CMenuScreen::EMulti
 
 	if(network)
 	{
-		if(multiPlayer == CMenuScreen::MULTI_NETWORK_HOST)
+		if(isHost())
 		{
 			assert(playerNames.size() == 1  &&  vstd::contains(playerNames, 1)); //TODO hot-seat/network combo
-			serv = sh->connectToServer();
+			if(settings["session"]["donotstartserver"].Bool())
+				serv = CServerHandler::justConnectToServer(Address, Port);
+			else
+				serv = sh->connectToServer();
 			*serv << (ui8) 4;
 			myNameID = 1;
 		}
 		else
-		{
 			serv = CServerHandler::justConnectToServer(Address, Port);
-		}
 
 		serv->enterPregameConnectionMode();
 		*serv << playerNames.begin()->second;
 
-		if(multiPlayer == CMenuScreen::MULTI_NETWORK_GUEST)
+		if(isGuest())
 		{
 			const CMapInfo *map;
 			*serv >> myNameID >> map;
 			serv->connectionID = myNameID;
 			changeSelection(map);
 		}
-		else //host
+		else if(current)
 		{
-			if(current)
-			{
-				SelectMap sm(*current);
-				*serv << &sm;
+			SelectMap sm(*current);
+			*serv << &sm;
 
-				UpdateStartOptions uso(sInfo);
-				*serv << &uso;
-			}
+			UpdateStartOptions uso(sInfo);
+			*serv << &uso;
 		}
 
-		applier = new CApplier<CBaseForPGApply>;
+		applier = new CApplier<CBaseForPGApply>();
 		registerTypesPregamePacks(*applier);
 		serverHandlingThread = new boost::thread(&CSelectionScreen::handleConnection, this);
 	}
@@ -769,7 +753,7 @@ CSelectionScreen::~CSelectionScreen()
 
 void CSelectionScreen::toggleTab(CIntObject *tab)
 {
-	if(multiPlayer == CMenuScreen::MULTI_NETWORK_HOST && serv)
+	if(isHost() && serv)
 	{
 		PregameGuiAction pga;
 		if(tab == curTab)
@@ -798,17 +782,15 @@ void CSelectionScreen::toggleTab(CIntObject *tab)
 	else
 	{
 		curTab = nullptr;
-	};
+	}
 	GH.totalRedraw();
 }
 
 void CSelectionScreen::changeSelection(const CMapInfo * to)
 {
 	if(current == to) return;
-	if(multiPlayer == CMenuScreen::MULTI_NETWORK_GUEST)
-	{
+	if(isGuest())
 		vstd::clear_pointer(current);
-	}
 
 	current = to;
 
@@ -817,7 +799,12 @@ void CSelectionScreen::changeSelection(const CMapInfo * to)
 	   SEL->sInfo.difficulty = to->scenarioOpts->difficulty;
 	if(screenType != CMenuScreen::campaignList)
 	{
-		updateStartInfo(to ? to->fileURI : "", sInfo, to ? to->mapHeader.get() : nullptr);
+		std::unique_ptr<CMapHeader> emptyHeader;
+        if(to)
+			updateStartInfo(to->fileURI, sInfo, to->mapHeader);
+		else
+			updateStartInfo("", sInfo, emptyHeader);
+
 		if(screenType == CMenuScreen::newGame)
 		{
 			if(to && to->isRandomMap)
@@ -836,7 +823,7 @@ void CSelectionScreen::changeSelection(const CMapInfo * to)
 		opt->recreate();
 	}
 
-	if(multiPlayer == CMenuScreen::MULTI_NETWORK_HOST && serv)
+	if(isHost() && serv)
 	{
 		SelectMap sm(*to);
 		*serv << &sm;
@@ -849,9 +836,7 @@ void CSelectionScreen::changeSelection(const CMapInfo * to)
 void CSelectionScreen::startCampaign()
 {
 	if (SEL->current)
-	{
 		GH.pushInt(new CBonusSelection(SEL->current->fileURI));
-	}
 }
 
 void CSelectionScreen::startScenario()
@@ -871,7 +856,7 @@ void CSelectionScreen::startScenario()
 		}
 	}
 
-	if(multiPlayer == CMenuScreen::MULTI_NETWORK_HOST)
+	if(isHost())
 	{
 		start->block(true);
 		StartWithCurrentSettings swcs;
@@ -958,7 +943,7 @@ void CSelectionScreen::handleConnection()
 		{
 			CPackForSelectionScreen *pack = nullptr;
 			*serv >> pack;
-            logNetwork->traceStream() << "Received a pack of type " << typeid(*pack).name();
+			logNetwork->trace("Received a pack of type %s", typeid(*pack).name());
 			assert(pack);
 			if(QuitMenuWithoutStarting *endingPack = dynamic_cast<QuitMenuWithoutStarting *>(pack))
 			{
@@ -974,11 +959,16 @@ void CSelectionScreen::handleConnection()
 				upcomingPacks.push_back(pack);
 			}
 		}
-	} HANDLE_EXCEPTION
+	}
 	catch(int i)
 	{
 		if(i != 666)
 			throw;
+	}
+	catch(...)
+	{
+		handleException();
+		throw;
 	}
 }
 
@@ -1003,6 +993,9 @@ void CSelectionScreen::setSInfo(const StartInfo &si)
 
 	card->difficulty->setSelected(si.difficulty);
 
+	if(curTab == randMapTab)
+		randMapTab->setMapGenOptions(si.mapGenOptions);
+
 	GH.totalRedraw();
 }
 
@@ -1013,7 +1006,7 @@ void CSelectionScreen::processPacks()
 	{
 		CPackForSelectionScreen *pack = upcomingPacks.front();
 		upcomingPacks.pop_front();
-		CBaseForPGApply *apply = applier->apps[typeList.getTypeID(pack)]; //find the applier
+		CBaseForPGApply *apply = applier->getApplier(typeList.getTypeID(pack)); //find the applier
 		apply->applyOnPG(this, pack);
 		delete pack;
 	}
@@ -1093,8 +1086,8 @@ void SelectionTab::filter( int size, bool selectFirst )
 		{
 			slider->moveTo(0);
 			onSelect(curItems[0]);
+			selectAbs(0);
 		}
-		selectAbs(0);
 	}
 	else
 	{
@@ -1106,6 +1099,10 @@ void SelectionTab::filter( int size, bool selectFirst )
 std::unordered_set<ResourceID> SelectionTab::getFiles(std::string dirURI, int resType)
 {
 	boost::to_upper(dirURI);
+	CResourceHandler::get()->updateFilteredFiles([&](const std::string & mount)
+	{
+		return boost::algorithm::starts_with(mount, dirURI);
+	});
 
 	std::unordered_set<ResourceID> ret = CResourceHandler::get()->getFilteredFiles([&](const ResourceID & ident)
 	{
@@ -1118,6 +1115,7 @@ std::unordered_set<ResourceID> SelectionTab::getFiles(std::string dirURI, int re
 
 void SelectionTab::parseMaps(const std::unordered_set<ResourceID> &files)
 {
+	logGlobal->debug("Parsing %d maps", files.size());
 	allItems.clear();
 	for(auto & file : files)
 	{
@@ -1126,24 +1124,25 @@ void SelectionTab::parseMaps(const std::unordered_set<ResourceID> &files)
 			CMapInfo mapInfo;
 			mapInfo.mapInit(file.getName());
 
-			// ignore unsupported map versions (e.g. WoG maps without WoG
-			if (mapInfo.mapHeader->version <= CGI->modh->settings.data["textData"]["mapVersion"].Float())
+			// ignore unsupported map versions (e.g. WoG maps without WoG)
+			// but accept VCMI maps
+			if((mapInfo.mapHeader->version >= EMapFormat::VCMI) || (mapInfo.mapHeader->version <= CGI->modh->settings.data["textData"]["mapVersion"].Float()))
 				allItems.push_back(std::move(mapInfo));
 		}
 		catch(std::exception & e)
 		{
-            logGlobal->errorStream() << "Map " << file.getName() << " is invalid. Message: " << e.what();
+			logGlobal->error("Map %s is invalid. Message: %s", file.getName(), e.what());
 		}
 	}
 }
 
-void SelectionTab::parseGames(const std::unordered_set<ResourceID> &files, bool multi)
+void SelectionTab::parseGames(const std::unordered_set<ResourceID> &files, CMenuScreen::EGameMode gameMode)
 {
 	for(auto & file : files)
 	{
 		try
 		{
-			CLoadFile lf(*CResourceHandler::get()->getResourceName(file), minSupportedVersion);
+			CLoadFile lf(*CResourceHandler::get()->getResourceName(file), MINIMAL_SERIALIZATION_VERSION);
 			lf.checkMagicBytes(SAVEGAME_MAGIC);
 // 			ui8 sign[8];
 // 			lf >> sign;
@@ -1155,24 +1154,37 @@ void SelectionTab::parseGames(const std::unordered_set<ResourceID> &files, bool 
 			// Create the map info object
 			CMapInfo mapInfo;
 			mapInfo.mapHeader = make_unique<CMapHeader>();
-			mapInfo.scenarioOpts = new StartInfo;
+			mapInfo.scenarioOpts = nullptr;//to be created by serialiser
 			lf >> *(mapInfo.mapHeader.get()) >> mapInfo.scenarioOpts;
 			mapInfo.fileURI = file.getName();
 			mapInfo.countPlayers();
-			std::time_t time = CFileInfo(*CResourceHandler::get()->getResourceName(file)).getDate();
+			std::time_t time = boost::filesystem::last_write_time(*CResourceHandler::get()->getResourceName(file));
 			mapInfo.date = std::asctime(std::localtime(&time));
 
-			// If multi mode then only multi games, otherwise single
-			if((mapInfo.actualHumanPlayers > 1) != multi)
+			// Filter out other game modes
+			bool isCampaign = mapInfo.scenarioOpts->mode == StartInfo::CAMPAIGN;
+			bool isMultiplayer = mapInfo.actualHumanPlayers > 1;
+			switch(gameMode)
 			{
-				mapInfo.mapHeader.reset();
+			case CMenuScreen::SINGLE_PLAYER:
+				if(isMultiplayer || isCampaign)
+					mapInfo.mapHeader.reset();
+				break;
+			case CMenuScreen::SINGLE_CAMPAIGN:
+				if(!isCampaign)
+					mapInfo.mapHeader.reset();
+				break;
+			default:
+				if(!isMultiplayer)
+					mapInfo.mapHeader.reset();
+				break;
 			}
 
 			allItems.push_back(std::move(mapInfo));
 		}
 		catch(const std::exception & e)
 		{
-            logGlobal->errorStream() << "Error: Failed to process " << file.getName() <<": " << e.what();
+			logGlobal->error("Error: Failed to process %s: %s", file.getName(), e.what());
 		}
 	}
 }
@@ -1190,7 +1202,7 @@ void SelectionTab::parseCampaigns(const std::unordered_set<ResourceID> &files )
 	}
 }
 
-SelectionTab::SelectionTab(CMenuScreen::EState Type, const std::function<void(CMapInfo *)> &OnSelect, CMenuScreen::EMultiMode MultiPlayer /*= CMenuScreen::SINGLE_PLAYER*/)
+SelectionTab::SelectionTab(CMenuScreen::EState Type, const std::function<void(CMapInfo *)> &OnSelect, CMenuScreen::EGameMode GameMode)
 	:bg(nullptr), onSelect(OnSelect)
 {
 	OBJ_CONSTRUCTION;
@@ -1208,12 +1220,13 @@ SelectionTab::SelectionTab(CMenuScreen::EState Type, const std::function<void(CM
 	else
 	{
 		bg = nullptr; //use background from parent
+		type |= REDRAW_PARENT; // we use parent background so we need to make sure it's will be redrawn too
 		pos.w = parent->pos.w;
 		pos.h = parent->pos.h;
 		pos.x += 3; pos.y += 6;
 	}
 
-	if(MultiPlayer == CMenuScreen::MULTI_NETWORK_GUEST)
+	if(GameMode == CMenuScreen::MULTI_NETWORK_GUEST)
 	{
 		positions = 18;
 	}
@@ -1228,7 +1241,7 @@ SelectionTab::SelectionTab(CMenuScreen::EState Type, const std::function<void(CM
 
 		case CMenuScreen::loadGame:
 		case CMenuScreen::saveGame:
-			parseGames(getFiles("Saves/", EResType::CLIENT_SAVEGAME), MultiPlayer);
+			parseGames(getFiles("Saves/", EResType::CLIENT_SAVEGAME), GameMode);
 			if(tabType == CMenuScreen::loadGame)
 			{
 				positions = 18;
@@ -1291,7 +1304,9 @@ SelectionTab::SelectionTab(CMenuScreen::EState Type, const std::function<void(CM
 
 	slider = new CSlider(Point(372, 86), tabType != CMenuScreen::saveGame ? 480 : 430, std::bind(&SelectionTab::sliderMove, this, _1), positions, curItems.size(), 0, false, CSlider::BLUE);
 	slider->addUsedEvents(WHEEL);
-	format =  CDefHandler::giveDef("SCSELC.DEF");
+
+	formatIcons = std::make_shared<CAnimation>("SCSELC.DEF");
+	formatIcons->load();
 
 	sortingBy = _format;
 	ascending = true;
@@ -1300,16 +1315,24 @@ SelectionTab::SelectionTab(CMenuScreen::EState Type, const std::function<void(CM
 	switch(tabType)
 	{
 	case CMenuScreen::newGame:
-		selectFName("Maps/Arrogance");
+		logGlobal->error(settings["session"]["lastMap"].String());
+		if(settings["session"]["lastMap"].isNull())
+			selectFName("Maps/Arrogance");
+		else
+			selectFName(settings["session"]["lastMap"].String());
+
 		break;
-	case CMenuScreen::loadGame:
 	case CMenuScreen::campaignList:
 		select(0);
 		break;
-	case CMenuScreen::saveGame:;
+	case CMenuScreen::loadGame:
+	case CMenuScreen::saveGame:
 		if(saveGameName.empty())
 		{
-			txt->setText("NEWGAME");
+			if(tabType == CMenuScreen::saveGame)
+				txt->setText("NEWGAME");
+			else
+				select(0);
 		}
 		else
 		{
@@ -1320,7 +1343,7 @@ SelectionTab::SelectionTab(CMenuScreen::EState Type, const std::function<void(CM
 
 SelectionTab::~SelectionTab()
 {
-	delete format;
+	formatIcons->unload();
 }
 
 void SelectionTab::sortBy( int criteria )
@@ -1367,11 +1390,17 @@ void SelectionTab::select( int position )
 	else if(position >= positions)
 		slider->moveBy(position - positions + 1);
 
+	if(tabType == CMenuScreen::newGame)
+	{
+		Settings lastMap = settings.write["session"]["lastMap"];
+		lastMap->String() = getSelectedMapInfo()->fileURI;
+	}
+
 	if(txt)
 	{
-		std::string filename = *CResourceHandler::get("local")->getResourceName(
+		auto filename = *CResourceHandler::get("local")->getResourceName(
 								   ResourceID(curItems[py]->fileURI, EResType::CLIENT_SAVEGAME));
-		txt->setText(CFileInfo(filename).getBaseName());
+		txt->setText(filename.stem().string());
 	}
 
 	onSelect(curItems[py]);
@@ -1414,7 +1443,7 @@ void SelectionTab::printMaps(SDL_Surface *to)
 	{
 		CMapInfo *currentItem = curItems[elemIdx];
 
-		if (elemIdx == selectionPos)
+		if(elemIdx == selectionPos)
 			itemColor=Colors::YELLOW;
 		else
 			itemColor=Colors::WHITE;
@@ -1445,33 +1474,51 @@ void SelectionTab::printMaps(SDL_Surface *to)
 			}
 			printAtMiddleLoc(temp2, 70, 128 + line * 25, FONT_SMALL, itemColor, to);
 
-			int temp=-1;
+			int frame = -1, group = 0;
 			switch (currentItem->mapHeader->version)
 			{
 			case EMapFormat::ROE:
-				temp=0;
+				frame = 0;
 				break;
 			case EMapFormat::AB:
-				temp=1;
+				frame = 1;
 				break;
 			case EMapFormat::SOD:
-				temp=2;
+				frame = 2;
 				break;
 			case EMapFormat::WOG:
-				temp=3;
+				frame = 3;
+				break;
+			case EMapFormat::VCMI:
+				frame = 0;
+				group = 1;
 				break;
 			default:
 				// Unknown version. Be safe and ignore that map
-                logGlobal->warnStream() << "Warning: " << currentItem->fileURI << " has wrong version!";
+				logGlobal->warn("Warning: %s has wrong version!", currentItem->fileURI);
 				continue;
 			}
-			blitAtLoc(format->ourImages[temp].bitmap, 88, 117 + line * 25, to);
+			IImage * icon = formatIcons->getImage(frame,group);
+			if(icon)
+			{
+				icon->draw(to, pos.x + 88, pos.y + 117 + line * 25);
+				icon->decreaseRef();
+			}
 
 			//victory conditions
-			blitAtLoc(CGP->victory->ourImages[currentItem->mapHeader->victoryIconIndex].bitmap, 306, 117 + line * 25, to);
-
+			icon = CGP->victoryIcons->getImage(currentItem->mapHeader->victoryIconIndex,0);
+			if(icon)
+			{
+				icon->draw(to, pos.x + 306, pos.y + 117 + line * 25);
+				icon->decreaseRef();
+			}
 			//loss conditions
-			blitAtLoc(CGP->loss->ourImages[currentItem->mapHeader->defeatIconIndex].bitmap, 339, 117 + line * 25, to);
+			icon = CGP->lossIcons->getImage(currentItem->mapHeader->defeatIconIndex,0);
+			if(icon)
+			{
+				icon->draw(to, pos.x + 339, pos.y + 117 + line * 25);
+				icon->decreaseRef();
+			}
 		}
 		else //if campaign
 		{
@@ -1494,8 +1541,8 @@ void SelectionTab::printMaps(SDL_Surface *to)
 		}
 		else
 		{
-			name = CFileInfo(*CResourceHandler::get("local")->getResourceName(
-								 ResourceID(currentItem->fileURI, EResType::CLIENT_SAVEGAME))).getBaseName();
+			name = CResourceHandler::get("local")->getResourceName(
+								 ResourceID(currentItem->fileURI, EResType::CLIENT_SAVEGAME))->stem().string();
 		}
 
 		//print name
@@ -1636,16 +1683,22 @@ CRandomMapTab::CRandomMapTab()
 	mapSizeBtnGroup->setSelected(1);
 	mapSizeBtnGroup->addCallback([&](int btnId)
 	{
-		const std::vector<int> mapSizeVal = {CMapHeader::MAP_SIZE_SMALL,CMapHeader::MAP_SIZE_MIDDLE,CMapHeader::MAP_SIZE_LARGE,CMapHeader::MAP_SIZE_XLARGE};
+		auto mapSizeVal = getPossibleMapSizes();
 		mapGenOptions.setWidth(mapSizeVal[btnId]);
 		mapGenOptions.setHeight(mapSizeVal[btnId]);
-		updateMapInfo();
+		if(!SEL->isGuest())
+			updateMapInfo();
 	});
 
 	// Two levels
 	twoLevelsBtn = new CToggleButton(Point(346, 81), "RANUNDR", CGI->generaltexth->zelp[202]);
 	//twoLevelsBtn->select(true); for now, deactivated
-	twoLevelsBtn->addCallback([&](bool on) { mapGenOptions.setHasTwoLevels(on); updateMapInfo(); });
+	twoLevelsBtn->addCallback([&](bool on)
+	{
+		mapGenOptions.setHasTwoLevels(on);
+		if(!SEL->isGuest())
+			updateMapInfo();
+	});
 
 	// Create number defs list
 	std::vector<std::string> numberDefs;
@@ -1665,9 +1718,10 @@ CRandomMapTab::CRandomMapTab()
 	{
 		mapGenOptions.setPlayerCount(btnId);
 		deactivateButtonsFrom(teamsCntGroup, btnId);
-		deactivateButtonsFrom(compOnlyPlayersCntGroup, 8 - btnId + 1);
+		deactivateButtonsFrom(compOnlyPlayersCntGroup, btnId);
 		validatePlayersCnt(btnId);
-		updateMapInfo();
+		if(!SEL->isGuest())
+			updateMapInfo();
 	});
 
 	// Amount of teams
@@ -1678,7 +1732,8 @@ CRandomMapTab::CRandomMapTab()
 	teamsCntGroup->addCallback([&](int btnId)
 	{
 		mapGenOptions.setTeamCount(btnId);
-		updateMapInfo();
+		if(!SEL->isGuest())
+			updateMapInfo();
 	});
 
 	// Computer only players
@@ -1686,13 +1741,13 @@ CRandomMapTab::CRandomMapTab()
 	compOnlyPlayersCntGroup->pos.y += 285;
 	compOnlyPlayersCntGroup->pos.x += BTNS_GROUP_LEFT_MARGIN;
 	addButtonsWithRandToGroup(compOnlyPlayersCntGroup, numberDefs, 0, 7, NUMBERS_WIDTH, 224, 232);
-	compOnlyPlayersCntGroup->setSelected(0);
 	compOnlyPlayersCntGroup->addCallback([&](int btnId)
 	{
 		mapGenOptions.setCompOnlyPlayerCount(btnId);
-		deactivateButtonsFrom(compOnlyTeamsCntGroup, btnId);
+		deactivateButtonsFrom(compOnlyTeamsCntGroup, (btnId == 0 ? 1 : btnId));
 		validateCompOnlyPlayersCnt(btnId);
-		updateMapInfo();
+		if(!SEL->isGuest())
+			updateMapInfo();
 	});
 
 	// Computer only teams
@@ -1700,11 +1755,12 @@ CRandomMapTab::CRandomMapTab()
 	compOnlyTeamsCntGroup->pos.y += 351;
 	compOnlyTeamsCntGroup->pos.x += BTNS_GROUP_LEFT_MARGIN;
 	addButtonsWithRandToGroup(compOnlyTeamsCntGroup, numberDefs, 0, 6, NUMBERS_WIDTH, 234, 241);
-	deactivateButtonsFrom(compOnlyTeamsCntGroup, 0);
+	deactivateButtonsFrom(compOnlyTeamsCntGroup, 1);
 	compOnlyTeamsCntGroup->addCallback([&](int btnId)
 	{
 		mapGenOptions.setCompOnlyTeamCount(btnId);
-		updateMapInfo();
+		if(!SEL->isGuest())
+			updateMapInfo();
 	});
 
 	const int WIDE_BTN_WIDTH = 85;
@@ -1737,7 +1793,8 @@ CRandomMapTab::CRandomMapTab()
 	showRandMaps = new CButton(Point(54, 535), "RANSHOW", CGI->generaltexth->zelp[252]);
 
 	// Initialize map info object
-	updateMapInfo();
+	if(!SEL->isGuest())
+		updateMapInfo();
 }
 
 void CRandomMapTab::addButtonsWithRandToGroup(CToggleGroup * group, const std::vector<std::string> & defs, int nStart, int nEnd, int btnWidth, int helpStartIndex, int helpRandIndex) const
@@ -1768,7 +1825,7 @@ void CRandomMapTab::addButtonsToGroup(CToggleGroup * group, const std::vector<st
 
 void CRandomMapTab::deactivateButtonsFrom(CToggleGroup * group, int startId)
 {
-	logGlobal->infoStream() << "Blocking buttons from " << startId;
+	logGlobal->debug("Blocking buttons from %d", startId);
 	for(auto toggle : group->buttons)
 	{
 		if (auto button = dynamic_cast<CToggleButton*>(toggle.second))
@@ -1797,9 +1854,9 @@ void CRandomMapTab::validatePlayersCnt(int playersCnt)
 		mapGenOptions.setTeamCount(playersCnt - 1);
 		teamsCntGroup->setSelected(mapGenOptions.getTeamCount());
 	}
-	if(mapGenOptions.getCompOnlyPlayerCount() > 8 - playersCnt)
+	if(mapGenOptions.getCompOnlyPlayerCount() >= playersCnt)
 	{
-		mapGenOptions.setCompOnlyPlayerCount(8 - playersCnt);
+		mapGenOptions.setCompOnlyPlayerCount(playersCnt - 1);
 		compOnlyPlayersCntGroup->setSelected(mapGenOptions.getCompOnlyPlayerCount());
 	}
 
@@ -1815,9 +1872,15 @@ void CRandomMapTab::validateCompOnlyPlayersCnt(int compOnlyPlayersCnt)
 
 	if(mapGenOptions.getCompOnlyTeamCount() >= compOnlyPlayersCnt)
 	{
-		mapGenOptions.setCompOnlyTeamCount(compOnlyPlayersCnt - 1);
-		compOnlyTeamsCntGroup->setSelected(mapGenOptions.getCompOnlyTeamCount());
+		int compOnlyTeamCount = compOnlyPlayersCnt == 0 ? 0 : compOnlyPlayersCnt - 1;
+		mapGenOptions.setCompOnlyTeamCount(compOnlyTeamCount);
+		compOnlyTeamsCntGroup->setSelected(compOnlyTeamCount);
 	}
+}
+
+std::vector<int> CRandomMapTab::getPossibleMapSizes()
+{
+	return {CMapHeader::MAP_SIZE_SMALL,CMapHeader::MAP_SIZE_MIDDLE,CMapHeader::MAP_SIZE_LARGE,CMapHeader::MAP_SIZE_XLARGE};
 }
 
 void CRandomMapTab::showAll(SDL_Surface * to)
@@ -1866,9 +1929,9 @@ void CRandomMapTab::updateMapInfo()
 
 	// Generate player information
 	mapInfo->mapHeader->players.clear();
-	int playersToGen = (mapGenOptions.getPlayerCount() == CMapGenOptions::RANDOM_SIZE
-		|| mapGenOptions.getCompOnlyPlayerCount() == CMapGenOptions::RANDOM_SIZE)
-			? 8 : mapGenOptions.getPlayerCount() + mapGenOptions.getCompOnlyPlayerCount();
+	int playersToGen = PlayerColor::PLAYER_LIMIT_I;
+	if(mapGenOptions.getPlayerCount() != CMapGenOptions::RANDOM_SIZE)
+		playersToGen = mapGenOptions.getPlayerCount();
 	mapInfo->mapHeader->howManyTeams = playersToGen;
 
 	for(int i = 0; i < playersToGen; ++i)
@@ -1876,7 +1939,8 @@ void CRandomMapTab::updateMapInfo()
 		PlayerInfo player;
 		player.isFactionRandom = true;
 		player.canComputerPlay = true;
-		if(i >= mapGenOptions.getPlayerCount() && mapGenOptions.getPlayerCount() != CMapGenOptions::RANDOM_SIZE)
+		if(mapGenOptions.getCompOnlyPlayerCount() != CMapGenOptions::RANDOM_SIZE &&
+			i >= mapGenOptions.getHumanOnlyPlayerCount())
 		{
 			player.canHumanPlay = false;
 		}
@@ -1908,12 +1972,25 @@ const CMapGenOptions & CRandomMapTab::getMapGenOptions() const
 	return mapGenOptions;
 }
 
+void CRandomMapTab::setMapGenOptions(std::shared_ptr<CMapGenOptions> opts)
+{
+	mapSizeBtnGroup->setSelected(vstd::find_pos(getPossibleMapSizes(), opts->getWidth()));
+	twoLevelsBtn->setSelected(opts->getHasTwoLevels());
+	playersCntGroup->setSelected(opts->getPlayerCount());
+	teamsCntGroup->setSelected(opts->getTeamCount());
+	compOnlyPlayersCntGroup->setSelected(opts->getCompOnlyPlayerCount());
+	compOnlyTeamsCntGroup->setSelected(opts->getCompOnlyTeamCount());
+	waterContentGroup->setSelected(opts->getWaterContent());
+	monsterStrengthGroup->setSelected(opts->getMonsterStrength());
+}
+
 CChatBox::CChatBox(const Rect &rect)
 {
 	OBJ_CONSTRUCTION;
 	pos += rect;
 	addUsedEvents(KEYBOARD | TEXTINPUT);
 	captureAllKeys = true;
+	type |= REDRAW_PARENT;
 
 	const int height = graphics->fonts[FONT_SMALL]->getLineHeight();
 	inputBox = new CTextInput(Rect(0, rect.h - height, rect.w, height));
@@ -1936,14 +2013,15 @@ void CChatBox::keyPressed(const SDL_KeyboardEvent & key)
 
 void CChatBox::addNewMessage(const std::string &text)
 {
+	CCS->soundh->playSound("CHAT");
 	chatHistory->setText(chatHistory->label->text + text + "\n");
 	if(chatHistory->slider)
 		chatHistory->slider->moveToMax();
 }
 
 InfoCard::InfoCard( bool Network )
-  : bg(nullptr), network(Network), chatOn(false), chat(nullptr), playerListBg(nullptr),
-	difficulty(nullptr), sizes(nullptr), sFlags(nullptr)
+  : sizes(nullptr), bg(nullptr), network(Network), chatOn(false), chat(nullptr), playerListBg(nullptr),
+	difficulty(nullptr)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 	CIntObject::type |= REDRAW_PARENT;
@@ -1969,8 +2047,11 @@ InfoCard::InfoCard( bool Network )
 		parent->children.pop_back();
 		pos.w = bg->pos.w;
 		pos.h = bg->pos.h;
-		sizes = CDefHandler::giveDef("SCNRMPSZ.DEF");
-		sFlags = CDefHandler::giveDef("ITGFLAGS.DEF");
+		sizes = new CAnimImage("SCNRMPSZ", 4, 0, 318, 22);//let it be custom size (frame 4) by default
+		sizes->recActions &= ~(SHOWALL | UPDATE);//explicit draw
+
+		sFlags = std::make_shared<CAnimation>("ITGFLAGS.DEF");
+		sFlags->load();
 		difficulty = new CToggleGroup(0);
 		{
 			static const char *difButns[] = {"GSPBUT3.DEF", "GSPBUT4.DEF", "GSPBUT5.DEF", "GSPBUT6.DEF", "GSPBUT7.DEF"};
@@ -1988,20 +2069,23 @@ InfoCard::InfoCard( bool Network )
 		if(network)
 		{
 			playerListBg = new CPicture("CHATPLUG.bmp", 16, 276);
-			chat = new CChatBox(descriptionRect);
-			chat->chatHistory->addChild(new CPicture(*bg, chat->chatHistory->pos - pos), true); //move subpicture bg to our description control (by default it's our (Infocard) child)
+			chat = new CChatBox(Rect(26, 132, 340, 132));
 
 			chatOn = true;
 			mapDescription->disable();
 		}
 	}
 
+	victory = new CAnimImage("SCNRVICT",0, 0, 24, 302);
+	victory->recActions &= ~(SHOWALL | UPDATE);//explicit draw
+	loss = new CAnimImage("SCNRLOSS", 0, 0, 24, 359);
+	loss->recActions &= ~(SHOWALL | UPDATE);//explicit draw
 }
 
 InfoCard::~InfoCard()
 {
-	delete sizes;
-	delete sFlags;
+	if(sFlags)
+		sFlags->unload();
 }
 
 void InfoCard::showAll(SDL_Surface * to)
@@ -2049,27 +2133,17 @@ void InfoCard::showAll(SDL_Surface * to)
 	{
 		if(SEL->screenType != CMenuScreen::campaignList)
 		{
-			int temp = -1;
-
 			if(!chatOn)
 			{
-				CDefHandler * loss    = CGP ? CGP->loss    : CDefHandler::giveDef("SCNRLOSS.DEF");
-				CDefHandler * victory = CGP ? CGP->victory : CDefHandler::giveDef("SCNRVICT.DEF");
-
 				CMapHeader * header = SEL->current->mapHeader.get();
 				//victory conditions
 				printAtLoc(header->victoryMessage, 60, 307, FONT_SMALL, Colors::WHITE, to);
-				blitAtLoc(victory->ourImages[header->victoryIconIndex].bitmap, 24, 302, to); //victory cond descr
-
+				victory->setFrame(header->victoryIconIndex);
+				victory->showAll(to);
 				//loss conditoins
 				printAtLoc(header->defeatMessage, 60, 366, FONT_SMALL, Colors::WHITE, to);
-				blitAtLoc(loss->ourImages[header->defeatIconIndex].bitmap, 24, 359, to); //loss cond
-
-				if (!CGP)
-				{
-					delete loss;
-					delete victory;
-				}
+				loss->setFrame(header->defeatIconIndex);
+				loss->showAll(to);
 			}
 
 			//difficulty
@@ -2081,23 +2155,22 @@ void InfoCard::showAll(SDL_Surface * to)
 			switch (SEL->current->mapHeader->width)
 			{
 			case 36:
-				temp=0;
+				sizes->setFrame(0);
 				break;
 			case 72:
-				temp=1;
+				sizes->setFrame(1);
 				break;
 			case 108:
-				temp=2;
+				sizes->setFrame(2);
 				break;
 			case 144:
-				temp=3;
+				sizes->setFrame(3);
 				break;
 			default:
-				temp=4;
+				sizes->setFrame(4);
 				break;
 			}
-			blitAtLoc(sizes->ourImages[temp].bitmap, 318, 22, to);
-
+			sizes->showAll(to);
 
 			if(SEL->screenType == CMenuScreen::loadGame)
 				printToLoc((static_cast<const CMapInfo*>(SEL->current))->date,308,34, FONT_SMALL, Colors::WHITE, to);
@@ -2116,8 +2189,10 @@ void InfoCard::showAll(SDL_Surface * to)
 			for (auto i = SEL->sInfo.playerInfos.cbegin(); i != SEL->sInfo.playerInfos.cend(); i++)
 			{
 				int *myx = ((i->first == playerColor  ||  SEL->current->mapHeader->players[i->first.getNum()].team == myT) ? &fx : &ex);
-				blitAtLoc(sFlags->ourImages[i->first.getNum()].bitmap, *myx, 399, to);
-				*myx += sFlags->ourImages[i->first.getNum()].bitmap->w;
+				IImage * flag = sFlags->getImage(i->first.getNum(),0);
+				flag->draw(to, pos.x + *myx, pos.y + 399);
+				*myx += flag->width();
+				flag->decreaseRef();
 			}
 
 			std::string tob;
@@ -2186,7 +2261,7 @@ void InfoCard::changeSelection( const CMapInfo *to )
 void InfoCard::clickRight( tribool down, bool previousState )
 {
 	static const Rect flagArea(19, 397, 335, 23);
-	if(down && SEL->current && isItInLoc(flagArea, GH.current->motion.x, GH.current->motion.y))
+	if(SEL->current && down && SEL->current && isItInLoc(flagArea, GH.current->motion.x, GH.current->motion.y))
 		showTeamsPopup();
 }
 
@@ -2212,7 +2287,9 @@ void InfoCard::showTeamsPopup()
 		int curx = 128 - 9*flags.size();
 		for(auto & flag : flags)
 		{
-			blitAt(sFlags->ourImages[flag].bitmap, curx, 75 + 50*i, bmp);
+			IImage * icon = sFlags->getImage(flag,0);
+			icon->draw(bmp, curx, 75 + 50*i);
+			icon->decreaseRef();
 			curx += 18;
 		}
 	}
@@ -2290,6 +2367,7 @@ void OptionsTab::nextCastle( PlayerColor player, int dir )
 	PlayerSettings &s = SEL->sInfo.playerInfos[player];
 	si16 &cur = s.castle;
 	auto & allowed = SEL->current->mapHeader->players[s.color.getNum()].allowedFactions;
+	const bool allowRandomTown = SEL->current->mapHeader->players[s.color.getNum()].isFactionRandom;
 
 	if (cur == PlayerSettings::NONE) //no change
 		return;
@@ -2304,9 +2382,20 @@ void OptionsTab::nextCastle( PlayerColor player, int dir )
 	}
 	else // next/previous available
 	{
-		if ( (cur == *allowed.begin() && dir < 0 )
-		  || (cur == *allowed.rbegin() && dir > 0) )
-			cur = -1;
+		if((cur == *allowed.begin() && dir < 0 ) || (cur == *allowed.rbegin() && dir > 0))
+		{
+			if(allowRandomTown)
+			{
+				cur = PlayerSettings::RANDOM;
+			}
+			else
+			{
+				if (dir > 0)
+					cur = *allowed.begin();
+				else
+					cur = *allowed.rbegin();
+			}
+		}
 		else
 		{
 			assert(dir >= -1 && dir <= 1); //othervice std::advance may go out of range
@@ -2317,7 +2406,10 @@ void OptionsTab::nextCastle( PlayerColor player, int dir )
 	}
 
 	if(s.hero >= 0 && !SEL->current->mapHeader->players[s.color.getNum()].hasCustomMainHero()) // remove hero unless it set to fixed one in map editor
+	{
+		usedHeroes.erase(s.hero); // restore previously selected hero back to available pool
 		s.hero =  PlayerSettings::RANDOM;
+	}
 	if(cur < 0  &&  s.bonus == PlayerSettings::RESOURCE)
 		s.bonus = PlayerSettings::RANDOM;
 
@@ -2352,7 +2444,7 @@ void OptionsTab::nextHero( PlayerColor player, int dir )
 		if(dir > 0)
 			s.hero = nextAllowedHero(player, s.hero, CGI->heroh->heroes.size(), 1, dir);
 		else
-			s.hero = nextAllowedHero(player,  0, s.hero, 1, dir);
+			s.hero = nextAllowedHero(player, -1, s.hero, 1, dir); // min needs to be -1 -- hero at index 0 would be skipped otherwise
 	}
 
 	if(old != s.hero)
@@ -2442,9 +2534,9 @@ void OptionsTab::recreate()
 		entries.insert(std::make_pair(it->first, new PlayerOptionsEntry(this, it->second)));
 		const std::vector<SHeroName> &heroes = SEL->current->mapHeader->players[it->first.getNum()].heroesNames;
 		for(auto & heroe : heroes)
-			usedHeroes.insert(heroe.heroId);
+			if(heroe.heroId >= 0)//in VCMI map format heroId = -1 means random hero
+				usedHeroes.insert(heroe.heroId);
 	}
-
 }
 
 void OptionsTab::setTurnLength( int npos )
@@ -2530,6 +2622,7 @@ void OptionsTab::flagPressed( PlayerColor color )
 			usedHeroes.erase(old->hero);
 
 		old->hero = entries[old->color]->pi.defaultHero();
+		entries[old->color]->update(); // update previous frame images in case entries were auto-updated
 	}
 
 	SEL->propagateOptions();
@@ -2585,11 +2678,11 @@ OptionsTab::PlayerOptionsEntry::PlayerOptionsEntry( OptionsTab *owner, PlayerSet
 		whoCanPlay = HUMAN;
 
 	if(SEL->screenType != CMenuScreen::scenarioInfo
-		&&  SEL->current->mapHeader->players[s.color.getNum()].canHumanPlay
-		&&  SEL->multiPlayer != CMenuScreen::MULTI_NETWORK_GUEST)
+		&&  SEL->current->mapHeader->players[s.color.getNum()].canHumanPlay)
 	{
 		flag = new CButton(Point(-43, 2), flags[s.color.getNum()], CGI->generaltexth->zelp[180], std::bind(&OptionsTab::flagPressed, owner, s.color));
 		flag->hoverable = true;
+		flag->block(SEL->isGuest());
 	}
 	else
 		flag = nullptr;
@@ -2618,8 +2711,9 @@ void OptionsTab::PlayerOptionsEntry::selectButtons()
 	if(!btns[0])
 		return;
 
-	if( (pi.defaultCastle() != -1) //fixed tow
-		|| (SEL->isGuest() && s.color != playerColor)) //or not our player
+	const bool foreignPlayer = SEL->isGuest() && s.color != playerColor;
+
+	if( (pi.allowedFactions.size() < 2 && !pi.isFactionRandom) || foreignPlayer)
 	{
 		btns[0]->disable();
 		btns[1]->disable();
@@ -2631,7 +2725,7 @@ void OptionsTab::PlayerOptionsEntry::selectButtons()
 	}
 
 	if( (pi.defaultHero() != -1  ||  !s.playerID  ||  s.castle < 0) //fixed hero
-		|| (SEL->isGuest() && s.color != playerColor))//or not our player
+		|| foreignPlayer)//or not our player
 	{
 		btns[2]->disable();
 		btns[3]->disable();
@@ -2642,7 +2736,7 @@ void OptionsTab::PlayerOptionsEntry::selectButtons()
 		btns[3]->enable();
 	}
 
-	if(SEL->isGuest() && s.color != playerColor)//or not our player
+	if(foreignPlayer)
 	{
 		btns[4]->disable();
 		btns[5]->disable();
@@ -3077,7 +3171,7 @@ CMultiMode::CMultiMode()
 	btns[0] = new CButton(Point(373, 78),        "MUBHOT.DEF",  CGI->generaltexth->zelp[266], std::bind(&CMultiMode::openHotseat, this));
 	btns[1] = new CButton(Point(373, 78 + 57*1), "MUBHOST.DEF", CButton::tooltip("Host TCP/IP game", ""), std::bind(&CMultiMode::hostTCP, this));
 	btns[2] = new CButton(Point(373, 78 + 57*2), "MUBJOIN.DEF", CButton::tooltip("Join TCP/IP game", ""), std::bind(&CMultiMode::joinTCP, this));
-	btns[6] = new CButton(Point(373, 424),       "MUBCANC.DEF", CGI->generaltexth->zelp[288], [&] { GH.popIntTotally(this);}, SDLK_ESCAPE);
+	btns[6] = new CButton(Point(373, 424),       "MUBCANC.DEF", CGI->generaltexth->zelp[288], [&](){ GH.popIntTotally(this);}, SDLK_ESCAPE);
 }
 
 void CMultiMode::openHotseat()
@@ -3090,14 +3184,17 @@ void CMultiMode::hostTCP()
 	Settings name = settings.write["general"]["playerName"];
 	name->String() = txt->text;
 	GH.popIntTotally(this);
-	GH.pushInt(new CSelectionScreen(CMenuScreen::newGame, CMenuScreen::MULTI_NETWORK_HOST));
+	if(settings["session"]["donotstartserver"].Bool())
+		GH.pushInt(new CSimpleJoinScreen(CMenuScreen::MULTI_NETWORK_HOST));
+	else
+		GH.pushInt(new CSelectionScreen(CMenuScreen::newGame, CMenuScreen::MULTI_NETWORK_HOST));
 }
 
 void CMultiMode::joinTCP()
 {
 	Settings name = settings.write["general"]["playerName"];
 	name->String() = txt->text;
-	GH.pushInt(new CSimpleJoinScreen);
+	GH.pushInt(new CSimpleJoinScreen(CMenuScreen::MULTI_NETWORK_GUEST));
 }
 
 CHotSeatPlayers::CHotSeatPlayers(const std::string &firstPlayer)
@@ -3153,7 +3250,7 @@ void CHotSeatPlayers::enterSelectionScreen()
 void CBonusSelection::init()
 {
 	highlightedRegion = nullptr;
-	ourHeader = nullptr;
+	ourHeader.reset();
 	diffLb = nullptr;
 	diffRb = nullptr;
 	bonuses = nullptr;
@@ -3192,7 +3289,8 @@ void CBonusSelection::init()
 		graphics->fonts[FONT_BIG]->renderTextLeft(background, CGI->generaltexth->allTexts[508], Colors::YELLOW, Point(481, 28));
 
 	//map size icon
-	sizes = CDefHandler::giveDef("SCNRMPSZ.DEF");
+	sizes = new CAnimImage("SCNRMPSZ",4,0,735, 26);
+	sizes->recActions &= ~(SHOWALL | UPDATE);//explicit draw
 
 	//campaign description
 	graphics->fonts[FONT_SMALL]->renderTextLeft(background, CGI->generaltexth->allTexts[38], Colors::YELLOW, Point(481, 63));
@@ -3243,14 +3341,10 @@ void CBonusSelection::init()
 	graphics->fonts[FONT_MEDIUM]->renderTextLeft(background, difficulty.back(), Colors::WHITE, Point(689, 432));
 
 	//difficulty pics
-	for (int b=0; b<ARRAY_COUNT(diffPics); ++b)
+	for (size_t b=0; b < diffPics.size(); ++b)
 	{
-		CDefEssential * cde = CDefHandler::giveDefEss("GSPBUT" + boost::lexical_cast<std::string>(b+3) + ".DEF");
-		SDL_Surface * surfToDuplicate = cde->ourImages[0].bitmap;
-		diffPics[b] = SDL_ConvertSurface(surfToDuplicate, surfToDuplicate->format,
-			surfToDuplicate->flags);
-
-		delete cde;
+		diffPics[b] = new CAnimImage("GSPBUT" + boost::lexical_cast<std::string>(b+3) + ".DEF", 0, 0, 709, 455);
+		diffPics[b]->recActions &= ~(SHOWALL | UPDATE);//explicit draw
 	}
 
 	//difficulty selection buttons
@@ -3261,30 +3355,25 @@ void CBonusSelection::init()
 	}
 
 	//load miniflags
-	sFlags = CDefHandler::giveDef("ITGFLAGS.DEF");
+	sFlags = std::make_shared<CAnimation>("ITGFLAGS.DEF");
+	sFlags->load();
 }
 
-CBonusSelection::CBonusSelection(shared_ptr<CCampaignState> _ourCampaign) : ourCampaign(_ourCampaign)
+CBonusSelection::CBonusSelection(std::shared_ptr<CCampaignState> _ourCampaign) : ourCampaign(_ourCampaign)
 {
 	init();
 }
 
 CBonusSelection::CBonusSelection(const std::string & campaignFName)
 {
-	ourCampaign = make_shared<CCampaignState>(CCampaignHandler::getCampaign(campaignFName));
+	ourCampaign = std::make_shared<CCampaignState>(CCampaignHandler::getCampaign(campaignFName));
 	init();
 }
 
 CBonusSelection::~CBonusSelection()
 {
 	SDL_FreeSurface(background);
-	delete sizes;
-	delete ourHeader;
-	delete sFlags;
-	for (auto & elem : diffPics)
-	{
-		SDL_FreeSurface(elem);
-	}
+	sFlags->unload();
 }
 
 void CBonusSelection::goBack()
@@ -3364,10 +3453,10 @@ void CBonusSelection::selectMap(int mapNr, bool initialSelect)
 		scenarioName += ':' + boost::lexical_cast<std::string>(selectedMap);
 
 		//get header
-		delete ourHeader;
 		std::string & headerStr = ourCampaign->camp->mapPieces.find(mapNr)->second;
 		auto buffer = reinterpret_cast<const ui8 *>(headerStr.data());
-		ourHeader = CMapService::loadMapHeader(buffer, headerStr.size(), scenarioName).release();
+		CMapService mapService;
+		ourHeader = mapService.loadMapHeader(buffer, headerStr.size(), scenarioName);
 
 		std::map<ui8, std::string> names;
 		names[1] = settings["general"]["playerName"].String();
@@ -3383,8 +3472,6 @@ void CBonusSelection::selectMap(int mapNr, bool initialSelect)
 
 void CBonusSelection::show(SDL_Surface * to)
 {
-	//blitAt(background, pos.x, pos.y, to);
-
 	//map name
 	std::string mapName = ourHeader->name;
 
@@ -3418,7 +3505,8 @@ void CBonusSelection::show(SDL_Surface * to)
 		temp=4;
 		break;
 	}
-	blitAtLoc(sizes->ourImages[temp].bitmap, 735, 26, to);
+	sizes->setFrame(temp);
+	sizes->showAll(to);
 
 	//flags
 	int fx = 496  + graphics->fonts[FONT_SMALL]->getStringWidth(CGI->generaltexth->allTexts[390]);
@@ -3428,12 +3516,15 @@ void CBonusSelection::show(SDL_Surface * to)
 	for (auto i = startInfo.playerInfos.cbegin(); i != startInfo.playerInfos.cend(); i++)
 	{
 		int *myx = ((i->first == playerColor  ||  ourHeader->players[i->first.getNum()].team == myT) ? &fx : &ex);
-		blitAtLoc(sFlags->ourImages[i->first.getNum()].bitmap, *myx, 405, to);
-		*myx += sFlags->ourImages[i->first.getNum()].bitmap->w;
+
+		IImage * flag = sFlags->getImage(i->first.getNum(),0);
+		flag->draw(to, pos.x + *myx, pos.y + 405);
+		*myx += flag->width();
+		flag->decreaseRef();
 	}
 
 	//difficulty
-	blitAtLoc(diffPics[startInfo.difficulty], 709, 455, to);
+	diffPics[startInfo.difficulty]->showAll(to);
 
 	CIntObject::show(to);
 }
@@ -3548,7 +3639,7 @@ void CBonusSelection::updateBonusSelection()
 			desc = CGI->generaltexth->allTexts[718];
 
 			boost::algorithm::replace_first(desc, "%s", CGI->generaltexth->levels[bonDescs[i].info3 - 1]); //skill level
-			boost::algorithm::replace_first(desc, "%s", CGI->generaltexth->skillName[bonDescs[i].info2]); //skill name
+			boost::algorithm::replace_first(desc, "%s", CGI->skillh->skillName(bonDescs[i].info2)); //skill name
 			picNumber = bonDescs[i].info2 * 3 + bonDescs[i].info3 - 1;
 
 			break;
@@ -3586,7 +3677,7 @@ void CBonusSelection::updateBonusSelection()
 		case CScenarioTravel::STravelBonus::HEROES_FROM_PREVIOUS_SCENARIO:
 			{
 				auto superhero = ourCampaign->camp->scenarios[bonDescs[i].info2].strongestHero(PlayerColor(bonDescs[i].info1));
-				if (!superhero) logGlobal->warnStream() << "No superhero! How could it be transferred?";
+				if (!superhero) logGlobal->warn("No superhero! How could it be transferred?");
 				picNumber = superhero ? superhero->portrait : 0;
 				desc = CGI->generaltexth->allTexts[719];
 
@@ -3617,11 +3708,11 @@ void CBonusSelection::updateBonusSelection()
 		if (picNumber != -1)
 			picName += ":" + boost::lexical_cast<std::string>(picNumber);
 
-		auto   anim = new CAnimation();
+		auto anim = std::make_shared<CAnimation>();
 		anim->setCustom(picName, 0);
 		bonusButton->setImage(anim);
 		const SDL_Color brightYellow = { 242, 226, 110, 0 };
-		bonusButton->borderColor = brightYellow;
+		bonusButton->borderColor = boost::make_optional(brightYellow);
 		bonuses->addToggle(i, bonusButton);
 	}
 
@@ -3634,7 +3725,7 @@ void CBonusSelection::updateBonusSelection()
 
 void CBonusSelection::updateCampaignState()
 {
-	ourCampaign->currentMap = selectedMap;
+	ourCampaign->currentMap = boost::make_optional(selectedMap);
 	if (selectedBonus)
 		ourCampaign->chosenCampaignBonuses[selectedMap] = *selectedBonus;
 }
@@ -3646,7 +3737,7 @@ void CBonusSelection::startMap()
 	{
 		auto exitCb = [=]()
 		{
-			logGlobal->infoStream() << "Starting scenario " << selectedMap;
+			logGlobal->info("Starting scenario %d", selectedMap);
             CGP->showLoadingScreen(std::bind(&startGame, si, (CConnection *)nullptr));
 		};
 
@@ -3664,7 +3755,7 @@ void CBonusSelection::startMap()
 	if(LOCPLINT) // we're currently ingame, so ask for starting new map and end game
 	{
 		GH.popInt(this);
-		LOCPLINT->showYesNoDialog(CGI->generaltexth->allTexts[67], [=]
+		LOCPLINT->showYesNoDialog(CGI->generaltexth->allTexts[67], [=]()
 		{
 			updateCampaignState();
 			endGame();
@@ -3682,7 +3773,7 @@ void CBonusSelection::startMap()
 void CBonusSelection::restartMap()
 {
 	GH.popInt(this);
-	LOCPLINT->showYesNoDialog(CGI->generaltexth->allTexts[67], [=]
+	LOCPLINT->showYesNoDialog(CGI->generaltexth->allTexts[67], [=]()
 	{
 		updateCampaignState();
 		auto si = new StartInfo(startInfo);
@@ -3701,7 +3792,7 @@ void CBonusSelection::selectBonus(int id)
 	// have to be undrawn/drawn.
 	if (!selectedBonus || *selectedBonus != id)
 	{
-		selectedBonus = id;
+		selectedBonus = boost::make_optional(id);
 		GH.totalRedraw();
 
 		updateStartButtonState(id);
@@ -3733,7 +3824,7 @@ void CBonusSelection::decreaseDifficulty()
 	startInfo.difficulty = std::max(startInfo.difficulty - 1, 0);
 }
 
-void CBonusSelection::updateStartButtonState(int selected /*= -1*/)
+void CBonusSelection::updateStartButtonState(int selected)
 {
 	if(selected == -1)
 	{
@@ -3829,7 +3920,10 @@ void CBonusSelection::CRegion::show(SDL_Surface * to)
 }
 
 CSavingScreen::CSavingScreen(bool hotseat)
- : CSelectionScreen(CMenuScreen::saveGame, hotseat ? CMenuScreen::MULTI_HOT_SEAT : CMenuScreen::SINGLE_PLAYER)
+	: CSelectionScreen(
+		CMenuScreen::saveGame,
+		hotseat ? CMenuScreen::MULTI_HOT_SEAT : (LOCPLINT->cb->getStartInfo()->mode == StartInfo::CAMPAIGN ? CMenuScreen::SINGLE_CAMPAIGN : CMenuScreen::SINGLE_PLAYER)
+	)
 {
 	ourGame = mapInfoFromGame();
 	sInfo = *LOCPLINT->cb->getStartInfo();
@@ -3841,9 +3935,10 @@ CSavingScreen::~CSavingScreen()
 
 }
 
-ISelectionScreenInfo::ISelectionScreenInfo(const std::map<ui8, std::string> *Names /*= nullptr*/)
+ISelectionScreenInfo::ISelectionScreenInfo(const std::map<ui8, std::string> * Names)
 {
-	multiPlayer = CMenuScreen::SINGLE_PLAYER;
+	gameMode = CMenuScreen::SINGLE_PLAYER;
+	screenType = CMenuScreen::mainMenu;
 	assert(!SEL);
 	SEL = this;
 	current = nullptr;
@@ -3860,7 +3955,7 @@ ISelectionScreenInfo::~ISelectionScreenInfo()
 	SEL = nullptr;
 }
 
-void ISelectionScreenInfo::updateStartInfo(std::string filename, StartInfo & sInfo, const CMapHeader * mapHeader)
+void ISelectionScreenInfo::updateStartInfo(std::string filename, StartInfo & sInfo, const std::unique_ptr<CMapHeader> & mapHeader)
 {
 	::updateStartInfo(filename, sInfo, mapHeader, playerNames);
 }
@@ -3881,12 +3976,12 @@ ui8 ISelectionScreenInfo::getIdOfFirstUnallocatedPlayer()
 
 bool ISelectionScreenInfo::isGuest() const
 {
-	return multiPlayer == CMenuScreen::MULTI_NETWORK_GUEST;
+	return gameMode == CMenuScreen::MULTI_NETWORK_GUEST;
 }
 
 bool ISelectionScreenInfo::isHost() const
 {
-	return multiPlayer == CMenuScreen::MULTI_NETWORK_HOST;
+	return gameMode == CMenuScreen::MULTI_NETWORK_HOST;
 }
 
 void ChatMessage::apply(CSelectionScreen *selScreen)
@@ -3914,7 +4009,7 @@ void PlayerJoined::apply(CSelectionScreen *selScreen)
 	//put new player in first slot with AI
 	for(auto & elem : SEL->sInfo.playerInfos)
 	{
-		if(!elem.second.playerID)
+		if(!elem.second.playerID && !elem.second.compOnly)
 		{
 			selScreen->setPlayer(elem.second, connectionID);
 			selScreen->opt->entries[elem.second.color]->selectButtons();
@@ -3924,13 +4019,14 @@ void PlayerJoined::apply(CSelectionScreen *selScreen)
 
 	selScreen->propagateNames();
 	selScreen->propagateOptions();
+	selScreen->toggleTab(selScreen->curTab);
 
 	GH.totalRedraw();
 }
 
 void SelectMap::apply(CSelectionScreen *selScreen)
 {
-	if(selScreen->multiPlayer == CMenuScreen::MULTI_NETWORK_GUEST)
+	if(selScreen->isGuest())
 	{
 		free = false;
 		selScreen->changeSelection(mapInfo);
@@ -4033,6 +4129,8 @@ void StartWithCurrentSettings::apply(CSelectionScreen *selScreen)
 
 CCampaignScreen::CCampaignButton::CCampaignButton(const JsonNode &config )
 {
+	OBJ_CONSTRUCTION_CAPTURING_ALL;
+
 	pos.x += config["x"].Float();
 	pos.y += config["y"].Float();
 	pos.w = 200;
@@ -4041,24 +4139,23 @@ CCampaignScreen::CCampaignButton::CCampaignButton(const JsonNode &config )
 	campFile = config["file"].String();
 	video = config["video"].String();
 
-	OBJ_CONSTRUCTION_CAPTURING_ALL;
-
 	status = config["open"].Bool() ? CCampaignScreen::ENABLED : CCampaignScreen::DISABLED;
 
 	CCampaignHeader header = CCampaignHandler::getHeader(campFile);
 	hoverText = header.name;
 
+	hoverLabel = nullptr;
 	if (status != CCampaignScreen::DISABLED)
 	{
 		addUsedEvents(LCLICK | HOVER);
-		image = new CPicture(config["image"].String());
+		new CPicture(config["image"].String());
 
 		hoverLabel = new CLabel(pos.w / 2, pos.h + 20, FONT_MEDIUM, CENTER, Colors::YELLOW, "");
 		parent->addChild(hoverLabel);
 	}
 
 	if (status == CCampaignScreen::COMPLETED)
-		checkMark = new CPicture("CAMPCHK");
+		new CPicture("CAMPCHK");
 }
 
 void CCampaignScreen::CCampaignButton::clickLeft(tribool down, bool previousState)
@@ -4073,10 +4170,13 @@ void CCampaignScreen::CCampaignButton::clickLeft(tribool down, bool previousStat
 
 void CCampaignScreen::CCampaignButton::hover(bool on)
 {
-	if (on)
-		hoverLabel->setText(hoverText); // Shows the name of the campaign when you get into the bounds of the button
-	else
-		hoverLabel->setText(" ");
+	if (hoverLabel)
+	{
+		if (on)
+			hoverLabel->setText(hoverText); // Shows the name of the campaign when you get into the bounds of the button
+		else
+			hoverLabel->setText(" ");
+	}
 }
 
 void CCampaignScreen::CCampaignButton::show(SDL_Surface * to)
@@ -4129,7 +4229,7 @@ CCampaignScreen::CCampaignScreen(const JsonNode &config)
 
 	if (!config["exitbutton"].isNull())
 	{
-		back = createExitButton(config["exitbutton"]);
+		CButton * back = createExitButton(config["exitbutton"]);
 		back->hoverable = true;
 	}
 
@@ -4233,7 +4333,7 @@ void CPrologEpilogVideo::clickLeft( tribool down, bool previousState )
 	exitCb();
 }
 
-CSimpleJoinScreen::CSimpleJoinScreen()
+CSimpleJoinScreen::CSimpleJoinScreen(CMenuScreen::EGameMode mode)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 	bg = new CPicture("MUDIALOG.bmp"); // address background
@@ -4249,24 +4349,24 @@ CSimpleJoinScreen::CSimpleJoinScreen()
     port->cb += std::bind(&CSimpleJoinScreen::onChange, this, _1);
     port->filters += std::bind(&CTextInput::numberFilter, _1, _2, 0, 65535);
 
-	ok     = new CButton(Point( 26, 142), "MUBCHCK.DEF", CGI->generaltexth->zelp[560], std::bind(&CSimpleJoinScreen::enterSelectionScreen, this), SDLK_RETURN);
+	ok     = new CButton(Point( 26, 142), "MUBCHCK.DEF", CGI->generaltexth->zelp[560], std::bind(&CSimpleJoinScreen::enterSelectionScreen, this, mode), SDLK_RETURN);
 	cancel = new CButton(Point(142, 142), "MUBCANC.DEF", CGI->generaltexth->zelp[561], std::bind(&CGuiHandler::popIntTotally, std::ref(GH), this), SDLK_ESCAPE);
 	bar = new CGStatusBar(new CPicture(Rect(7, 186, 218, 18), 0));
 
-	port->setText(boost::lexical_cast<std::string>(settings["server"]["port"].Float()), true);
+	port->setText(CServerHandler::getDefaultPortStr(), true);
 	address->setText(settings["server"]["server"].String(), true);
 	address->giveFocus();
 }
 
-void CSimpleJoinScreen::enterSelectionScreen()
+void CSimpleJoinScreen::enterSelectionScreen(CMenuScreen::EGameMode mode)
 {
 	std::string textAddress = address->text;
 	std::string textPort = port->text;
 
 	GH.popIntTotally(this);
-	GH.pushInt(new CSelectionScreen(CMenuScreen::newGame, CMenuScreen::MULTI_NETWORK_GUEST, nullptr, textAddress, textPort));
-}
 
+	GH.pushInt(new CSelectionScreen(CMenuScreen::newGame, mode, nullptr, textAddress, boost::lexical_cast<ui16>(textPort)));
+}
 void CSimpleJoinScreen::onChange(const std::string & newText)
 {
 	ok->block(address->text.empty() || port->text.empty());

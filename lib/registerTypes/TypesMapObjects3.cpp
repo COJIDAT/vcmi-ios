@@ -1,9 +1,16 @@
+/*
+ * TypesMapObjects3.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "RegisterTypes.h"
 
-#include "../mapping/CMapInfo.h"
 #include "../StartInfo.h"
-#include "../BattleState.h"
 #include "../CGameState.h"
 #include "../mapping/CMap.h"
 #include "../CModHandler.h"
@@ -12,17 +19,16 @@
 #include "../VCMI_Lib.h"
 #include "../CArtHandler.h"
 #include "../CHeroHandler.h"
-#include "../CSpellHandler.h"
+#include "../spells/CSpellHandler.h"
 #include "../CTownHandler.h"
 #include "../mapping/CCampaignHandler.h"
 #include "../NetPacks.h"
 #include "../mapObjects/CObjectClassesHandler.h"
 
-template void registerTypesMapObjectTypes<CISer<CConnection>>(CISer<CConnection>& s);
-template void registerTypesMapObjectTypes<COSer<CConnection>>(COSer<CConnection>& s);
-template void registerTypesMapObjectTypes<CISer<CMemorySerializer>>(CISer<CMemorySerializer>& s);
-template void registerTypesMapObjectTypes<COSer<CMemorySerializer>>(COSer<CMemorySerializer>& s);
-template void registerTypesMapObjectTypes<CSaveFile>(CSaveFile & s);
-template void registerTypesMapObjectTypes<CLoadFile>(CLoadFile & s);
+#include "../serializer/BinaryDeserializer.h"
+#include "../serializer/BinarySerializer.h"
+#include "../serializer/CTypeList.h"
+
+template void registerTypesMapObjectTypes<BinaryDeserializer>(BinaryDeserializer & s);
+template void registerTypesMapObjectTypes<BinarySerializer>(BinarySerializer & s);
 template void registerTypesMapObjectTypes<CTypeList>(CTypeList & s);
-template void registerTypesMapObjectTypes<CLoadIntegrityValidator>(CLoadIntegrityValidator & s);

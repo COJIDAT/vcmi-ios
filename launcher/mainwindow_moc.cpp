@@ -1,3 +1,12 @@
+/*
+ * mainwindow_moc.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "mainwindow_moc.h"
 #include "ui_mainwindow_moc.h"
@@ -12,7 +21,11 @@
 
 void MainWindow::load()
 {
-	console = new CConsoleHandler;
+	// Set current working dir to executable folder.
+	// This is important on Mac for relative paths to work inside DMG.
+	QDir::setCurrent(QApplication::applicationDirPath());
+
+	console = new CConsoleHandler();
 	CBasicLogConfigurator logConfig(VCMIDirs::get().userCachePath() / "VCMI_Launcher_log.txt", console);
 	logConfig.configureDefault();
 
@@ -26,14 +39,30 @@ void MainWindow::load()
 	settings.init();
 }
 
-MainWindow::MainWindow(QWidget *parent) :
+MainWindow::MainWindow(QWidget * parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
 	load(); // load FS before UI
 
 	ui->setupUi(this);
+	auto width = ui->startGameTitle->fontMetrics().boundingRect(ui->startGameTitle->text()).width();
+	if (ui->startGameButton->iconSize().width() < width)
+	{
+		ui->startGameButton->setIconSize(QSize(width, width));
+	}
+	auto tab_icon_size = ui->tabSelectList->iconSize();
+	if (tab_icon_size.width() < width)
+	{
+		ui->tabSelectList->setIconSize(QSize(
+			width,
+			width + tab_icon_size.height() - tab_icon_size.width()));
+		ui->tabSelectList->setGridSize(QSize(width, width));
+		// 4 is a dirty hack to make it look right
+		ui->tabSelectList->setMaximumWidth(width + 4);
+	}
 	ui->tabListWidget->setCurrentIndex(0);
+	ui->settingsView->setDisplayList();
 
 	connect(ui->tabSelectList, SIGNAL(currentRowChanged(int)),
 	        ui->tabListWidget, SLOT(setCurrentIndex(int)));
@@ -44,7 +73,7 @@ MainWindow::~MainWindow()
 	delete ui;
 }
 
-void MainWindow::on_startGameButon_clicked()
+void MainWindow::on_startGameButton_clicked()
 {
 	startExecutable(pathToQString(VCMIDirs::get().clientPath()));
 }
@@ -68,5 +97,4 @@ void MainWindow::startExecutable(QString name)
 		                      QMessageBox::Ok);
 		return;
 	}
-
 }

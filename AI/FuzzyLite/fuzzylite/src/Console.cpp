@@ -1,45 +1,32 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/Console.h"
 
 #include "fl/Headers.h"
 
-#include <algorithm>
-#include <cctype>
 #include <fstream>
-#include <stdlib.h>
-#include <utility>
-#include <vector>
 
 #ifdef FL_UNIX
-#include <time.h> //only for benchmarks
 #include <termios.h>
 #include <unistd.h>
 #elif defined(FL_WINDOWS)
 #include <conio.h>
 #endif
+
 
 namespace fl {
     const std::string Console::KW_INPUT_FILE = "-i";
@@ -48,10 +35,15 @@ namespace fl {
     const std::string Console::KW_OUTPUT_FORMAT = "-of";
     const std::string Console::KW_EXAMPLE = "-example";
     const std::string Console::KW_DECIMALS = "-decimals";
-    const std::string Console::KW_DATA_INPUT = "-d";
-    const std::string Console::KW_DATA_MAXIMUM = "-dmaximum";
+    const std::string Console::KW_DATA_INPUT_FILE = "-d";
+    const std::string Console::KW_DATA_VALUES = "-values";
+    const std::string Console::KW_DATA_VALUES_SCOPE = "-scope";
+
     const std::string Console::KW_DATA_EXPORT_HEADER = "-dheader";
     const std::string Console::KW_DATA_EXPORT_INPUTS = "-dinputs";
+
+    Console::Option::Option(const std::string& key, const std::string& value, const std::string& description) :
+    key(key), value(value), description(description) { }
 
     std::vector<Console::Option> Console::availableOptions() {
         std::vector<Console::Option> options;
@@ -61,8 +53,9 @@ namespace fl {
         options.push_back(Option(KW_OUTPUT_FORMAT, "format", "format of the file to export (fll | fld | cpp | java | fis | fcl)"));
         options.push_back(Option(KW_EXAMPLE, "letter", "if not inputfile, built-in example to use as engine: (m)amdani or (t)akagi-sugeno"));
         options.push_back(Option(KW_DECIMALS, "number", "number of decimals to write floating-poing values"));
-        options.push_back(Option(KW_DATA_INPUT, "datafile", "if exporting to fld, file of input values to evaluate your engine on"));
-        options.push_back(Option(KW_DATA_MAXIMUM, "number", "if exporting to fld without datafile, maximum number of results to export"));
+        options.push_back(Option(KW_DATA_INPUT_FILE, "file", "if exporting to fld, FLD file of input values to evaluate your engine on"));
+        options.push_back(Option(KW_DATA_VALUES, "number", "if exporting to fld without datafile, number of results to export within scope (default: EachVariable)"));
+        options.push_back(Option(KW_DATA_VALUES_SCOPE, "scope", "if exporting to fld without datafile, scope of " + KW_DATA_VALUES + ": [EachVariable|AllVariables]"));
         options.push_back(Option(KW_DATA_EXPORT_HEADER, "boolean", "if true and exporting to fld, include headers"));
         options.push_back(Option(KW_DATA_EXPORT_INPUTS, "boolean", "if true and exporting to fld, include input values"));
         return options;
@@ -71,15 +64,16 @@ namespace fl {
     std::string Console::usage() {
         std::vector<Console::Option> options = availableOptions();
         std::ostringstream ss;
-        ss << "Copyright (C) 2010-2014 FuzzyLite Limited\n";
-        ss << "All rights reserved\n";
-        ss << "==================================================\n";
+
+        ss << "========================================\n";
         ss << "fuzzylite: a fuzzy logic control library\n";
-        ss << "version: " << fuzzylite::longVersion() << "\n";
+        ss << "version: " << fuzzylite::version() << "\n";
         ss << "author: " << fuzzylite::author() << "\n";
         ss << "license: " << fuzzylite::license() << "\n";
-        ss << "==================================================\n";
+        ss << "========================================\n\n";
         ss << "usage: fuzzylite inputfile outputfile\n";
+        ss << "   or: fuzzylite benchmark engine.fll input.fld runs [output.tsv]\n";
+        ss << "   or: fuzzylite benchmarks fllFiles.txt fldFiles.txt runs [output.tsv]\n";
         ss << "   or: fuzzylite ";
         for (std::size_t i = 0; i < options.size(); ++i) {
             ss << "[" << options.at(i).key << " " << options.at(i).value << "] ";
@@ -100,13 +94,16 @@ namespace fl {
         }
 
         ss << "\n";
-        ss << "Visit http://www.fuzzylite.com for more information.";
+        ss << "Visit " << fuzzylite::website() << " for more information.\n\n";
+        ss << "Copyright (C) 2010-2017 by FuzzyLite Limited.\n";
+        ss << "All rights reserved.";
+
         return ss.str();
     }
 
-    std::map<std::string, std::string> Console::parse(int argc, char** argv) {
+    std::map<std::string, std::string> Console::parse(int argc, const char* argv[]) {
         if ((argc - 1) % 2 != 0) {
-            throw fl::Exception("[option error] incomplete number of parameters [key value]", FL_AT);
+            throw Exception("[option error] incomplete number of parameters [key value]", FL_AT);
         }
         std::map<std::string, std::string> options;
         for (int i = 1; i < argc - 1; i += 2) {
@@ -134,7 +131,7 @@ namespace fl {
                     }
                 }
                 if (not isValid) {
-                    throw fl::Exception("[option error] option <" + it->first + "> not recognized", FL_AT);
+                    throw Exception("[option error] option <" + it->first + "> not recognized", FL_AT);
                 }
             }
         }
@@ -146,7 +143,7 @@ namespace fl {
 
         it = options.find(KW_DECIMALS);
         if (it != options.end()) {
-            fl::fuzzylite::setDecimals((int) fl::Op::toScalar(it->second));
+            fuzzylite::setDecimals((int) Op::toScalar(it->second));
         }
 
         std::string example;
@@ -165,7 +162,7 @@ namespace fl {
             } else if (example == "t" or example == "ts" or example == "takagi-sugeno") {
                 engine = takagiSugeno();
             } else {
-                throw fl::Exception("[option error] example <" + example + "> not available", FL_AT);
+                throw Exception("[option error] example <" + example + "> not available", FL_AT);
             }
             inputFormat = "fll";
             textEngine << FllExporter().toString(engine);
@@ -174,12 +171,12 @@ namespace fl {
         } else {
             it = options.find(KW_INPUT_FILE);
             if (it == options.end()) {
-                throw fl::Exception("[option error] no input file specified", FL_AT);
+                throw Exception("[option error] no input file specified", FL_AT);
             }
             std::string inputFilename = it->second;
             std::ifstream inputFile(inputFilename.c_str());
             if (not inputFile.is_open()) {
-                throw fl::Exception("[file error] file <" + inputFilename + "> could not be opened", FL_AT);
+                throw Exception("[file error] file <" + inputFilename + "> could not be opened", FL_AT);
             }
             std::string line;
             while (std::getline(inputFile, line)) {
@@ -195,7 +192,7 @@ namespace fl {
                 if (extensionIndex != std::string::npos) {
                     inputFormat = inputFilename.substr(extensionIndex + 1);
                 } else {
-                    throw fl::Exception("[format error] unspecified format of input file", FL_AT);
+                    throw Exception("[format error] unspecified format of input file", FL_AT);
                 }
             }
         }
@@ -215,7 +212,7 @@ namespace fl {
             if (extensionIndex != std::string::npos) {
                 outputFormat = outputFilename.substr(extensionIndex + 1);
             } else {
-                throw fl::Exception("[format error] unspecified format of output file", FL_AT);
+                throw Exception("[format error] unspecified format of output file", FL_AT);
             }
         }
 
@@ -225,7 +222,7 @@ namespace fl {
         } else {
             std::ofstream writer(outputFilename.c_str());
             if (not writer.is_open()) {
-                throw fl::Exception("[file error] file <" + outputFilename + "> could not be created", FL_AT);
+                throw Exception("[file error] file <" + outputFilename + "> could not be created", FL_AT);
             }
             process(textEngine.str(), writer, inputFormat, outputFormat, options);
             writer.flush();
@@ -247,7 +244,7 @@ namespace fl {
         } else if ("fis" == inputFormat) {
             importer.reset(new FisImporter);
         } else {
-            throw fl::Exception("[import error] format <" + inputFormat + "> "
+            throw Exception("[import error] format <" + inputFormat + "> "
                     "not supported", FL_AT);
         }
 
@@ -257,7 +254,7 @@ namespace fl {
             std::map<std::string, std::string>::const_iterator it;
 
             FldExporter fldExporter;
-            fldExporter.setSeparator("\t");
+            fldExporter.setSeparator(" ");
             bool exportHeaders = true;
             if ((it = options.find(KW_DATA_EXPORT_HEADER)) != options.end()) {
                 exportHeaders = ("true" == it->second);
@@ -268,22 +265,32 @@ namespace fl {
                 exportInputValues = ("true" == it->second);
             }
             fldExporter.setExportInputValues(exportInputValues);
-            if ((it = options.find(KW_DATA_INPUT)) != options.end()) {
+            if ((it = options.find(KW_DATA_INPUT_FILE)) != options.end()) {
                 std::ifstream dataFile(it->second.c_str());
                 if (not dataFile.is_open()) {
-                    throw fl::Exception("[export error] file <" + it->second + "> could not be opened", FL_AT);
+                    throw Exception("[export error] file <" + it->second + "> could not be opened", FL_AT);
                 }
                 try {
                     fldExporter.write(engine.get(), writer, dataFile);
                 } catch (std::exception& ex) {
-                    (void) ex;
+                    FL_IUNUSED(ex);
                     dataFile.close();
                     throw;
                 }
 
             } else {
-                if ((it = options.find(KW_DATA_MAXIMUM)) != options.end()) {
-                    fldExporter.write(engine.get(), writer, (int) fl::Op::toScalar(it->second));
+                if ((it = options.find(KW_DATA_VALUES)) != options.end()) {
+                    int values = (int) Op::toScalar(it->second);
+                    FldExporter::ScopeOfValues scope = FldExporter::EachVariable;
+                    if ((it = options.find(KW_DATA_VALUES_SCOPE)) != options.end()) {
+                        if ("AllVariables" == it->second)
+                            scope = FldExporter::AllVariables;
+                        else if ("EachVariable" == it->second)
+                            scope = FldExporter::EachVariable;
+                        else throw Exception("[export error] unknown scope of values <"
+                                + it->second + ">", FL_AT);
+                    }
+                    fldExporter.write(engine.get(), writer, values, scope);
                 } else {
                     std::ostringstream buffer;
                     buffer << "#FuzzyLite Interactive Console (press H for help)\n";
@@ -306,7 +313,7 @@ namespace fl {
                 exporter.reset(new CppExporter);
             } else if ("java" == outputFormat) {
                 exporter.reset(new JavaExporter);
-            } else throw fl::Exception("[export error] format <" + outputFormat + "> "
+            } else throw Exception("[export error] format <" + outputFormat + "> "
                     "not supported", FL_AT);
             writer << exporter->toString(engine.get());
         }
@@ -316,14 +323,14 @@ namespace fl {
         int ch = 0;
 #ifdef FL_UNIX
         struct termios oldt, newt;
-        tcgetattr(STDIN_FILENO, &oldt);
+        ::tcgetattr(STDIN_FILENO, &oldt);
         newt = oldt;
         newt.c_lflag &= ~(ICANON | ECHO);
-        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-        ch = getchar();
-        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+        ::tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+        ch = ::getchar();
+        ::tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
 #elif defined(FL_WINDOWS)
-        ch = _getch();
+        ch = ::_getch();
 #endif
         return ch;
     }
@@ -344,13 +351,17 @@ namespace fl {
 
             ch = readCharacter();
 
+            if (ch == EOF) {
+                break;
+            }
+
             if (std::isspace(ch)) {
-                scalar value = engine->getInputVariable(inputValues.size())->getInputValue();
+                scalar value = engine->getInputVariable(inputValues.size())->getValue();
                 try {
-                    value = fl::Op::toScalar(inputValue.str());
+                    value = Op::toScalar(inputValue.str());
                 } catch (std::exception& ex) {
-                    (void) ex;
-                    buffer << "[" << fl::Op::str(value) << "]";
+                    FL_IUNUSED(ex);
+                    buffer << "[" << Op::str(value) << "]";
                 }
                 buffer << space;
                 inputValue.str("");
@@ -370,7 +381,7 @@ namespace fl {
                 case 'r':
                 case 'R': engine->restart();
                     buffer << "#[Restart]";
-                    //fall through
+                    continue; //fall through
                 case 'd':
                 case 'D': inputValues.clear();
                     buffer << "#[Discard]\n>";
@@ -383,15 +394,15 @@ namespace fl {
 
                     for (std::size_t i = 0; i < inputValues.size(); ++i) {
                         InputVariable* inputVariable = engine->inputVariables().at(i);
-                        inputVariable->setInputValue(inputValues.at(i));
+                        inputVariable->setValue(inputValues.at(i));
                     }
                     std::vector<scalar> missingInputs;
                     for (std::size_t i = inputValues.size(); i < engine->inputVariables().size(); ++i) {
                         InputVariable* inputVariable = engine->inputVariables().at(i);
-                        missingInputs.push_back(inputVariable->getInputValue());
+                        missingInputs.push_back(inputVariable->getValue());
                     }
                     inputValues.clear();
-                    buffer << fl::Op::join(missingInputs, space);
+                    buffer << Op::join(missingInputs, space);
                     if (not missingInputs.empty()) buffer << space;
                     buffer << "=" << space;
                     try {
@@ -400,9 +411,9 @@ namespace fl {
                         for (std::size_t i = 0; i < engine->outputVariables().size(); ++i) {
                             OutputVariable* outputVariable = engine->outputVariables().at(i);
                             outputVariable->defuzzify();
-                            outputValues.push_back(outputVariable->getOutputValue());
+                            outputValues.push_back(outputVariable->getValue());
                         }
-                        buffer << fl::Op::join(outputValues, space) << "\n>";
+                        buffer << Op::join(outputValues, space) << "\n>";
 
                     } catch (std::exception& ex) {
                         buffer << "#[Error: " << ex.what() << "]";
@@ -417,7 +428,7 @@ namespace fl {
                     inputValue.str("");
                     break;
             }
-        } while (not (ch == 'Q' or ch == 'q'));
+        } while (not (ch == 'Q' or ch == 'q' or ch == 4));
         writer << std::endl;
     }
 
@@ -434,141 +445,283 @@ namespace fl {
     }
 
     Engine* Console::mamdani() {
-        Engine* engine = new Engine("simple-dimmer");
+        Engine* engine = new Engine;
+        engine->setName("simple-dimmer");
+        engine->setDescription("");
 
-        InputVariable* ambient = new InputVariable("Ambient", 0, 1);
-        ambient->addTerm(new Triangle("DARK", .0, .25, .5));
-        ambient->addTerm(new Triangle("MEDIUM", .25, .5, .75));
-        ambient->addTerm(new Triangle("BRIGHT", .5, .75, 1));
+        InputVariable* ambient = new InputVariable;
+        ambient->setName("ambient");
+        ambient->setDescription("");
+        ambient->setEnabled(true);
+        ambient->setRange(0.000, 1.000);
+        ambient->setLockValueInRange(false);
+        ambient->addTerm(new Triangle("DARK", 0.000, 0.250, 0.500));
+        ambient->addTerm(new Triangle("MEDIUM", 0.250, 0.500, 0.750));
+        ambient->addTerm(new Triangle("BRIGHT", 0.500, 0.750, 1.000));
         engine->addInputVariable(ambient);
 
-
-        OutputVariable* power = new OutputVariable("Power", 0, 2);
+        OutputVariable* power = new OutputVariable;
+        power->setName("power");
+        power->setDescription("");
+        power->setEnabled(true);
+        power->setRange(0.000, 2.000);
+        power->setLockValueInRange(false);
+        power->setAggregation(new Maximum);
+        power->setDefuzzifier(new Centroid(200));
         power->setDefaultValue(fl::nan);
-        power->addTerm(new Triangle("LOW", 0.0, 0.5, 1));
-        power->addTerm(new Triangle("MEDIUM", 0.5, 1, 1.5));
-        power->addTerm(new Triangle("HIGH", 1, 1.5, 2));
+        power->setLockPreviousValue(false);
+        power->addTerm(new Triangle("LOW", 0.000, 0.500, 1.000));
+        power->addTerm(new Triangle("MEDIUM", 0.500, 1.000, 1.500));
+        power->addTerm(new Triangle("HIGH", 1.000, 1.500, 2.000));
         engine->addOutputVariable(power);
 
-        RuleBlock* ruleblock = new RuleBlock();
-        ruleblock->addRule(Rule::parse("if Ambient is DARK then Power is HIGH", engine));
-        ruleblock->addRule(Rule::parse("if Ambient is MEDIUM then Power is MEDIUM", engine));
-        ruleblock->addRule(Rule::parse("if Ambient is BRIGHT then Power is LOW", engine));
-
-        engine->addRuleBlock(ruleblock);
-
-        engine->configure("", "", "Minimum", "Maximum", "Centroid");
+        RuleBlock* ruleBlock = new RuleBlock;
+        ruleBlock->setName("");
+        ruleBlock->setDescription("");
+        ruleBlock->setEnabled(true);
+        ruleBlock->setConjunction(fl::null);
+        ruleBlock->setDisjunction(fl::null);
+        ruleBlock->setImplication(new Minimum);
+        ruleBlock->setActivation(new General);
+        ruleBlock->addRule(Rule::parse("if ambient is DARK then power is HIGH", engine));
+        ruleBlock->addRule(Rule::parse("if ambient is MEDIUM then power is MEDIUM", engine));
+        ruleBlock->addRule(Rule::parse("if ambient is BRIGHT then power is LOW", engine));
+        engine->addRuleBlock(ruleBlock);
 
         return engine;
     }
 
     Engine* Console::takagiSugeno() {
-        Engine* engine = new Engine("approximation of sin(x)/x");
+        Engine* engine = new Engine;
+        engine->setName("approximation");
+        engine->setDescription("approximation of sin(x)/x");
 
-        fl::InputVariable* inputX = new fl::InputVariable("inputX");
-        inputX->setRange(0, 10);
-        inputX->addTerm(new fl::Triangle("NEAR_1", 0, 1, 2));
-        inputX->addTerm(new fl::Triangle("NEAR_2", 1, 2, 3));
-        inputX->addTerm(new fl::Triangle("NEAR_3", 2, 3, 4));
-        inputX->addTerm(new fl::Triangle("NEAR_4", 3, 4, 5));
-        inputX->addTerm(new fl::Triangle("NEAR_5", 4, 5, 6));
-        inputX->addTerm(new fl::Triangle("NEAR_6", 5, 6, 7));
-        inputX->addTerm(new fl::Triangle("NEAR_7", 6, 7, 8));
-        inputX->addTerm(new fl::Triangle("NEAR_8", 7, 8, 9));
-        inputX->addTerm(new fl::Triangle("NEAR_9", 8, 9, 10));
+        InputVariable* inputX = new InputVariable;
+        inputX->setName("inputX");
+        inputX->setDescription("value of x");
+        inputX->setEnabled(true);
+        inputX->setRange(0.000, 10.000);
+        inputX->setLockValueInRange(false);
+        inputX->addTerm(new Triangle("NEAR_1", 0.000, 1.000, 2.000));
+        inputX->addTerm(new Triangle("NEAR_2", 1.000, 2.000, 3.000));
+        inputX->addTerm(new Triangle("NEAR_3", 2.000, 3.000, 4.000));
+        inputX->addTerm(new Triangle("NEAR_4", 3.000, 4.000, 5.000));
+        inputX->addTerm(new Triangle("NEAR_5", 4.000, 5.000, 6.000));
+        inputX->addTerm(new Triangle("NEAR_6", 5.000, 6.000, 7.000));
+        inputX->addTerm(new Triangle("NEAR_7", 6.000, 7.000, 8.000));
+        inputX->addTerm(new Triangle("NEAR_8", 7.000, 8.000, 9.000));
+        inputX->addTerm(new Triangle("NEAR_9", 8.000, 9.000, 10.000));
         engine->addInputVariable(inputX);
 
-
-        fl::OutputVariable* outputFx = new fl::OutputVariable("outputFx");
-        outputFx->setRange(-1, 1);
+        OutputVariable* outputFx = new OutputVariable;
+        outputFx->setName("outputFx");
+        outputFx->setDescription("value of the approximation of x");
+        outputFx->setEnabled(true);
+        outputFx->setRange(-1.000, 1.000);
+        outputFx->setLockValueInRange(false);
+        outputFx->setAggregation(fl::null);
+        outputFx->setDefuzzifier(new WeightedAverage("Automatic"));
         outputFx->setDefaultValue(fl::nan);
-        outputFx->setLockPreviousOutputValue(true); //To use its value with diffFx
-        outputFx->addTerm(new Constant("f1", 0.84));
-        outputFx->addTerm(new Constant("f2", 0.45));
-        outputFx->addTerm(new Constant("f3", 0.04));
-        outputFx->addTerm(new Constant("f4", -0.18));
-        outputFx->addTerm(new Constant("f5", -0.19));
-        outputFx->addTerm(new Constant("f6", -0.04));
-        outputFx->addTerm(new Constant("f7", 0.09));
-        outputFx->addTerm(new Constant("f8", 0.12));
-        outputFx->addTerm(new Constant("f9", 0.04));
+        outputFx->setLockPreviousValue(true);
+        outputFx->addTerm(new Constant("f1", 0.840));
+        outputFx->addTerm(new Constant("f2", 0.450));
+        outputFx->addTerm(new Constant("f3", 0.040));
+        outputFx->addTerm(new Constant("f4", -0.180));
+        outputFx->addTerm(new Constant("f5", -0.190));
+        outputFx->addTerm(new Constant("f6", -0.040));
+        outputFx->addTerm(new Constant("f7", 0.090));
+        outputFx->addTerm(new Constant("f8", 0.120));
+        outputFx->addTerm(new Constant("f9", 0.040));
         engine->addOutputVariable(outputFx);
 
-        fl::OutputVariable* trueFx = new fl::OutputVariable("trueFx");
-        trueFx->setRange(fl::nan, fl::nan);
-        trueFx->setLockPreviousOutputValue(true); //To use its value with diffFx
-        trueFx->addTerm(fl::Function::create("fx", "sin(inputX)/inputX", engine));
-        engine->addOutputVariable(trueFx);
+        OutputVariable* trueValue = new OutputVariable;
+        trueValue->setName("trueValue");
+        trueValue->setDescription("value of f(x)=sin(x)/x");
+        trueValue->setEnabled(true);
+        trueValue->setRange(-1.060, 1.000);
+        trueValue->setLockValueInRange(false);
+        trueValue->setAggregation(fl::null);
+        trueValue->setDefuzzifier(new WeightedAverage("Automatic"));
+        trueValue->setDefaultValue(fl::nan);
+        trueValue->setLockPreviousValue(true);
+        trueValue->addTerm(Function::create("fx", "sin(inputX)/inputX", engine));
+        engine->addOutputVariable(trueValue);
 
-        fl::OutputVariable* diffFx = new fl::OutputVariable("diffFx");
-        diffFx->addTerm(fl::Function::create("diff", "fabs(outputFx-trueFx)", engine));
-        diffFx->setRange(fl::nan, fl::nan);
-        //        diffFx->setLockValidOutput(true); //To use in input diffPreviousFx
-        engine->addOutputVariable(diffFx);
+        OutputVariable* difference = new OutputVariable;
+        difference->setName("difference");
+        difference->setDescription("error e=f(x) - f'(x)");
+        difference->setEnabled(true);
+        difference->setRange(-1.000, 1.000);
+        difference->setLockValueInRange(false);
+        difference->setAggregation(fl::null);
+        difference->setDefuzzifier(new WeightedAverage("Automatic"));
+        difference->setDefaultValue(fl::nan);
+        difference->setLockPreviousValue(false);
+        difference->addTerm(Function::create("error", "outputFx-trueValue", engine));
+        engine->addOutputVariable(difference);
 
-        fl::RuleBlock* block = new fl::RuleBlock();
-        block->addRule(fl::Rule::parse("if inputX is NEAR_1 then outputFx is f1", engine));
-        block->addRule(fl::Rule::parse("if inputX is NEAR_2 then outputFx is f2", engine));
-        block->addRule(fl::Rule::parse("if inputX is NEAR_3 then outputFx is f3", engine));
-        block->addRule(fl::Rule::parse("if inputX is NEAR_4 then outputFx is f4", engine));
-        block->addRule(fl::Rule::parse("if inputX is NEAR_5 then outputFx is f5", engine));
-        block->addRule(fl::Rule::parse("if inputX is NEAR_6 then outputFx is f6", engine));
-        block->addRule(fl::Rule::parse("if inputX is NEAR_7 then outputFx is f7", engine));
-        block->addRule(fl::Rule::parse("if inputX is NEAR_8 then outputFx is f8", engine));
-        block->addRule(fl::Rule::parse("if inputX is NEAR_9 then outputFx is f9", engine));
-        block->addRule(fl::Rule::parse("if inputX is any then trueFx is fx and diffFx is diff", engine));
-        engine->addRuleBlock(block);
+        RuleBlock* ruleBlock = new RuleBlock;
+        ruleBlock->setName("");
+        ruleBlock->setDescription("");
+        ruleBlock->setEnabled(true);
+        ruleBlock->setConjunction(fl::null);
+        ruleBlock->setDisjunction(fl::null);
+        ruleBlock->setImplication(new AlgebraicProduct);
+        ruleBlock->setActivation(new General);
+        ruleBlock->addRule(Rule::parse("if inputX is NEAR_1 then outputFx is f1", engine));
+        ruleBlock->addRule(Rule::parse("if inputX is NEAR_2 then outputFx is f2", engine));
+        ruleBlock->addRule(Rule::parse("if inputX is NEAR_3 then outputFx is f3", engine));
+        ruleBlock->addRule(Rule::parse("if inputX is NEAR_4 then outputFx is f4", engine));
+        ruleBlock->addRule(Rule::parse("if inputX is NEAR_5 then outputFx is f5", engine));
+        ruleBlock->addRule(Rule::parse("if inputX is NEAR_6 then outputFx is f6", engine));
+        ruleBlock->addRule(Rule::parse("if inputX is NEAR_7 then outputFx is f7", engine));
+        ruleBlock->addRule(Rule::parse("if inputX is NEAR_8 then outputFx is f8", engine));
+        ruleBlock->addRule(Rule::parse("if inputX is NEAR_9 then outputFx is f9", engine));
+        ruleBlock->addRule(Rule::parse("if inputX is any then trueValue is fx and difference is error", engine));
+        engine->addRuleBlock(ruleBlock);
 
-        engine->configure("", "", "AlgebraicProduct", "AlgebraicSum", "WeightedAverage");
+        return engine;
+    }
+
+    Engine* Console::hybrid() {
+        Engine* engine = new Engine;
+        engine->setName("tipper");
+        engine->setDescription("(service and food) -> (tip)");
+
+        InputVariable* service = new InputVariable;
+        service->setName("service");
+        service->setDescription("quality of service");
+        service->setEnabled(true);
+        service->setRange(0.000, 10.000);
+        service->setLockValueInRange(true);
+        service->addTerm(new Trapezoid("poor", 0.000, 0.000, 2.500, 5.000));
+        service->addTerm(new Triangle("good", 2.500, 5.000, 7.500));
+        service->addTerm(new Trapezoid("excellent", 5.000, 7.500, 10.000, 10.000));
+        engine->addInputVariable(service);
+
+        InputVariable* food = new InputVariable;
+        food->setName("food");
+        food->setDescription("quality of food");
+        food->setEnabled(true);
+        food->setRange(0.000, 10.000);
+        food->setLockValueInRange(true);
+        food->addTerm(new Trapezoid("rancid", 0.000, 0.000, 2.500, 7.500));
+        food->addTerm(new Trapezoid("delicious", 2.500, 7.500, 10.000, 10.000));
+        engine->addInputVariable(food);
+
+        OutputVariable* mTip = new OutputVariable;
+        mTip->setName("mTip");
+        mTip->setDescription("tip based on Mamdani inference");
+        mTip->setEnabled(true);
+        mTip->setRange(0.000, 30.000);
+        mTip->setLockValueInRange(false);
+        mTip->setAggregation(new Maximum);
+        mTip->setDefuzzifier(new Centroid(100));
+        mTip->setDefaultValue(fl::nan);
+        mTip->setLockPreviousValue(false);
+        mTip->addTerm(new Triangle("cheap", 0.000, 5.000, 10.000));
+        mTip->addTerm(new Triangle("average", 10.000, 15.000, 20.000));
+        mTip->addTerm(new Triangle("generous", 20.000, 25.000, 30.000));
+        engine->addOutputVariable(mTip);
+
+        OutputVariable* tsTip = new OutputVariable;
+        tsTip->setName("tsTip");
+        tsTip->setDescription("tip based on Takagi-Sugeno inference");
+        tsTip->setEnabled(true);
+        tsTip->setRange(0.000, 30.000);
+        tsTip->setLockValueInRange(false);
+        tsTip->setAggregation(fl::null);
+        tsTip->setDefuzzifier(new WeightedAverage("TakagiSugeno"));
+        tsTip->setDefaultValue(fl::nan);
+        tsTip->setLockPreviousValue(false);
+        tsTip->addTerm(new Constant("cheap", 5.000));
+        tsTip->addTerm(new Constant("average", 15.000));
+        tsTip->addTerm(new Constant("generous", 25.000));
+        engine->addOutputVariable(tsTip);
+
+        RuleBlock* mamdaniRuleBlock = new RuleBlock;
+        mamdaniRuleBlock->setName("mamdani");
+        mamdaniRuleBlock->setDescription("Mamdani inference");
+        mamdaniRuleBlock->setEnabled(true);
+        mamdaniRuleBlock->setConjunction(new AlgebraicProduct);
+        mamdaniRuleBlock->setDisjunction(new AlgebraicSum);
+        mamdaniRuleBlock->setImplication(new Minimum);
+        mamdaniRuleBlock->setActivation(new General);
+        mamdaniRuleBlock->addRule(Rule::parse("if service is poor or food is rancid then mTip is cheap", engine));
+        mamdaniRuleBlock->addRule(Rule::parse("if service is good then mTip is average", engine));
+        mamdaniRuleBlock->addRule(Rule::parse("if service is excellent or food is delicious then mTip is generous with 0.5", engine));
+        mamdaniRuleBlock->addRule(Rule::parse("if service is excellent and food is delicious then mTip is generous with 1.0", engine));
+        engine->addRuleBlock(mamdaniRuleBlock);
+
+        RuleBlock* takagiSugenoRuleBlock = new RuleBlock;
+        takagiSugenoRuleBlock->setName("takagiSugeno");
+        takagiSugenoRuleBlock->setDescription("Takagi-Sugeno inference");
+        takagiSugenoRuleBlock->setEnabled(true);
+        takagiSugenoRuleBlock->setConjunction(new AlgebraicProduct);
+        takagiSugenoRuleBlock->setDisjunction(new AlgebraicSum);
+        takagiSugenoRuleBlock->setImplication(fl::null);
+        takagiSugenoRuleBlock->setActivation(new General);
+        takagiSugenoRuleBlock->addRule(Rule::parse("if service is poor or food is rancid then tsTip is cheap", engine));
+        takagiSugenoRuleBlock->addRule(Rule::parse("if service is good then tsTip is average", engine));
+        takagiSugenoRuleBlock->addRule(Rule::parse("if service is excellent or food is delicious then tsTip is generous with 0.5", engine));
+        takagiSugenoRuleBlock->addRule(Rule::parse("if service is excellent and food is delicious then tsTip is generous with 1.0", engine));
+        engine->addRuleBlock(takagiSugenoRuleBlock);
 
         return engine;
     }
 
     void Console::exportAllExamples(const std::string& from, const std::string& to) {
-        std::vector<std::string> examples;
-        examples.push_back("/mamdani/AllTerms");
-        //        examples.push_back("/mamdani/Laundry");
-        examples.push_back("/mamdani/SimpleDimmer");
-        //        examples.push_back("/mamdani/SimpleDimmerInverse");
-        examples.push_back("/mamdani/matlab/mam21");
-        examples.push_back("/mamdani/matlab/mam22");
-        examples.push_back("/mamdani/matlab/shower");
-        examples.push_back("/mamdani/matlab/tank");
-        examples.push_back("/mamdani/matlab/tank2");
-        examples.push_back("/mamdani/matlab/tipper");
-        examples.push_back("/mamdani/matlab/tipper1");
-        examples.push_back("/mamdani/octave/investment_portfolio");
-        examples.push_back("/mamdani/octave/mamdani_tip_calculator");
-        examples.push_back("/takagi-sugeno/approximation");
-        examples.push_back("/takagi-sugeno/SimpleDimmer");
-        examples.push_back("/takagi-sugeno/matlab/fpeaks");
-        examples.push_back("/takagi-sugeno/matlab/invkine1");
-        examples.push_back("/takagi-sugeno/matlab/invkine2");
-        examples.push_back("/takagi-sugeno/matlab/juggler");
-        examples.push_back("/takagi-sugeno/matlab/membrn1");
-        examples.push_back("/takagi-sugeno/matlab/membrn2");
-        examples.push_back("/takagi-sugeno/matlab/slbb");
-        examples.push_back("/takagi-sugeno/matlab/slcp");
-        examples.push_back("/takagi-sugeno/matlab/slcp1");
-        examples.push_back("/takagi-sugeno/matlab/slcpp1");
-        examples.push_back("/takagi-sugeno/matlab/sltbu_fl");
-        examples.push_back("/takagi-sugeno/matlab/sugeno1");
-        examples.push_back("/takagi-sugeno/matlab/tanksg");
-        examples.push_back("/takagi-sugeno/matlab/tippersg");
-        examples.push_back("/takagi-sugeno/octave/cubic_approximator");
-        examples.push_back("/takagi-sugeno/octave/heart_disease_risk");
-        examples.push_back("/takagi-sugeno/octave/linear_tip_calculator");
-        examples.push_back("/takagi-sugeno/octave/sugeno_tip_calculator");
-        examples.push_back("/tsukamoto/tsukamoto");
+        Console::exportAllExamples(from, to, "./", "/tmp/");
+    }
 
-        std::string sourceBase = "/home/jcrada/Development/fl/fuzzylite/examples/original";
-        std::string targetBase = "/tmp/fl/";
+    void Console::exportAllExamples(const std::string& from, const std::string& to,
+            const std::string& sourcePath, const std::string& targetPath) {
+        std::vector<std::string> examples;
+        examples.push_back("mamdani/AllTerms");
+        examples.push_back("mamdani/SimpleDimmer");
+        examples.push_back("mamdani/Laundry");
+        examples.push_back("mamdani/ObstacleAvoidance");
+        examples.push_back("mamdani/SimpleDimmerChained");
+        examples.push_back("mamdani/SimpleDimmerInverse");
+        examples.push_back("mamdani/matlab/mam21");
+        examples.push_back("mamdani/matlab/mam22");
+        examples.push_back("mamdani/matlab/shower");
+        examples.push_back("mamdani/matlab/tank");
+        examples.push_back("mamdani/matlab/tank2");
+        examples.push_back("mamdani/matlab/tipper");
+        examples.push_back("mamdani/matlab/tipper1");
+        examples.push_back("mamdani/octave/investment_portfolio");
+        examples.push_back("mamdani/octave/mamdani_tip_calculator");
+        examples.push_back("takagi-sugeno/approximation");
+        examples.push_back("takagi-sugeno/ObstacleAvoidance");
+        examples.push_back("takagi-sugeno/SimpleDimmer");
+        examples.push_back("takagi-sugeno/matlab/fpeaks");
+        examples.push_back("takagi-sugeno/matlab/invkine1");
+        examples.push_back("takagi-sugeno/matlab/invkine2");
+        examples.push_back("takagi-sugeno/matlab/juggler");
+        examples.push_back("takagi-sugeno/matlab/membrn1");
+        examples.push_back("takagi-sugeno/matlab/membrn2");
+        examples.push_back("takagi-sugeno/matlab/slbb");
+        examples.push_back("takagi-sugeno/matlab/slcp");
+        examples.push_back("takagi-sugeno/matlab/slcp1");
+        examples.push_back("takagi-sugeno/matlab/slcpp1");
+        examples.push_back("takagi-sugeno/matlab/sltbu_fl");
+        examples.push_back("takagi-sugeno/matlab/sugeno1");
+        examples.push_back("takagi-sugeno/matlab/tanksg");
+        examples.push_back("takagi-sugeno/matlab/tippersg");
+        examples.push_back("takagi-sugeno/octave/cubic_approximator");
+        examples.push_back("takagi-sugeno/octave/heart_disease_risk");
+        examples.push_back("takagi-sugeno/octave/linear_tip_calculator");
+        examples.push_back("takagi-sugeno/octave/sugeno_tip_calculator");
+        examples.push_back("tsukamoto/tsukamoto");
+        examples.push_back("hybrid/tipper");
+        examples.push_back("hybrid/ObstacleAvoidance");
 
         FL_unique_ptr<Importer> importer;
         if (from == "fll") importer.reset(new FllImporter);
         else if (from == "fis") importer.reset(new FisImporter);
         else if (from == "fcl") importer.reset(new FclImporter);
-        else throw fl::Exception("[examples error] unrecognized format <" + from + "> to import", FL_AT);
+        else throw Exception("[examples error] unrecognized format <" + from + "> to import", FL_AT);
 
         FL_unique_ptr<Exporter> exporter;
         if (to == "fll") exporter.reset(new FllExporter);
@@ -577,16 +730,19 @@ namespace fl {
         else if (to == "fis") exporter.reset(new FisExporter);
         else if (to == "cpp") exporter.reset(new CppExporter);
         else if (to == "java") exporter.reset(new JavaExporter);
-        else throw fl::Exception("[examples error] unrecognized format <" + to + "> to export", FL_AT);
+        else if (to == "R") exporter.reset(new RScriptExporter());
+        else throw Exception("[examples error] unrecognized format <" + to + "> to export", FL_AT);
 
         std::vector<std::pair<Exporter*, Importer*> > tests;
         tests.push_back(std::pair<Exporter*, Importer*>(new FllExporter, new FllImporter));
         tests.push_back(std::pair<Exporter*, Importer*>(new FisExporter, new FisImporter));
         tests.push_back(std::pair<Exporter*, Importer*>(new FclExporter, new FclImporter));
         for (std::size_t i = 0; i < examples.size(); ++i) {
-            FL_LOG("Processing " << (i + 1) << "/" << examples.size() << ": " << examples.at(i));
+            std::string example = examples.at(i);
+            FL_LOG((i + 1) << "/" << examples.size());
+            FL_LOG("Importing from: " << sourcePath << "/" << example << "." << from);
             std::ostringstream ss;
-            std::string input = sourceBase + examples.at(i) + "." + from;
+            std::string input = sourcePath + "/" + example + "." + from;
             std::ifstream source(input.c_str());
             if (source.is_open()) {
                 std::string line;
@@ -595,29 +751,40 @@ namespace fl {
                     ss << line << "\n";
                 }
                 source.close();
-            } else throw fl::Exception("[examples error] file not found: " + input, FL_AT);
+            } else throw Exception("[examples error] file not found: " + input, FL_AT);
 
             FL_unique_ptr<Engine> engine(importer->fromString(ss.str()));
 
             for (std::size_t t = 0; t < tests.size(); ++t) {
-                std::string out = tests.at(t).first->toString(engine.get());
-                FL_unique_ptr<Engine> copy(tests.at(t).second->fromString(out));
-                std::string out_copy = tests.at(t).first->toString(copy.get());
+                if ("mamdani/Laundry" == example
+                        or "mamdani/SimpleDimmerInverse" == example
+                        or "mamdani/SimpleDimmerChained" == example
+                        or "hybrid/tipper" == example
+                        or "hybrid/ObstacleAvoidance" == example) {
+                    if (tests.at(t).second->name() == FisImporter().name()) {
+                        continue;
+                    }
+                }
+                
+                std::string exported = tests.at(t).first->toString(engine.get());
+                FL_unique_ptr<Engine> engineFromExport(tests.at(t).second->fromString(exported));
+                std::string imported = tests.at(t).first->toString(engineFromExport.get());
 
-                if (out != out_copy) {
-                    std::ostringstream ss;
-                    ss << "[imex error] different results <"
-                            << importer->name() << "," << exporter->name() << "> "
-                            "at " + examples.at(t) + "." + from + ":\n";
-                    ss << "<Engine A>\n" << out << "\n\n" <<
+                if (exported != imported) {
+                    std::ostringstream msg;
+                    msg << "[imex error] different results <"
+                            << tests.at(t).first->name() << "," << tests.at(t).second->name() << "> "
+                            "at " << example << "." << from << ":\n";
+                    msg << "<Engine A>\n" << exported << "\n\n" <<
                             "================================\n\n" <<
-                            "<Engine B>\n" << out_copy;
-                    throw fl::Exception(ss.str(), FL_AT);
+                            "<Engine B>\n" << imported;
+                    throw Exception(msg.str(), FL_AT);
                 }
             }
 
-            std::string output = targetBase + examples.at(i) + "." + to;
+            std::string output = targetPath + "/" + example + "." + to;
             std::ofstream target(output.c_str());
+            FL_LOG("Exporting to: " << output << "\n");
             if (target.is_open()) {
                 if (to == "cpp") {
                     target << "#include <fl/Headers.h>\n\n"
@@ -625,8 +792,9 @@ namespace fl {
                             << exporter->toString(engine.get())
                             << "\n}\n";
                 } else if (to == "java") {
-                    std::string className = examples.at(i).substr(examples.at(i).find_last_of('/') + 1);
+                    std::string className = example.substr(example.find_last_of('/') + 1);
                     target << "import com.fuzzylite.*;\n"
+                            << "import com.fuzzylite.activation.*\n"
                             << "import com.fuzzylite.defuzzifier.*;\n"
                             << "import com.fuzzylite.factory.*;\n"
                             << "import com.fuzzylite.hedge.*;\n"
@@ -641,161 +809,215 @@ namespace fl {
                             << "public static void main(String[] args){\n"
                             << exporter->toString(engine.get())
                             << "\n}\n}\n";
+                } else if (to == "R") {
+                    RScriptExporter* rScript = dynamic_cast<RScriptExporter*> (exporter.get());
+                    InputVariable* a = engine->getInputVariable(0);
+                    InputVariable* b = engine->getInputVariable(1 % engine->numberOfInputVariables());
+                    std::string pathToDF = example.substr(example.find_last_of('/') + 1) + ".fld";
+                    rScript->writeScriptImportingDataFrame(engine.get(), target,
+                            a, b, pathToDF, engine->outputVariables());
                 } else {
                     target << exporter->toString(engine.get());
                 }
                 target.close();
             }
             Engine copyConstructor(*engine.get());
-            (void) copyConstructor;
+            FL_IUNUSED(copyConstructor);
             Engine assignmentOperator = *engine.get();
-            (void) assignmentOperator;
+            FL_IUNUSED(assignmentOperator);
         }
+        FL_LOG("Please, make sure the output contains the following structure:\n"
+                "mkdir -p " << targetPath << "mamdani/matlab; "
+                "mkdir -p " << targetPath << "mamdani/octave; "
+                "mkdir -p " << targetPath << "takagi-sugeno/matlab; "
+                "mkdir -p " << targetPath << "takagi-sugeno/octave; "
+                "mkdir -p " << targetPath << "tsukamoto; "
+                "mkdir -p " << targetPath << "hybrid;");
         for (std::size_t i = 0; i < tests.size(); ++i) {
             delete tests.at(i).first;
             delete tests.at(i).second;
         }
     }
 
-#if defined(FL_UNIX) && ! defined(FL_APPLE)
-
-    void Console::benchmarkExamples(int runs) {
-        std::string sourceBase = "/home/jcrada/Development/fl/fuzzylite/examples/original";
-        typedef std::pair<std::string, int > Example;
-        std::vector<Example> examples;
-        examples.push_back(Example("/mamdani/AllTerms", 1e4));
-        examples.push_back(Example("/mamdani/SimpleDimmer", 1e5));
-        examples.push_back(Example("/mamdani/matlab/mam21", 128));
-        examples.push_back(Example("/mamdani/matlab/mam22", 128));
-        examples.push_back(Example("/mamdani/matlab/shower", 256));
-        examples.push_back(Example("/mamdani/matlab/tank", 256));
-        examples.push_back(Example("/mamdani/matlab/tank2", 512));
-        examples.push_back(Example("/mamdani/matlab/tipper", 256));
-        examples.push_back(Example("/mamdani/matlab/tipper1", 1e5));
-        examples.push_back(Example("/mamdani/octave/investment_portfolio", 256));
-        examples.push_back(Example("/mamdani/octave/mamdani_tip_calculator", 256));
-        examples.push_back(Example("/takagi-sugeno/approximation", 1e6));
-        examples.push_back(Example("/takagi-sugeno/SimpleDimmer", 2e6));
-        examples.push_back(Example("/takagi-sugeno/matlab/fpeaks", 512));
-        examples.push_back(Example("/takagi-sugeno/matlab/invkine1", 256));
-        examples.push_back(Example("/takagi-sugeno/matlab/invkine2", 256));
-        examples.push_back(Example("/takagi-sugeno/matlab/juggler", 512));
-        examples.push_back(Example("/takagi-sugeno/matlab/membrn1", 1024));
-        examples.push_back(Example("/takagi-sugeno/matlab/membrn2", 512));
-        examples.push_back(Example("/takagi-sugeno/matlab/slbb", 20));
-        examples.push_back(Example("/takagi-sugeno/matlab/slcp", 20));
-        examples.push_back(Example("/takagi-sugeno/matlab/slcp1", 15));
-        examples.push_back(Example("/takagi-sugeno/matlab/slcpp1", 9));
-        examples.push_back(Example("/takagi-sugeno/matlab/sltbu_fl", 128));
-        examples.push_back(Example("/takagi-sugeno/matlab/sugeno1", 2e6));
-        examples.push_back(Example("/takagi-sugeno/matlab/tanksg", 1024));
-        examples.push_back(Example("/takagi-sugeno/matlab/tippersg", 1024));
-        examples.push_back(Example("/takagi-sugeno/octave/cubic_approximator", 2e6));
-        examples.push_back(Example("/takagi-sugeno/octave/heart_disease_risk", 1024));
-        examples.push_back(Example("/takagi-sugeno/octave/linear_tip_calculator", 1024));
-        examples.push_back(Example("/takagi-sugeno/octave/sugeno_tip_calculator", 512));
-        examples.push_back(Example("/tsukamoto/tsukamoto", 1e6));
-
-        for (std::size_t i = 0; i < examples.size(); ++i) {
-            FL_LOG(examples.at(i).first << "\t" << examples.at(i).second);
+    void Console::benchmark(const std::string& fllFile, const std::string& fldFile,
+            int runs, std::ofstream* writer) const {
+        FL_unique_ptr<Engine> engine(FllImporter().fromFile(fllFile));
+        std::ifstream reader(fldFile.c_str());
+        if (not reader.is_open()) {
+            throw Exception("File <" + fldFile + "> could not be opened");
         }
-
-        FllImporter importer;
-        FldExporter exporter;
-        exporter.setExportHeader(false);
-        exporter.setExportInputValues(false);
-        exporter.setExportOutputValues(false);
-        std::ostream dummy(0);
-
-        for (std::size_t e = 0; e < examples.size(); ++e) {
-            std::string filename(sourceBase + examples.at(e).first + ".fll");
-            std::ifstream file(filename.c_str());
-            std::ostringstream fll;
-            if (file.is_open()) {
-                std::string line;
-                while (file.good()) {
-                    std::getline(file, line);
-                    fll << line << "\n";
-                }
-                file.close();
-            } else throw fl::Exception("[examples error] file not found: " + filename, FL_AT);
-
-            FL_unique_ptr<Engine> engine(importer.fromString(fll.str()));
-
-            std::vector<scalar> seconds;
-            timespec start, now;
-            int results = std::pow(1.0 * examples.at(e).second, engine->numberOfInputVariables());
-
-            for (int r = 0; r < runs; ++r) {
-                clock_gettime(CLOCK_REALTIME, &start);
-                exporter.write(engine.get(), dummy, results);
-                clock_gettime(CLOCK_REALTIME, &now);
-
-                time_t elapsed = now.tv_sec - start.tv_sec;
-                scalar a = elapsed + start.tv_nsec / 1e9f;
-                scalar b = elapsed + now.tv_nsec / 1e9f;
-
-                seconds.push_back((b - a) + elapsed);
-            }
-            scalar mean = Op::mean(seconds);
-            scalar stdev = Op::standardDeviation(seconds, mean);
-            FL_LOG(examples.at(e).first << ":\t" <<
-                    fl::Op::str(mean) << "\t" << fl::Op::str(stdev) << "\t" <<
-                    Op::join(seconds, "\t"));
+        Benchmark benchmark(engine->getName(), engine.get());
+        benchmark.prepare(reader);
+        if (writer) {
+            FL_LOG("\tEvaluating on " << benchmark.getExpected().size() <<
+                    " values read from " << fldFile << " ...");
+        }
+        for (int i = 0; i < runs; ++i) {
+            benchmark.runOnce();
+        }
+        if (writer) {
+            FL_LOG("\tMean(t)=" << Op::mean(benchmark.getTimes()) << " nanoseconds");
+            *writer << benchmark.format(benchmark.results(),
+                    Benchmark::Horizontal, Benchmark::Body) << "\n";
+        } else {
+            FL_LOGP(benchmark.format(benchmark.results(),
+                    Benchmark::Horizontal, Benchmark::Body));
         }
     }
-#endif
 
-    int Console::main(int argc, char** argv) {
-        (void) argc;
-        (void) argv;
-        if (argc <= 1) {
-            std::cout << usage() << std::endl;
-            return EXIT_SUCCESS;
-        }
-        if (argc == 2) {
-            if ("export-examples" == std::string(argv[1])) {
-                try {
-                    fuzzylite::setDecimals(3);
-                    FL_LOG("Processing fll->fll");
-                    exportAllExamples("fll", "fll");
-                    FL_LOG("Processing fll->fcl");
-                    exportAllExamples("fll", "fcl");
-                    FL_LOG("Processing fll->fis");
-                    exportAllExamples("fll", "fis");
-                    FL_LOG("Processing fll->cpp");
-                    exportAllExamples("fll", "cpp");
-                    FL_LOG("Processing fll->java");
-                    exportAllExamples("fll", "java");
-                    fuzzylite::setDecimals(8);
-                    fuzzylite::setMachEps(1e-6);
-                    FL_LOG("Processing fll->fld");
-                    exportAllExamples("fll", "fld");
-                } catch (std::exception& ex) {
-                    std::cout << ex.what() << "\nBACKTRACE:\n" <<
-                            fl::Exception::btCallStack() << std::endl;
-                    return EXIT_FAILURE;
-                }
-                return EXIT_SUCCESS;
-            } else if ("benchmarks" == std::string(argv[1])) {
-#if defined(FL_UNIX) && ! defined(FL_APPLE)
-                fuzzylite::setDecimals(3);
-                Console::benchmarkExamples(10);
-                return EXIT_SUCCESS;
-#else
-                throw fl::Exception("[benchmarks error] implementation available only for Unix-based OS", FL_AT);
-#endif
+    void Console::benchmarks(const std::string& fllFileList,
+            const std::string& fldFileList, int runs, std::ofstream* writer) const {
+        std::vector<std::string> fllFiles, fldFiles;
+
+        {
+            std::ifstream fllReader(fllFileList.c_str());
+            if (not fllReader.is_open()) {
+                throw Exception("[error] file <" + fllFileList + "> could not be opened");
+            }
+            std::ifstream fldReader(fldFileList.c_str());
+            if (not fldReader.is_open()) {
+                throw Exception("[error] file <" + fldFileList + "> could not be opened");
+            }
+
+            std::string fllLine, fldLine;
+            while (std::getline(fllReader, fllLine) and std::getline(fldReader, fldLine)) {
+                fllLine = Op::trim(fllLine);
+                fldLine = Op::trim(fldLine);
+                if (fllLine.empty() or fllLine[0] == '#')
+                    continue;
+                fllFiles.push_back(fllLine);
+                fldFiles.push_back(fldLine);
             }
         }
 
+        if (writer) {
+            *writer << Op::join(Benchmark().header(runs, true), "\t") << "\n";
+        } else {
+            FL_LOGP(Op::join(Benchmark().header(runs, true), "\t"));
+        }
+
+        for (std::size_t i = 0; i < fllFiles.size(); ++i) {
+            if (writer) {
+                FL_LOG("Benchmark " << (i + 1) << "/" << fllFiles.size() << ": "
+                        << fllFiles.at(i));
+            }
+            benchmark(fllFiles.at(i), fldFiles.at(i), runs, writer);
+        }
+    }
+
+    int Console::main(int argc, const char* argv[]) {
+        fuzzylite::setLogging(true);
+
+        Console console;
+        if (argc <= 2) {
+            FL_LOGP(console.usage() << "\n");
+            return EXIT_SUCCESS;
+        }
+
+        const std::string firstArgument(argv[1]);
+        if (firstArgument == "export-examples") {
+            std::string path = ".";
+            if (argc > 2) {
+                path = std::string(argv[2]);
+            }
+            std::string outputPath = "/tmp/";
+            if (argc > 3) {
+                outputPath = std::string(argv[3]);
+            }
+            FL_LOG("Origin=" << path);
+            FL_LOG("Target=" << outputPath);
+            fuzzylite::setDecimals(3);
+            try {
+                FL_LOG("Processing fll->fll");
+                console.exportAllExamples("fll", "fll", path, outputPath);
+                FL_LOG("Processing fll->fcl");
+                console.exportAllExamples("fll", "fcl", path, outputPath);
+                FL_LOG("Processing fll->fis");
+                console.exportAllExamples("fll", "fis", path, outputPath);
+                FL_LOG("Processing fll->cpp");
+                console.exportAllExamples("fll", "cpp", path, outputPath);
+                FL_LOG("Processing fll->java");
+                console.exportAllExamples("fll", "java", path, outputPath);
+                FL_LOG("Processing fll->R");
+                console.exportAllExamples("fll", "R", path, outputPath);
+                fuzzylite::setDecimals(9);
+                FL_LOG("Processing fll->fld");
+                console.exportAllExamples("fll", "fld", path, outputPath);
+                FL_LOG("Origin=" << path);
+                FL_LOG("Target=" << outputPath);
+            } catch (std::exception& ex) {
+                FL_LOGP(ex.what() << "\n");
+                return EXIT_FAILURE;
+            }
+            return EXIT_SUCCESS;
+
+        } else if (firstArgument == "benchmark") {
+            if (argc < 5) {
+                FL_LOG("[error] not enough parameters");
+                return EXIT_FAILURE;
+            }
+            std::string fllFile(argv[2]);
+            std::string fldFile(argv[3]);
+            try {
+                int runs = (int) Op::toScalar(argv[4]);
+                if (argc > 5) {
+                    std::string filename(argv[5]);
+                    std::ofstream outputFile;
+                    outputFile.open(filename.c_str());
+                    if (not outputFile.is_open()) {
+                        FL_LOG("[error] cannot create file <" << filename << ">");
+                        return EXIT_FAILURE;
+                    }
+                    outputFile << Op::join(Benchmark().header(runs, true), "\t") << "\n";
+                    console.benchmark(fllFile, fldFile, runs, &outputFile);
+                } else {
+                    FL_LOGP(Op::join(Benchmark().header(runs, true), "\t"));
+                    console.benchmark(fllFile, fldFile, runs, fl::null);
+                }
+            } catch (std::exception& ex) {
+                FL_LOGP(ex.what() << "\n");
+                return EXIT_FAILURE;
+            }
+            return EXIT_SUCCESS;
+
+        } else if (firstArgument == "benchmarks") {
+            if (argc < 5) {
+                FL_LOG("[error] not enough parameters");
+                return EXIT_FAILURE;
+            }
+            std::string fllFiles(argv[2]);
+            std::string fldFiles(argv[3]);
+            try {
+                int runs = (int) Op::toScalar(argv[4]);
+                if (argc > 5) {
+                    std::string filename(argv[5]);
+                    std::ofstream outputFile;
+                    outputFile.open(filename.c_str());
+                    if (not outputFile.is_open()) {
+                        FL_LOG("[error] cannot create file <" << filename << ">");
+                        return EXIT_FAILURE;
+                    }
+                    console.benchmarks(fllFiles, fldFiles, runs, &outputFile);
+                } else {
+                    console.benchmarks(fllFiles, fldFiles, runs, fl::null);
+                }
+            } catch (std::exception& ex) {
+                FL_LOGP(ex.what() << "\n");
+                return EXIT_FAILURE;
+            }
+            return EXIT_SUCCESS;
+        }
+
+        //MAIN:
         try {
-            std::map<std::string, std::string> options = parse(argc, argv);
-            process(options);
+            std::map<std::string, std::string> options = console.parse(argc, argv);
+            console.process(options);
+
         } catch (std::exception& ex) {
-            std::cout << ex.what() << "\n" << std::endl;
-            //            std::cout << fl::Exception::btCallStack() << std::endl;
+            FL_LOGP(ex.what() << "\n");
             return EXIT_FAILURE;
         }
         return EXIT_SUCCESS;
     }
+
 }

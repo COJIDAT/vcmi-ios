@@ -1,4 +1,3 @@
-
 /*
  * CMapGenOptions.h, part of VCMI engine
  *
@@ -88,7 +87,9 @@ public:
 		template <typename Handler>
 		void serialize(Handler & h, const int version)
 		{
-			h & color & startingTown & playerType;
+			h & color;
+			h & startingTown;
+			h & playerType;
 		}
 	};
 
@@ -103,10 +104,12 @@ public:
 	bool getHasTwoLevels() const;
 	void setHasTwoLevels(bool value);
 
-	/// The count of the players ranging from 1 to PlayerColor::PLAYER_LIMIT or RANDOM_SIZE for random. If you call
+	/// The count of all (human or computer) players ranging from 1 to PlayerColor::PLAYER_LIMIT or RANDOM_SIZE for random. If you call
 	/// this method, all player settings are reset to default settings.
 	si8 getPlayerCount() const;
 	void setPlayerCount(si8 value);
+
+	si8 getHumanOnlyPlayerCount() const;
 
 	/// The count of the teams ranging from 0 to <players count - 1> or RANDOM_SIZE for random.
 	si8 getTeamCount() const;
@@ -155,6 +158,7 @@ public:
 private:
 	void resetPlayersMap();
 	int countHumanPlayers() const;
+	int countCompOnlyPlayers() const;
 	PlayerColor getNextPlayerColor() const;
 	void updateCompOnlyPlayers();
 	void updatePlayers();
@@ -162,7 +166,7 @@ private:
 
 	si32 width, height;
 	bool hasTwoLevels;
-	si8 playerCount, teamCount, compOnlyPlayerCount, compOnlyTeamCount;
+	si8 playerCount, teamCount, humanPlayersCount, compOnlyPlayerCount, compOnlyTeamCount;
 	EWaterContent::EWaterContent waterContent;
 	EMonsterStrength::EMonsterStrength monsterStrength;
 	std::map<PlayerColor, CPlayerSettings> players;
@@ -172,8 +176,17 @@ public:
 	template <typename Handler>
 	void serialize(Handler & h, const int version)
 	{
-		h & width & height & hasTwoLevels & playerCount & teamCount & compOnlyPlayerCount;
-		h & compOnlyTeamCount & waterContent & monsterStrength & players;
+		h & width;
+		h & height;
+		h & hasTwoLevels;
+		h & playerCount;
+		h & teamCount;
+		h & compOnlyPlayerCount;
+		h & compOnlyTeamCount;
+		h & waterContent;
+		h & monsterStrength;
+		h & players;
+		h & humanPlayersCount;
 		//TODO add name of template to class, enables selection of a template by a user
 	}
 };

@@ -7,13 +7,14 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
- 
+
 #pragma once
 
 typedef si32 TResource;
 typedef si64 TResourceCap; //to avoid overflow when adding integers. Signed values are easier to control.
 
 class JsonNode;
+class JsonSerializeFormat;
 
 namespace Res
 {
@@ -124,11 +125,16 @@ namespace Res
 			h & static_cast<std::vector<int>&>(*this);
 		}
 
+		DLL_LINKAGE void serializeJson(JsonSerializeFormat & handler, const std::string & fieldName);
+
 		DLL_LINKAGE void amax(const TResourceCap &val); //performs vstd::amax on each element
+		DLL_LINKAGE void amin(const TResourceCap &val); //performs vstd::amin on each element
 		DLL_LINKAGE void positive(); //values below 0 are set to 0 - upgrade cost can't be negative, for example
 		DLL_LINKAGE bool nonZero() const; //returns true if at least one value is non-zero;
 		DLL_LINKAGE bool canAfford(const ResourceSet &price) const;
 		DLL_LINKAGE bool canBeAfforded(const ResourceSet &res) const;
+
+		DLL_LINKAGE std::string toString() const;
 
 		//special iterator of iterating over non-zero resources in set
 		class DLL_LINKAGE nziterator
@@ -150,9 +156,9 @@ namespace Res
 			const ResEntry* operator->() const;
 
 		};
-	};
 
-	using ::operator<<;
+
+	};
 }
 
 typedef Res::ResourceSet TResources;

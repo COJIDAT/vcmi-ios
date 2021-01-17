@@ -1,11 +1,3 @@
-﻿#pragma once
-
-#include "ObjectTemplate.h"
-
-//#include "../IGameCallback.h"
-#include "../int3.h"
-#include "../HeroBonus.h"
-
 /*
  * CObjectHandler.h, part of VCMI engine
  *
@@ -15,12 +7,26 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "ObjectTemplate.h"
+
+//#include "../IGameCallback.h"
+#include "../int3.h"
+#include "../HeroBonus.h"
 
 class CGHeroInstance;
 class IGameCallback;
 class CGObjectInstance;
 struct MetaString;
 struct BattleResult;
+class JsonSerializeFormat;
+class CRandomGenerator;
+class CMap;
+
+// This one teleport-specific, but has to be available everywhere in callbacks and netpacks
+// For now it's will be there till teleports code refactored and moved into own file
+typedef std::vector<std::pair<ObjectInstanceID, int3>> TTeleportExitsList;
 
 class DLL_LINKAGE IObjectInterface
 {
@@ -32,10 +38,10 @@ public:
 
 	virtual void onHeroVisit(const CGHeroInstance * h) const;
 	virtual void onHeroLeave(const CGHeroInstance * h) const;
-	virtual void newTurn() const;
-	virtual void initObj(); //synchr
+	virtual void newTurn(CRandomGenerator & rand) const;
+	virtual void initObj(CRandomGenerator & rand); //synchr
 	virtual void setProperty(ui8 what, ui32 val);//synchr
-	
+
 	//Called when queries created DURING HERO VISIT are resolved
 	//First parameter is always hero that visited object and triggered the query
 	virtual void battleFinished(const CGHeroInstance *hero, const BattleResult &result) const;
@@ -52,7 +58,7 @@ public:
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		logGlobal->errorStream() << "IObjectInterface serialized, unexpected, should not happen!";
+		logGlobal->error("IObjectInterface serialized, unexpected, should not happen!");
 	}
 };
 
@@ -113,6 +119,10 @@ public:
 	/// If true hero can visit this object only from neighbouring tiles and can't stand on this object
 	bool blockVisit;
 
+	std::string instanceName;
+	std::string typeName;
+	std::string subTypeName;
+
 	CGObjectInstance();
 	~CGObjectInstance();
 
@@ -134,12 +144,17 @@ public:
 	std::set<int3> getBlockedOffsets() const; //returns set of relative positions blocked by this object
 	bool isVisitable() const; //returns true if object is visitable
 
+	boost::optional<std::string> getAmbientSound() const;
+	boost::optional<std::string> getVisitSound() const;
+	boost::optional<std::string> getRemovalSound() const;
+
+
 	/** VIRTUAL METHODS **/
 
 	/// Returns true if player can pass through visitable tiles of this object
 	virtual bool passableFor(PlayerColor color) const;
 	/// Range of revealed map around this object, counting from getSightCenter()
-	virtual int getSightRadious() const;
+	virtual int getSightRadius() const;
 	/// returns (x,y,0) offset to a visitable tile of object
 	virtual int3 getVisitableOffset() const;
 	/// Called mostly during map randomization to turn random object into a regular one (e.g. "Random Monster" into "Pikeman")
@@ -157,24 +172,47 @@ public:
 
 	/** OVERRIDES OF IObjectInterface **/
 
-	void initObj() override;
+	void initObj(CRandomGenerator & rand) override;
 	void onHeroVisit(const CGHeroInstance * h) const override;
 	/// method for synchronous update. Note: For new properties classes should override setPropertyDer instead
 	void setProperty(ui8 what, ui32 val) override final;
 
-	//friend class CGameHandler;
+	virtual void afterAddToMap(CMap * map);
 
+	///Entry point of binary (de-)serialization
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & pos & ID & subID & id & tempOwner & blockVisit & appearance;
+		if(version >= 759)
+		{
+			h & instanceName;
+			h & typeName;
+			h & subTypeName;
+		}
+
+		h & pos;
+		h & ID;
+		h & subID;
+		h & id;
+		h & tempOwner;
+		h & blockVisit;
+		h & appearance;
 		//definfo is handled by map serializer
 	}
+
+	///Entry point of Json (de-)serialization
+	void serializeJson(JsonSerializeFormat & handler);
+
 protected:
 	/// virtual method that allows synchronously update object state on server and all clients
 	virtual void setPropertyDer(ui8 what, ui32 val);
 
 	/// Gives dummy bonus from this object to hero. Can be used to track visited state
 	void giveDummyBonus(ObjectInstanceID heroID, ui8 duration = Bonus::ONE_DAY) const;
+
+	///Serialize object-type specific options
+	virtual void serializeJsonOptions(JsonSerializeFormat & handler);
+
+	void serializeJsonOwner(JsonSerializeFormat & handler);
 };
 
 /// function object which can be used to find an object with an specific sub ID

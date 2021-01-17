@@ -1,10 +1,18 @@
+/*
+ * SDL_Extensions.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "SDL_Extensions.h"
 #include "SDL_Pixels.h"
 
 #include "../CGameInfo.h"
 #include "../CMessage.h"
-#include "../CDefHandler.h"
 #include "../Graphics.h"
 #include "../CMT.h"
 
@@ -14,20 +22,18 @@ const SDL_Color Colors::METALLIC_GOLD = { 173, 142, 66, 0 };
 const SDL_Color Colors::GREEN = { 0, 255, 0, 0 };
 const SDL_Color Colors::DEFAULT_KEY_COLOR = {0, 255, 255, 0};
 
-#if (SDL_MAJOR_VERSION == 2)
 void SDL_UpdateRect(SDL_Surface *surface, int x, int y, int w, int h)
 {
 	Rect rect(x,y,w,h);
 	if(0 !=SDL_UpdateTexture(screenTexture, &rect, surface->pixels, surface->pitch))
-		logGlobal->errorStream() << __FUNCTION__ << "SDL_UpdateTexture " << SDL_GetError();
+		logGlobal->error("%sSDL_UpdateTexture %s", __FUNCTION__, SDL_GetError());
 
 	SDL_RenderClear(mainRenderer);
 	if(0 != SDL_RenderCopy(mainRenderer, screenTexture, NULL, NULL))
-		logGlobal->errorStream() << __FUNCTION__ << "SDL_RenderCopy " <<  SDL_GetError();
-	SDL_RenderPresent(mainRenderer);	
-	
+		logGlobal->error("%sSDL_RenderCopy %s", __FUNCTION__, SDL_GetError());
+	SDL_RenderPresent(mainRenderer);
+
 }
-#endif // VCMI_SDL1
 
 SDL_Surface * CSDL_Ext::newSurface(int w, int h, SDL_Surface * mod) //creates new surface, with flags/format same as in surface given
 {
@@ -65,6 +71,11 @@ bool isItIn(const SDL_Rect * rect, int x, int y)
 	return (x>rect->x && x<rect->x+rect->w) && (y>rect->y && y<rect->y+rect->h);
 }
 
+bool isItInOrLowerBounds(const SDL_Rect * rect, int x, int y)
+{
+	return (x >= rect->x && x < rect->x + rect->w) && (y >= rect->y && y < rect->y + rect->h);
+}
+
 void blitAt(SDL_Surface * src, int x, int y, SDL_Surface * dst)
 {
 	if(!dst) dst = screen;
@@ -82,6 +93,10 @@ void blitAt(SDL_Surface * src, const SDL_Rect & pos, SDL_Surface * dst)
 SDL_Surface * CSDL_Ext::verticalFlip(SDL_Surface * toRot)
 {
 	SDL_Surface * ret = SDL_ConvertSurface(toRot, toRot->format, toRot->flags);
+
+	SDL_LockSurface(ret);
+	SDL_LockSurface(toRot);
+
 	const int bpp = ret->format->BytesPerPixel;
 
 	char * src = reinterpret_cast<char *>(toRot->pixels);
@@ -89,26 +104,29 @@ SDL_Surface * CSDL_Ext::verticalFlip(SDL_Surface * toRot)
 
 	for(int i=0; i<ret->h; i++)
 	{
-		char * srcPxl = src;
-		char * dstPxl = dst + ret->w * bpp;
+		//FIXME: optimization bugged
+//		if (bpp == 1)
+//		{
+//			// much faster for 8-bit surfaces (majority of our data)
+//			std::reverse_copy(src, src + toRot->pitch, dst);
+//		}
+//		else
+//		{
+			char * srcPxl = src;
+			char * dstPxl = dst + ret->w * bpp;
 
-		if (bpp == 1)
-		{
-			// much faster for 8-bit surfaces (majority of our data)
-			std::reverse_copy(src, src + ret->pitch, dst);
-		}
-		else
-		{
 			for(int j=0; j<ret->w; j++)
 			{
 				dstPxl -= bpp;
 				std::copy(srcPxl, srcPxl + bpp, dstPxl);
 				srcPxl += bpp;
 			}
-		}
+//		}
 		src += toRot->pitch;
 		dst += ret->pitch;
 	}
+	SDL_UnlockSurface(ret);
+	SDL_UnlockSurface(toRot);
 	return ret;
 }
 
@@ -116,6 +134,8 @@ SDL_Surface * CSDL_Ext::verticalFlip(SDL_Surface * toRot)
 SDL_Surface * CSDL_Ext::horizontalFlip(SDL_Surface * toRot)
 {
 	SDL_Surface * ret = SDL_ConvertSurface(toRot, toRot->format, toRot->flags);
+	SDL_LockSurface(ret);
+	SDL_LockSurface(toRot);
 	char * src = reinterpret_cast<char *>(toRot->pixels);
 	char * dst = reinterpret_cast<char *>(ret->pixels) + ret->h * ret->pitch;
 
@@ -125,8 +145,10 @@ SDL_Surface * CSDL_Ext::horizontalFlip(SDL_Surface * toRot)
 		std::copy(src, src + toRot->pitch, dst);
 		src += toRot->pitch;
 	}
+	SDL_UnlockSurface(ret);
+	SDL_UnlockSurface(toRot);
 	return ret;
-};
+}
 
 Uint32 CSDL_Ext::SDL_GetPixel(SDL_Surface *surface, const int & x, const int & y, bool colorByte)
 {
@@ -171,202 +193,29 @@ void CSDL_Ext::alphaTransform(SDL_Surface *src)
 		SDL_Color & palColor = src->format->palette->colors[i];
 		palColor = colors[i];
 	}
-	SDL_SetColorKey(src, SDL_SRCCOLORKEY, 0);
+	SDL_SetColorKey(src, SDL_TRUE, 0);
 }
 
-static void prepareOutRect(SDL_Rect *src, SDL_Rect *dst, const SDL_Rect & clip_rect)
-{
-	const int xoffset = std::max(clip_rect.x - dst->x, 0),
-		yoffset = std::max(clip_rect.y - dst->y, 0);
-
-	src->x += xoffset;
-	src->y += yoffset;
-	dst->x += xoffset;
-	dst->y += yoffset;
-
-	src->w = dst->w = std::max(0,std::min(dst->w - xoffset, clip_rect.x + clip_rect.w - dst->x));
-	src->h = dst->h = std::max(0,std::min(dst->h - yoffset, clip_rect.y + clip_rect.h - dst->y));
-}
-
-template<int bpp>
-void CSDL_Ext::blitWithRotateClip(SDL_Surface *src,SDL_Rect * srcRect, SDL_Surface * dst, SDL_Rect * dstRect, ui8 rotation)//srcRect is not used, works with 8bpp sources and 24bpp dests
-{
-	if(!rotation)
-	{
-		CSDL_Ext::blitSurface(src, srcRect, dst, dstRect);
-	}
-	else
-	{
-		static void (*blitWithRotate[])(const SDL_Surface *, const SDL_Rect *, SDL_Surface *, const SDL_Rect *) = {blitWithRotate1<bpp>, blitWithRotate2<bpp>, blitWithRotate3<bpp>};
-		prepareOutRect(srcRect, dstRect, dst->clip_rect);
-		blitWithRotate[rotation-1](src, srcRect, dst, dstRect);
-	}
-}
-
-template<int bpp>
-void CSDL_Ext::blitWithRotateClipVal( SDL_Surface *src,SDL_Rect srcRect, SDL_Surface * dst, SDL_Rect dstRect, ui8 rotation )
-{
-	blitWithRotateClip<bpp>(src, &srcRect, dst, &dstRect, rotation);
-}
-
-template<int bpp>
-void CSDL_Ext::blitWithRotateClipWithAlpha(SDL_Surface *src,SDL_Rect * srcRect, SDL_Surface * dst, SDL_Rect * dstRect, ui8 rotation)//srcRect is not used, works with 8bpp sources and 24bpp dests
-{
-	if(!rotation)
-	{
-		blit8bppAlphaTo24bpp(src, srcRect, dst, dstRect);
-	}
-	else
-	{
-		static void (*blitWithRotate[])(const SDL_Surface *, const SDL_Rect *, SDL_Surface *, const SDL_Rect *) = {blitWithRotate1WithAlpha<bpp>, blitWithRotate2WithAlpha<bpp>, blitWithRotate3WithAlpha<bpp>};
-		prepareOutRect(srcRect, dstRect, dst->clip_rect);
-		blitWithRotate[rotation-1](src, srcRect, dst, dstRect);
-	}
-}
-
-template<int bpp>
-void CSDL_Ext::blitWithRotateClipValWithAlpha( SDL_Surface *src,SDL_Rect srcRect, SDL_Surface * dst, SDL_Rect dstRect, ui8 rotation )
-{
-	blitWithRotateClipWithAlpha<bpp>(src, &srcRect, dst, &dstRect, rotation);
-}
-
-template<int bpp>
-void CSDL_Ext::blitWithRotate1(const SDL_Surface *src, const SDL_Rect * srcRect, SDL_Surface * dst, const SDL_Rect * dstRect)//srcRect is not used, works with 8bpp sources and 24/32 bpp dests
-{
-	Uint8 *sp = getPxPtr(src, src->w - srcRect->w - srcRect->x, srcRect->y);
-	Uint8 *dporg = (Uint8 *)dst->pixels + dstRect->y*dst->pitch + (dstRect->x+dstRect->w)*bpp;
-	const SDL_Color * const colors = src->format->palette->colors;
-
-	for(int i=dstRect->h; i>0; i--, dporg += dst->pitch)
-	{
-		Uint8 *dp = dporg;
-		for(int j=dstRect->w; j>0; j--, sp++)
-			ColorPutter<bpp, -1>::PutColor(dp, colors[*sp]);
-
-		sp += src->w - dstRect->w;
-	}
-}
-
-template<int bpp>
-void CSDL_Ext::blitWithRotate2(const SDL_Surface *src, const SDL_Rect * srcRect, SDL_Surface * dst, const SDL_Rect * dstRect)//srcRect is not used, works with 8bpp sources and 24/32 bpp dests
-{
-	Uint8 *sp = getPxPtr(src, srcRect->x, src->h - srcRect->h - srcRect->y);
-	Uint8 *dporg = (Uint8 *)dst->pixels + (dstRect->y + dstRect->h - 1)*dst->pitch + dstRect->x*bpp;
-	const SDL_Color * const colors = src->format->palette->colors;
-
-	for(int i=dstRect->h; i>0; i--, dporg -= dst->pitch)
-	{
-		Uint8 *dp = dporg;
-
-		for(int j=dstRect->w; j>0; j--, sp++)
-			ColorPutter<bpp, 1>::PutColor(dp, colors[*sp]);
-
-		sp += src->w - dstRect->w;
-	}
-}
-
-template<int bpp>
-void CSDL_Ext::blitWithRotate3(const SDL_Surface *src, const SDL_Rect * srcRect, SDL_Surface * dst, const SDL_Rect * dstRect)//srcRect is not used, works with 8bpp sources and 24/32 bpp dests
-{
-	Uint8 *sp = (Uint8 *)src->pixels + (src->h - srcRect->h - srcRect->y)*src->pitch + (src->w - srcRect->w - srcRect->x);
-	Uint8 *dporg = (Uint8 *)dst->pixels +(dstRect->y + dstRect->h - 1)*dst->pitch + (dstRect->x+dstRect->w)*bpp;
-	const SDL_Color * const colors = src->format->palette->colors;
-
-	for(int i=dstRect->h; i>0; i--, dporg -= dst->pitch)
-	{
-		Uint8 *dp = dporg;
-		for(int j=dstRect->w; j>0; j--, sp++)
-			ColorPutter<bpp, -1>::PutColor(dp, colors[*sp]);
-
-		sp += src->w - dstRect->w;
-	}
-}
-
-template<int bpp>
-void CSDL_Ext::blitWithRotate1WithAlpha(const SDL_Surface *src, const SDL_Rect * srcRect, SDL_Surface * dst, const SDL_Rect * dstRect)//srcRect is not used, works with 8bpp sources and 24/32 bpp dests
-{
-	Uint8 *sp = (Uint8 *)src->pixels + srcRect->y*src->pitch + (src->w - srcRect->w - srcRect->x);
-	Uint8 *dporg = (Uint8 *)dst->pixels + dstRect->y*dst->pitch + (dstRect->x+dstRect->w)*bpp;
-	const SDL_Color * const colors = src->format->palette->colors;
-
-	for(int i=dstRect->h; i>0; i--, dporg += dst->pitch)
-	{
-		Uint8 *dp = dporg;
-		for(int j=dstRect->w; j>0; j--, sp++)
-		{
-			if(*sp)
-				ColorPutter<bpp, -1>::PutColor(dp, colors[*sp]);
-			else
-				dp -= bpp;
-		}
-
-		sp += src->w - dstRect->w;
-	}
-}
-
-template<int bpp>
-void CSDL_Ext::blitWithRotate2WithAlpha(const SDL_Surface *src, const SDL_Rect * srcRect, SDL_Surface * dst, const SDL_Rect * dstRect)//srcRect is not used, works with 8bpp sources and 24/32 bpp dests
-{
-	Uint8 *sp = (Uint8 *)src->pixels + (src->h - srcRect->h - srcRect->y)*src->pitch + srcRect->x;
-	Uint8 *dporg = (Uint8 *)dst->pixels + (dstRect->y + dstRect->h - 1)*dst->pitch + dstRect->x*bpp;
-	const SDL_Color * const colors = src->format->palette->colors;
-
-	for(int i=dstRect->h; i>0; i--, dporg -= dst->pitch)
-	{
-		Uint8 *dp = dporg;
-
-		for(int j=dstRect->w; j>0; j--, sp++)
-		{
-			if(*sp)
-				ColorPutter<bpp, 1>::PutColor(dp, colors[*sp]);
-			else
-				dp += bpp;
-		}
-
-		sp += src->w - dstRect->w;
-	}
-}
-
-template<int bpp>
-void CSDL_Ext::blitWithRotate3WithAlpha(const SDL_Surface *src, const SDL_Rect * srcRect, SDL_Surface * dst, const SDL_Rect * dstRect)//srcRect is not used, works with 8bpp sources and 24/32 bpp dests
-{
-	Uint8 *sp = (Uint8 *)src->pixels + (src->h - srcRect->h - srcRect->y)*src->pitch + (src->w - srcRect->w - srcRect->x);
-	Uint8 *dporg = (Uint8 *)dst->pixels +(dstRect->y + dstRect->h - 1)*dst->pitch + (dstRect->x+dstRect->w)*bpp;
-	const SDL_Color * const colors = src->format->palette->colors;
-
-	for(int i=dstRect->h; i>0; i--, dporg -= dst->pitch)
-	{
-		Uint8 *dp = dporg;
-		for(int j=dstRect->w; j>0; j--, sp++)
-		{
-			if(*sp)
-				ColorPutter<bpp, -1>::PutColor(dp, colors[*sp]);
-			else
-				dp -= bpp;
-		}
-
-		sp += src->w - dstRect->w;
-	}
-}
 template<int bpp>
 int CSDL_Ext::blit8bppAlphaTo24bppT(const SDL_Surface * src, const SDL_Rect * srcRect, SDL_Surface * dst, SDL_Rect * dstRect)
 {
-	if (src && src->format->BytesPerPixel==1 && dst && (bpp==3 || bpp==4 || bpp==2)) //everything's ok
+	/* Make sure the surfaces aren't locked */
+	if ( ! src || ! dst )
+	{
+		SDL_SetError("SDL_UpperBlit: passed a nullptr surface");
+		return -1;
+	}
+
+	if ( src->locked || dst->locked )
+	{
+		SDL_SetError("Surfaces must not be locked during blit");
+		return -1;
+	}
+
+	if (src->format->BytesPerPixel==1 && (bpp==3 || bpp==4 || bpp==2)) //everything's ok
 	{
 		SDL_Rect fulldst;
 		int srcx, srcy, w, h;
-
-		/* Make sure the surfaces aren't locked */
-		if ( ! src || ! dst )
-		{
-			SDL_SetError("SDL_UpperBlit: passed a nullptr surface");
-			return -1;
-		}
-		if ( src->locked || dst->locked )
-		{
-			SDL_SetError("Surfaces must not be locked during blit");
-			return -1;
-		}
 
 		/* If the destination rectangle is nullptr, use the entire dest surface */
 		if ( dstRect == nullptr )
@@ -460,11 +309,7 @@ int CSDL_Ext::blit8bppAlphaTo24bppT(const SDL_Surface * src, const SDL_Rect * sr
 				for(int x = w; x; x--)
 				{
 					const SDL_Color &tbc = colors[*color++]; //color to blit
-					#ifdef VCMI_SDL1
-					ColorPutter<bpp, +1>::PutColorAlphaSwitch(p, tbc.r, tbc.g, tbc.b, tbc.unused);
-					#else
 					ColorPutter<bpp, +1>::PutColorAlphaSwitch(p, tbc.r, tbc.g, tbc.b, tbc.a);
-					#endif // 0					
 				}
 			}
 			SDL_UnlockSurface(dst);
@@ -481,7 +326,7 @@ int CSDL_Ext::blit8bppAlphaTo24bpp(const SDL_Surface * src, const SDL_Rect * src
 	case 3: return blit8bppAlphaTo24bppT<3>(src, srcRect, dst, dstRect);
 	case 4: return blit8bppAlphaTo24bppT<4>(src, srcRect, dst, dstRect);
 	default:
-        logGlobal->errorStream() << (int)dst->format->BitsPerPixel << " bpp is not supported!!!";
+		logGlobal->error("%d bpp is not supported!", (int)dst->format->BitsPerPixel);
 		return -1;
 	}
 }
@@ -489,11 +334,7 @@ int CSDL_Ext::blit8bppAlphaTo24bpp(const SDL_Surface * src, const SDL_Rect * src
 Uint32 CSDL_Ext::colorToUint32(const SDL_Color * color)
 {
 	Uint32 ret = 0;
-	#ifdef VCMI_SDL1
-	ret+=color->unused;
-	#else
 	ret+=color->a;
-	#endif // 0	
 	ret<<=8; //*=256
 	ret+=color->b;
 	ret<<=8; //*=256
@@ -505,15 +346,10 @@ Uint32 CSDL_Ext::colorToUint32(const SDL_Color * color)
 
 void CSDL_Ext::update(SDL_Surface * what)
 {
-	#ifdef VCMI_SDL1
-	if(what)
-		SDL_UpdateRect(what, 0, 0, what->w, what->h);	
-	#else
 	if(!what)
 		return;
 	if(0 !=SDL_UpdateTexture(screenTexture, nullptr, what->pixels, what->pitch))
-		logGlobal->errorStream() << __FUNCTION__ << "SDL_UpdateTexture " << SDL_GetError();		
-	#endif // VCMI_SDL1
+		logGlobal->error("%s SDL_UpdateTexture %s", __FUNCTION__, SDL_GetError());
 }
 void CSDL_Ext::drawBorder(SDL_Surface * sur, int x, int y, int w, int h, const int3 &color)
 {
@@ -571,7 +407,7 @@ void CSDL_Ext::setPlayerColor(SDL_Surface * sur, PlayerColor player)
 		SDL_SetColors(sur, color, 5, 1);
 	}
 	else
-        logGlobal->warnStream() << "Warning, setPlayerColor called on not 8bpp surface!";
+		logGlobal->warn("Warning, setPlayerColor called on not 8bpp surface!");
 }
 
 TColorPutter CSDL_Ext::getPutterFor(SDL_Surface * const &dest, int incrementing)
@@ -592,7 +428,7 @@ case BytesPerPixel:									\
 		CASE_BPP(3)
 		CASE_BPP(4)
 	default:
-        logGlobal->errorStream() << (int)dest->format->BitsPerPixel << "bpp is not supported!";
+		logGlobal->error("%d bpp is not supported!", (int)dest->format->BitsPerPixel);
 		return nullptr;
 	}
 
@@ -606,7 +442,7 @@ TColorPutterAlpha CSDL_Ext::getPutterAlphaFor(SDL_Surface * const &dest, int inc
 		CASE_BPP(3)
 		CASE_BPP(4)
 	default:
-        logGlobal->errorStream() << (int)dest->format->BitsPerPixel << "bpp is not supported!";
+		logGlobal->error("%d bpp is not supported!", (int)dest->format->BitsPerPixel);
 		return nullptr;
 	}
 #undef CASE_BPP
@@ -632,22 +468,14 @@ bool CSDL_Ext::isTransparent( SDL_Surface * srf, int x, int y )
 		return true;
 
 	SDL_Color color;
-	
-	#ifdef VCMI_SDL1
-	SDL_GetRGBA(SDL_GetPixel(srf, x, y), srf->format, &color.r, &color.g, &color.b, &color.unused);
-	#else
+
 	SDL_GetRGBA(SDL_GetPixel(srf, x, y), srf->format, &color.r, &color.g, &color.b, &color.a);
-	#endif // 0	
 
 	// color is considered transparent here if
 	// a) image has aplha: less than 50% transparency
 	// b) no alpha: color is cyan
 	if (srf->format->Amask)
-	#ifdef VCMI_SDL1
-		return color.unused < 128; // almost transparent
-	#else
 		return color.a < 128; // almost transparent
-	#endif // 0				
 	else
 		return (color.r == 0 && color.g == 255 && color.b == 255);
 }
@@ -668,7 +496,7 @@ void CSDL_Ext::VflipSurf(SDL_Surface * surf)
 	}
 }
 
-void CSDL_Ext::SDL_PutPixelWithoutRefresh(SDL_Surface *ekran, const int & x, const int & y, const Uint8 & R, const Uint8 & G, const Uint8 & B, Uint8 A /*= 255*/)
+void CSDL_Ext::SDL_PutPixelWithoutRefresh(SDL_Surface *ekran, const int & x, const int & y, const Uint8 & R, const Uint8 & G, const Uint8 & B, Uint8 A)
 {
 	Uint8 *p = getPxPtr(ekran, x, y);
 	getPutterFor(ekran, false)(p, R, G, B);
@@ -681,45 +509,13 @@ void CSDL_Ext::SDL_PutPixelWithoutRefresh(SDL_Surface *ekran, const int & x, con
 	}
 }
 
-void CSDL_Ext::SDL_PutPixelWithoutRefreshIfInSurf(SDL_Surface *ekran, const int & x, const int & y, const Uint8 & R, const Uint8 & G, const Uint8 & B, Uint8 A /*= 255*/)
+void CSDL_Ext::SDL_PutPixelWithoutRefreshIfInSurf(SDL_Surface *ekran, const int & x, const int & y, const Uint8 & R, const Uint8 & G, const Uint8 & B, Uint8 A)
 {
 	const SDL_Rect & rect = ekran->clip_rect;
 
 	if(x >= rect.x  &&  x < rect.w + rect.x
 	&& y >= rect.y  &&  y < rect.h + rect.y)
 		SDL_PutPixelWithoutRefresh(ekran, x, y, R, G, B, A);
-}
-
-BlitterWithRotationVal CSDL_Ext::getBlitterWithRotation(SDL_Surface *dest)
-{
-	switch(dest->format->BytesPerPixel)
-	{
-	case 2: return blitWithRotateClipVal<2>;
-	case 3: return blitWithRotateClipVal<3>;
-	case 4: return blitWithRotateClipVal<4>;
-	default:
-        logGlobal->errorStream() << (int)dest->format->BitsPerPixel << " bpp is not supported!!!";
-		break;
-	}
-
-	assert(0);
-	return nullptr;
-}
-
-BlitterWithRotationVal CSDL_Ext::getBlitterWithRotationAndAlpha(SDL_Surface *dest)
-{
-	switch(dest->format->BytesPerPixel)
-	{
-	case 2: return blitWithRotateClipValWithAlpha<2>;
-	case 3: return blitWithRotateClipValWithAlpha<3>;
-	case 4: return blitWithRotateClipValWithAlpha<4>;
-	default:
-        logGlobal->errorStream() << (int)dest->format->BitsPerPixel << " bpp is not supported!!!";
-		break;
-	}
-
-	assert(0);
-	return nullptr;
 }
 
 template<int bpp>
@@ -918,11 +714,11 @@ SDL_Surface * CSDL_Ext::scaleSurface(SDL_Surface *surf, int width, int height)
 	return ret;
 }
 
-void CSDL_Ext::blitSurface( SDL_Surface * src, SDL_Rect * srcRect, SDL_Surface * dst, SDL_Rect * dstRect )
+void CSDL_Ext::blitSurface( SDL_Surface * src, const SDL_Rect * srcRect, SDL_Surface * dst, SDL_Rect * dstRect )
 {
 	if (dst != screen)
 	{
-		SDL_BlitSurface(src, srcRect, dst, dstRect);
+		SDL_UpperBlit(src, srcRect, dst, dstRect);
 	}
 	else
 	{
@@ -936,7 +732,7 @@ void CSDL_Ext::blitSurface( SDL_Surface * src, SDL_Rect * srcRect, SDL_Surface *
 			betterDst = Rect(0, 0, dst->w, dst->h);
 		}
 
-		SDL_BlitSurface(src, srcRect, dst, &betterDst);
+		SDL_UpperBlit(src, srcRect, dst, &betterDst);
 	}
 }
 
@@ -988,42 +784,34 @@ SDL_Color CSDL_Ext::makeColor(ui8 r, ui8 g, ui8 b, ui8 a)
 
 void CSDL_Ext::startTextInput(SDL_Rect * where)
 {
-	#ifndef VCMI_SDL1
-	if (SDL_IsTextInputActive() == SDL_FALSE)		
-	{		
-		SDL_StartTextInput();		
-	}		
+	if (SDL_IsTextInputActive() == SDL_FALSE)
+	{
+		SDL_StartTextInput();
+	}
 	SDL_SetTextInputRect(where);
-	#endif
 }
 
 void CSDL_Ext::stopTextInput()
 {
-	#ifndef VCMI_SDL1
 	if (SDL_IsTextInputActive() == SDL_TRUE)
-	{		
-		SDL_StopTextInput();			
-	}		
-	#endif	
+	{
+		SDL_StopTextInput();
+	}
 }
 
 STRONG_INLINE static uint32_t mapColor(SDL_Surface * surface, SDL_Color color)
 {
-	#ifdef VCMI_SDL1
-	return SDL_MapRGB(surface->format, color.r, color.g, color.b); 
-	#else
-	return SDL_MapRGBA(surface->format, color.r, color.g, color.b, color.a); 
-	#endif		
+	return SDL_MapRGBA(surface->format, color.r, color.g, color.b, color.a);
 }
 
 void CSDL_Ext::setColorKey(SDL_Surface * surface, SDL_Color color)
 {
 	uint32_t key = mapColor(surface,color);
-	SDL_SetColorKey(surface, SDL_SRCCOLORKEY, key);	
+	SDL_SetColorKey(surface, SDL_TRUE, key);
 }
 
 void CSDL_Ext::setDefaultColorKey(SDL_Surface * surface)
-{	
+{
 	setColorKey(surface, Colors::DEFAULT_KEY_COLOR);
 }
 
@@ -1034,7 +822,7 @@ void CSDL_Ext::setDefaultColorKeyPresize(SDL_Surface * surface)
 
 	// set color key only if exactly such color was found
 	if (color.r == Colors::DEFAULT_KEY_COLOR.r && color.g == Colors::DEFAULT_KEY_COLOR.g && color.b == Colors::DEFAULT_KEY_COLOR.b)
-		SDL_SetColorKey(surface, SDL_SRCCOLORKEY, key);	
+		SDL_SetColorKey(surface, SDL_TRUE, key);
 }
 
 

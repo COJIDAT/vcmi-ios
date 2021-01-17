@@ -1,35 +1,3 @@
-#include "StdInc.h"
-#include "CBattleInterfaceClasses.h"
-
-#include "CBattleInterface.h"
-
-#include "../CBitmapHandler.h"
-#include "../CDefHandler.h"
-#include "../CGameInfo.h"
-#include "../CMessage.h"
-#include "../CMusicHandler.h"
-#include "../CPlayerInterface.h"
-#include "../CVideoHandler.h"
-#include "../Graphics.h"
-#include "../gui/CCursorHandler.h"
-#include "../gui/CGuiHandler.h"
-#include "../gui/SDL_Extensions.h"
-#include "../widgets/Buttons.h"
-#include "../widgets/TextControls.h"
-#include "../windows/CCreatureWindow.h"
-#include "../windows/CSpellWindow.h"
-
-#include "../../CCallback.h"
-#include "../../lib/BattleState.h"
-#include "../../lib/CConfigHandler.h"
-#include "../../lib/CCreatureHandler.h"
-#include "../../lib/CGameState.h"
-#include "../../lib/CGeneralTextHandler.h"
-#include "../../lib/CTownHandler.h"
-#include "../../lib/NetPacks.h"
-#include "../../lib/StartInfo.h"
-#include "../../lib/CondSh.h"
-
 /*
  * CBattleInterfaceClasses.cpp, part of VCMI engine
  *
@@ -39,6 +7,38 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "CBattleInterfaceClasses.h"
+
+#include "CBattleInterface.h"
+
+#include "../CBitmapHandler.h"
+#include "../CGameInfo.h"
+#include "../CMessage.h"
+#include "../CMusicHandler.h"
+#include "../CPlayerInterface.h"
+#include "../CVideoHandler.h"
+#include "../Graphics.h"
+#include "../gui/CAnimation.h"
+#include "../gui/CCursorHandler.h"
+#include "../gui/CGuiHandler.h"
+#include "../gui/SDL_Extensions.h"
+#include "../widgets/Buttons.h"
+#include "../widgets/TextControls.h"
+#include "../windows/CCreatureWindow.h"
+#include "../windows/CSpellWindow.h"
+
+#include "../../CCallback.h"
+#include "../../lib/CStack.h"
+#include "../../lib/CConfigHandler.h"
+#include "../../lib/CCreatureHandler.h"
+#include "../../lib/CGameState.h"
+#include "../../lib/CGeneralTextHandler.h"
+#include "../../lib/CTownHandler.h"
+#include "../../lib/NetPacks.h"
+#include "../../lib/StartInfo.h"
+#include "../../lib/CondSh.h"
+#include "../../lib/mapObjects/CGTownInstance.h"
 
 void CBattleConsole::showAll(SDL_Surface * to)
 {
@@ -69,6 +69,7 @@ void CBattleConsole::showAll(SDL_Surface * to)
 
 bool CBattleConsole::addText(const std::string & text)
 {
+	logGlobal->trace("CBattleConsole message: %s", text);
 	if(text.size()>70)
 		return false; //text too long!
 	int firstInToken = 0;
@@ -128,13 +129,18 @@ CBattleConsole::CBattleConsole() : lastShown(-1), alterTxt(""), whoSetAlter(0)
 
 void CBattleHero::show(SDL_Surface * to)
 {
+	IImage * flagFrame = flagAnimation->getImage(flagAnim, 0, true);
+
+	if(!flagFrame)
+		return;
+
 	//animation of flag
 	SDL_Rect temp_rect;
 	if(flip)
 	{
 		temp_rect = genRect(
-			flag->ourImages[flagAnim].bitmap->h,
-			flag->ourImages[flagAnim].bitmap->w,
+			flagFrame->height(),
+			flagFrame->width(),
 			pos.x + 61,
 			pos.y + 39);
 
@@ -142,28 +148,30 @@ void CBattleHero::show(SDL_Surface * to)
 	else
 	{
 		temp_rect = genRect(
-			flag->ourImages[flagAnim].bitmap->h,
-			flag->ourImages[flagAnim].bitmap->w,
+			flagFrame->height(),
+			flagFrame->width(),
 			pos.x + 72,
 			pos.y + 39);
 	}
-	CSDL_Ext::blit8bppAlphaTo24bpp(
-		flag->ourImages[flagAnim].bitmap,
-		nullptr,
-		screen,
-		&temp_rect);
+
+	flagFrame->draw(screen, &temp_rect, nullptr); //FIXME: why screen?
 
 	//animation of hero
 	SDL_Rect rect = pos;
-	CSDL_Ext::blit8bppAlphaTo24bpp(dh->ourImages[currentFrame].bitmap, nullptr, to, &rect);
 
-	if ( ++animCount == 4 )
+	IImage * heroFrame = animation->getImage(currentFrame, phase, true);
+	if(!heroFrame)
+		return;
+
+	heroFrame->draw(to, &rect, nullptr);
+
+	if(++animCount >= 4)
 	{
 		animCount = 0;
-		if ( ++flagAnim >= flag->ourImages.size())
+		if(++flagAnim >= flagAnimation->size(0))
 			flagAnim = 0;
 
-		if ( ++currentFrame >= lastFrame)
+		if(++currentFrame >= lastFrame)
 			switchToNextPhase();
 	}
 }
@@ -175,12 +183,27 @@ void CBattleHero::setPhase(int newPhase)
 	nextPhase = 0;
 }
 
+void CBattleHero::hover(bool on)
+{
+	//TODO: Make lines below work properly
+	if (on)
+		CCS->curh->changeGraphic(ECursor::COMBAT, 5);
+	else
+		CCS->curh->changeGraphic(ECursor::COMBAT, 0);
+}
+
 void CBattleHero::clickLeft(tribool down, bool previousState)
 {
 	if(myOwner->spellDestSelectMode) //we are casting a spell
 		return;
 
-	if(!down && myHero != nullptr && myOwner->myTurn && myOwner->getCurrentPlayerInterface()->cb->battleCanCastSpell()) //check conditions
+	if(boost::logic::indeterminate(down))
+		return;
+
+	if(!myHero || down || !myOwner->myTurn)
+		return;
+
+	if(myOwner->getCurrentPlayerInterface()->cb->battleCanCastSpell(myHero, spells::Mode::HERO) == ESpellCastProblem::OK) //check conditions
 	{
 		for(int it=0; it<GameConstants::BFIELD_SIZE; ++it) //do nothing when any hex is hovered - hero's animation overlaps battlefield
 		{
@@ -189,31 +212,43 @@ void CBattleHero::clickLeft(tribool down, bool previousState)
 		}
 		CCS->curh->changeGraphic(ECursor::ADVENTURE, 0);
 
-		auto  spellWindow = new CSpellWindow(genRect(595, 620, (screen->w - 620)/2, (screen->h - 595)/2), myHero, myOwner->getCurrentPlayerInterface());
-		GH.pushInt(spellWindow);
+		GH.pushInt(new CSpellWindow(myHero, myOwner->getCurrentPlayerInterface()));
+	}
+}
+
+void CBattleHero::clickRight(tribool down, bool previousState)
+{
+	if(boost::logic::indeterminate(down))
+		return;
+
+	Point windowPosition;
+	windowPosition.x = (!flip) ? myOwner->pos.topLeft().x + 1 : myOwner->pos.topRight().x - 79;
+	windowPosition.y = myOwner->pos.y + 135;
+
+	InfoAboutHero targetHero;
+	if(down && (myOwner->myTurn || settings["session"]["spectate"].Bool()))
+	{
+		auto h = flip ? myOwner->defendingHeroInstance : myOwner->attackingHeroInstance;
+		targetHero.initFromHero(h, InfoAboutHero::EInfoLevel::INBATTLE);
+		GH.pushInt(new CHeroInfoWindow(targetHero, &windowPosition));
 	}
 }
 
 void CBattleHero::switchToNextPhase()
 {
-	if (phase != nextPhase)
+	if(phase != nextPhase)
 	{
 		phase = nextPhase;
 
-		//find first and last frames of our animation
-		for (firstFrame = 0;
-		     firstFrame < dh->ourImages.size() && dh->ourImages[firstFrame].groupNumber != phase;
-		     firstFrame++);
+		firstFrame = 0;
 
-		for (lastFrame = firstFrame;
-			 lastFrame < dh->ourImages.size() && dh->ourImages[lastFrame].groupNumber == phase;
-			 lastFrame++);
+		lastFrame = animation->size(phase);
 	}
 
 	currentFrame = firstFrame;
 }
 
-CBattleHero::CBattleHero(const std::string & defName, bool flipG, PlayerColor player, const CGHeroInstance * hero, const CBattleInterface * owner):
+CBattleHero::CBattleHero(const std::string & animationPath, bool flipG, PlayerColor player, const CGHeroInstance * hero, const CBattleInterface * owner):
     flip(flipG),
     myHero(hero),
     myOwner(owner),
@@ -222,39 +257,25 @@ CBattleHero::CBattleHero(const std::string & defName, bool flipG, PlayerColor pl
     flagAnim(0),
     animCount(0)
 {
-	dh = CDefHandler::giveDef( defName );
-	for(auto & elem : dh->ourImages) //transforming images
-	{
-		if(flip)
-		{
-			SDL_Surface * hlp = CSDL_Ext::verticalFlip(elem.bitmap);
-			SDL_FreeSurface(elem.bitmap);
-			elem.bitmap = hlp;
-		}
-		CSDL_Ext::alphaTransform(elem.bitmap);
-	}
+	animation = std::make_shared<CAnimation>(animationPath);
+	animation->preload();
+	if(flipG)
+		animation->verticalFlip();
 
 	if(flip)
-		flag = CDefHandler::giveDef("CMFLAGR.DEF");
+		flagAnimation = std::make_shared<CAnimation>("CMFLAGR");
 	else
-		flag = CDefHandler::giveDef("CMFLAGL.DEF");
+		flagAnimation = std::make_shared<CAnimation>("CMFLAGL");
 
-	//coloring flag and adding transparency
-	for(auto & elem : flag->ourImages)
-	{
-		CSDL_Ext::alphaTransform(elem.bitmap);
-		graphics->blueToPlayersAdv(elem.bitmap, player);
-	}
-	addUsedEvents(LCLICK);
+	flagAnimation->preload();
+	flagAnimation->playerColored(player);
+
+	addUsedEvents(LCLICK | RCLICK | HOVER);
 
 	switchToNextPhase();
 }
 
-CBattleHero::~CBattleHero()
-{
-	delete dh;
-	delete flag;
-}
+CBattleHero::~CBattleHero() = default;
 
 CBattleOptionsWindow::CBattleOptionsWindow(const SDL_Rect & position, CBattleInterface *owner)
 {
@@ -276,9 +297,9 @@ CBattleOptionsWindow::CBattleOptionsWindow(const SDL_Rect & position, CBattleInt
 	animSpeeds->addToggle(100, new CToggleButton(Point(156, 225), "sysob11.def", CGI->generaltexth->zelp[424]));
 	animSpeeds->setSelected(owner->getAnimSpeed());
 
-	setToDefault = new CButton (Point(246, 359), "codefaul.def", CGI->generaltexth->zelp[393], [&]{ bDefaultf(); });
+	setToDefault = new CButton (Point(246, 359), "codefaul.def", CGI->generaltexth->zelp[393], [&](){ bDefaultf(); });
 	setToDefault->setImageOrder(1, 0, 2, 3);
-	exit = new CButton (Point(357, 359), "soretrn.def", CGI->generaltexth->zelp[392], [&]{ bExitf();}, SDLK_RETURN);
+	exit = new CButton (Point(357, 359), "soretrn.def", CGI->generaltexth->zelp[392], [&](){ bExitf();}, SDLK_RETURN);
 	exit->setImageOrder(1, 0, 2, 3);
 
 	//creating labels
@@ -325,8 +346,8 @@ CBattleResultWindow::CBattleResultWindow(const BattleResult &br, const SDL_Rect 
 	CPicture * bg = new CPicture("CPRESULT");
 	bg->colorize(owner.playerID);
 
-	exit = new CButton (Point(384, 505), "iok6432.def", std::make_pair("", ""), [&]{ bExitf();}, SDLK_RETURN);
-	exit->borderColor = Colors::METALLIC_GOLD;
+	exit = new CButton (Point(384, 505), "iok6432.def", std::make_pair("", ""), [&](){ bExitf();}, SDLK_RETURN);
+	exit->borderColor = boost::make_optional(Colors::METALLIC_GOLD);
 
 	if(br.winner==0) //attacker won
 	{
@@ -350,7 +371,7 @@ CBattleResultWindow::CBattleResultWindow(const BattleResult &br, const SDL_Rect 
 		auto heroInfo = owner.cb->battleGetHeroInfo(i);
 		const int xs[] = {21, 392};
 
-		if(heroInfo.portrait >= 0) //attacking hero 
+		if(heroInfo.portrait >= 0) //attacking hero
 		{
 			new CAnimImage("PortraitsLarge", heroInfo.portrait, 0, xs[i], 38);
 			sideNames[i] = heroInfo.name;
@@ -359,7 +380,7 @@ CBattleResultWindow::CBattleResultWindow(const BattleResult &br, const SDL_Rect 
 		{
 			auto stacks = owner.cb->battleGetAllStacks();
 			vstd::erase_if(stacks, [i](const CStack *stack) //erase stack of other side and not coming from garrison
-				{ return stack->attackerOwned == i  ||  !stack->base; });
+				{ return stack->side != i  ||  !stack->base; });
 
 			auto best = vstd::maxElementByFun(stacks, [](const CStack *stack){ return stack->type->AIValue; });
 			if(best != stacks.end()) //should be always but to be safe...
@@ -418,7 +439,7 @@ CBattleResultWindow::CBattleResultWindow(const BattleResult &br, const SDL_Rect 
 			boost::algorithm::replace_first(str,"%s",ourHero->name);
 			boost::algorithm::replace_first(str,"%d",boost::lexical_cast<std::string>(br.exp[weAreAttacker?0:1]));
 		}
-		
+
 		new CTextBox(str, Rect(69, 203, 330, 68), 0, FONT_SMALL, CENTER, Colors::WHITE);
 	}
 	else // we lose
@@ -468,18 +489,12 @@ void CBattleResultWindow::show(SDL_Surface * to)
 
 void CBattleResultWindow::bExitf()
 {
-	if(LOCPLINT->cb->getStartInfo()->mode == StartInfo::DUEL)
-	{
-		CGuiHandler::pushSDLEvent(SDL_QUIT);
-		return;
-	}
-
 	CPlayerInterface &intTmp = owner; //copy reference because "this" will be destructed soon
 	GH.popIntTotally(this);
 	if(dynamic_cast<CBattleInterface*>(GH.topInt()))
 		GH.popInts(1); //pop battle interface if present
 
-	//Result window and battle interface are gone. We requested all dialogs to be closed before opening the battle, 
+	//Result window and battle interface are gone. We requested all dialogs to be closed before opening the battle,
 	//so we can be sure that there is no dialogs left on GUI stack.
 	intTmp.showingDialog->setn(false);
 	CCS->videoh->close();
@@ -490,9 +505,9 @@ Point CClickableHex::getXYUnitAnim(BattleHex hexNum, const CStack * stack, CBatt
 	assert(cbi);
 
 	Point ret(-500, -500); //returned value
-	if(stack && stack->position < 0) //creatures in turrets
+	if(stack && stack->initialPosition < 0) //creatures in turrets
 	{
-		switch(stack->position)
+		switch(stack->initialPosition)
 		{
 		case -2: //keep
 			ret = cbi->siegeH->town->town->clientInfo.siegePositions[18];
@@ -502,7 +517,7 @@ Point CClickableHex::getXYUnitAnim(BattleHex hexNum, const CStack * stack, CBatt
 			break;
 		case -4: //upper turret
 			ret = cbi->siegeH->town->town->clientInfo.siegePositions[20];
-			break;	
+			break;
 		}
 	}
 	else
@@ -523,7 +538,7 @@ Point CClickableHex::getXYUnitAnim(BattleHex hexNum, const CStack * stack, CBatt
 			//shifting position for double - hex creatures
 			if(stack->doubleWide())
 			{
-				if(stack->attackerOwned)
+				if(stack->side == BattleSide::ATTACKER)
 				{
 					if(cbi->creDir[stack->ID])
 						ret.x -= 44;
@@ -537,7 +552,7 @@ Point CClickableHex::getXYUnitAnim(BattleHex hexNum, const CStack * stack, CBatt
 		}
 	}
 	//returning
-	return ret +CPlayerInterface::battleInt->pos;
+	return ret + CPlayerInterface::battleInt->pos;
 }
 
 void CClickableHex::hover(bool on)
@@ -577,9 +592,10 @@ void CClickableHex::mouseMoved(const SDL_MouseMotionEvent &sEvent)
 			attackedStack->owner != myInterface->getCurrentPlayerInterface()->playerID &&
 			attackedStack->alive())
 		{
-			const std::string & attackedName = attackedStack->count == 1 ? attackedStack->getCreature()->nameSing : attackedStack->getCreature()->namePl;
-			auto txt = boost::format (CGI->generaltexth->allTexts[220]) % attackedName;
-			myInterface->console->alterTxt = boost::to_string(txt);
+			MetaString text;
+			text.addTxt(MetaString::GENERAL_TXT, 220);
+			attackedStack->addNameReplacement(text);
+			myInterface->console->alterTxt = text.toString();
 			setAlterText = true;
 		}
 	}
@@ -612,105 +628,171 @@ void CClickableHex::clickRight(tribool down, bool previousState)
 	}
 }
 
-void CStackQueue::update()
+CHeroInfoWindow::CHeroInfoWindow(const InfoAboutHero &hero, Point *position) : CWindowObject(RCLICK_POPUP | SHADOW_DISABLED, "CHRPOP")
 {
-	stacksSorted.clear();
-	owner->getCurrentPlayerInterface()->cb->battleGetStackQueue(stacksSorted, stackBoxes.size());
-	if(stacksSorted.size())
-	{
-		for (int i = 0; i < stackBoxes.size() ; i++)
-		{
-			stackBoxes[i]->setStack(stacksSorted[i]);
-		}
-	}
-	else
-	{
-		//no stacks on battlefield... what to do with queue?
-	}
+	OBJ_CONSTRUCTION_CAPTURING_ALL;
+	if (position != nullptr)
+		moveTo(*position);
+	background->colorize(hero.owner); //maybe add this functionality to base class?
+
+	int attack = hero.details->primskills[0];
+	int defense = hero.details->primskills[1];
+	int power = hero.details->primskills[2];
+	int knowledge = hero.details->primskills[3];
+	int morale = hero.details->morale;
+	int luck = hero.details->luck;
+	int currentSpellPoints = hero.details->mana;
+	int maxSpellPoints = hero.details->manaLimit;
+
+	new CAnimImage("PortraitsLarge", hero.portrait, 0, 10, 6);
+
+	//primary stats
+	new CLabel(9, 75, EFonts::FONT_TINY, EAlignment::TOPLEFT, Colors::WHITE, CGI->generaltexth->allTexts[380] + ":");
+	new CLabel(9, 87, EFonts::FONT_TINY, EAlignment::TOPLEFT, Colors::WHITE, CGI->generaltexth->allTexts[381] + ":");
+	new CLabel(9, 99, EFonts::FONT_TINY, EAlignment::TOPLEFT, Colors::WHITE, CGI->generaltexth->allTexts[382] + ":");
+	new CLabel(9, 111, EFonts::FONT_TINY, EAlignment::TOPLEFT, Colors::WHITE, CGI->generaltexth->allTexts[383] + ":");
+
+	new CLabel(69, 87, EFonts::FONT_TINY, EAlignment::BOTTOMRIGHT, Colors::WHITE, std::to_string(attack));
+	new CLabel(69, 99, EFonts::FONT_TINY, EAlignment::BOTTOMRIGHT, Colors::WHITE, std::to_string(defense));
+	new CLabel(69, 111, EFonts::FONT_TINY, EAlignment::BOTTOMRIGHT, Colors::WHITE, std::to_string(power));
+	new CLabel(69, 123, EFonts::FONT_TINY, EAlignment::BOTTOMRIGHT, Colors::WHITE, std::to_string(knowledge));
+
+	//morale+luck
+	new CLabel(9, 131, EFonts::FONT_TINY, EAlignment::TOPLEFT, Colors::WHITE, CGI->generaltexth->allTexts[384] + ":");
+	new CLabel(9, 143, EFonts::FONT_TINY, EAlignment::TOPLEFT, Colors::WHITE, CGI->generaltexth->allTexts[385] + ":");
+
+	new CAnimImage("IMRL22", morale + 3, 0, 47, 131);
+	new CAnimImage("ILCK22", luck + 3, 0, 47, 143);
+
+	//spell points
+	new CLabel(39, 174, EFonts::FONT_TINY, EAlignment::CENTER, Colors::WHITE, CGI->generaltexth->allTexts[387]);
+	new CLabel(39, 186, EFonts::FONT_TINY, EAlignment::CENTER, Colors::WHITE, std::to_string(currentSpellPoints) + "/" + std::to_string(maxSpellPoints));
 }
 
 CStackQueue::CStackQueue(bool Embedded, CBattleInterface * _owner)
-:embedded(Embedded), owner(_owner)
+	: embedded(Embedded),
+	owner(_owner)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
 	if(embedded)
 	{
-		bg = nullptr;
 		pos.w = QUEUE_SIZE * 37;
 		pos.h = 46;
 		pos.x = screen->w/2 - pos.w/2;
 		pos.y = (screen->h - 600)/2 + 10;
+
+		icons = std::make_shared<CAnimation>("CPRSMALL");
+		stateIcons = std::make_shared<CAnimation>("VCMI/BATTLEQUEUE/STATESSMALL");
 	}
 	else
 	{
-		bg = BitmapHandler::loadBitmap("DIBOXBCK");
 		pos.w = 800;
 		pos.h = 85;
+
+		new CFilledTexture("DIBOXBCK", Rect(0,0, pos.w, pos.h));
+
+		icons = std::make_shared<CAnimation>("TWCRPORT");
+		stateIcons = std::make_shared<CAnimation>("VCMI/BATTLEQUEUE/STATESSMALL");
+		//TODO: where use big icons?
+		//stateIcons = std::make_shared<CAnimation>("VCMI/BATTLEQUEUE/STATESBIG");
 	}
+	stateIcons->preload();
 
 	stackBoxes.resize(QUEUE_SIZE);
 	for (int i = 0; i < stackBoxes.size(); i++)
 	{
-		stackBoxes[i] = new StackBox(embedded);
+		stackBoxes[i] = new StackBox(this);
 		stackBoxes[i]->moveBy(Point(1 + (embedded ? 36 : 80)*i, 0));
 	}
 }
 
 CStackQueue::~CStackQueue()
 {
-	SDL_FreeSurface(bg);
 }
 
-void CStackQueue::showAll(SDL_Surface * to)
+void CStackQueue::update()
 {
-	blitBg(to);
+	std::vector<battle::Units> queueData;
 
-	CIntObject::showAll(to);
-}
+	owner->getCurrentPlayerInterface()->cb->battleGetTurnOrder(queueData, stackBoxes.size(), 0);
 
-void CStackQueue::blitBg( SDL_Surface * to )
-{
-	if(bg)
+	size_t boxIndex = 0;
+
+	for(size_t turn = 0; turn < queueData.size() && boxIndex < stackBoxes.size(); turn++)
 	{
-		SDL_SetClipRect(to, &pos);
-		CSDL_Ext::fillTexture(to, bg);
-		SDL_SetClipRect(to, nullptr);
+		for(size_t unitIndex = 0; unitIndex < queueData[turn].size() && boxIndex < stackBoxes.size(); boxIndex++, unitIndex++)
+			stackBoxes[boxIndex]->setStack(queueData[turn][unitIndex], turn);
 	}
+
+	for(; boxIndex < stackBoxes.size(); boxIndex++)
+		stackBoxes[boxIndex]->setStack(nullptr);
 }
 
-void CStackQueue::StackBox::showAll(SDL_Surface * to)
-{
-	assert(stack);
-	bg->colorize(stack->owner);
-	CIntObject::showAll(to);
-
-	if(small)
-		printAtMiddleLoc(makeNumberShort(stack->count), pos.w/2, pos.h - 7, FONT_SMALL, Colors::WHITE, to);
-	else
-		printAtMiddleLoc(makeNumberShort(stack->count), pos.w/2, pos.h - 8, FONT_MEDIUM, Colors::WHITE, to);
-}
-
-void CStackQueue::StackBox::setStack( const CStack *stack )
-{
-	this->stack = stack;
-	assert(stack);
-	icon->setFrame(stack->getCreature()->iconIndex);
-}
-
-CStackQueue::StackBox::StackBox(bool small):
-    stack(nullptr),
-    small(small)
+CStackQueue::StackBox::StackBox(CStackQueue * owner)
+	: bg(nullptr),
+	icon(nullptr),
+	amount(nullptr),
+	stateIcon(nullptr)
 {
 	OBJ_CONSTRUCTION_CAPTURING_ALL;
-	bg = new CPicture(small ? "StackQueueSmall" : "StackQueueLarge" );
-
-	if (small)
-	{
-		icon = new CAnimImage("CPRSMALL", 0, 0, 5, 2);
-	}
-	else
-		icon = new CAnimImage("TWCRPORT", 0, 0, 9, 1);
+	bg = new CPicture(owner->embedded ? "StackQueueSmall" : "StackQueueLarge" );
 
 	pos.w = bg->pos.w;
 	pos.h = bg->pos.h;
+
+	if(owner->embedded)
+	{
+		icon = new CAnimImage(owner->icons, 0, 0, 5, 2);
+		amount = new CLabel(pos.w/2, pos.h - 7, FONT_SMALL, CENTER, Colors::WHITE);
+	}
+	else
+	{
+		icon = new CAnimImage(owner->icons, 0, 0, 9, 1);
+		amount = new CLabel(pos.w/2, pos.h - 8, FONT_MEDIUM, CENTER, Colors::WHITE);
+
+		int icon_x = pos.w - 17;
+		int icon_y = pos.h - 18;
+
+		stateIcon = new CAnimImage(owner->stateIcons, 0, 0, icon_x, icon_y);
+		stateIcon->visible = false;
+	}
+}
+
+void CStackQueue::StackBox::setStack(const battle::Unit * nStack, size_t turn)
+{
+	if(nStack)
+	{
+		bg->colorize(nStack->unitOwner());
+		icon->visible = true;
+		icon->setFrame(nStack->creatureIconIndex());
+		amount->setText(makeNumberShort(nStack->getCount()));
+
+		if(stateIcon)
+		{
+			if(nStack->defended(turn) || (turn > 0 && nStack->defended(turn - 1)))
+			{
+				stateIcon->setFrame(0, 0);
+				stateIcon->visible = true;
+			}
+			else if(nStack->waited(turn))
+			{
+				stateIcon->setFrame(1, 0);
+				stateIcon->visible = true;
+			}
+			else
+			{
+				stateIcon->visible = false;
+			}
+		}
+	}
+	else
+	{
+		bg->colorize(PlayerColor::NEUTRAL);
+		icon->visible = false;
+		icon->setFrame(0);
+		amount->setText("");
+
+		if(stateIcon)
+			stateIcon->visible = false;
+	}
 }

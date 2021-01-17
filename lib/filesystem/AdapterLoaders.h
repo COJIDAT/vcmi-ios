@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * AdapterLoaders.h, part of VCMI engine
  *
@@ -9,11 +7,11 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 #include "ISimpleResourceLoader.h"
 #include "ResourceID.h"
 
-class CFileInfo;
 class CInputStream;
 class JsonNode;
 
@@ -41,8 +39,9 @@ public:
 	std::unique_ptr<CInputStream> load(const ResourceID & resourceName) const override;
 	bool existsResource(const ResourceID & resourceName) const override;
 	std::string getMountPoint() const override;
-	boost::optional<std::string> getResourceName(const ResourceID & resourceName) const override;
-	std::unordered_set<ResourceID> getFilteredFiles(std::function<bool(const ResourceID &)> filter) const;
+	boost::optional<boost::filesystem::path> getResourceName(const ResourceID & resourceName) const override;
+	void updateFilteredFiles(std::function<bool(const std::string &)> filter) const override {}
+	std::unordered_set<ResourceID> getFilteredFiles(std::function<bool(const ResourceID &)> filter) const override;
 
 private:
 	/** A list of files in this map
@@ -59,15 +58,8 @@ class DLL_LINKAGE CFilesystemList : public ISimpleResourceLoader
 	std::set<ISimpleResourceLoader *> writeableLoaders;
 
 	//FIXME: this is only compile fix, should be removed in the end
-	CFilesystemList(CFilesystemList &) 
-    { 
-		//class is not copyable 
-    } 
-    CFilesystemList &operator=(CFilesystemList &) 
-    { 
-        //class is not copyable 
-        return *this; 
-    }
+	CFilesystemList(CFilesystemList &) = delete;
+	CFilesystemList &operator=(CFilesystemList &) = delete;
 
 public:
 	CFilesystemList();
@@ -77,7 +69,9 @@ public:
 	std::unique_ptr<CInputStream> load(const ResourceID & resourceName) const override;
 	bool existsResource(const ResourceID & resourceName) const override;
 	std::string getMountPoint() const override;
-	boost::optional<std::string> getResourceName(const ResourceID & resourceName) const override;
+	boost::optional<boost::filesystem::path> getResourceName(const ResourceID & resourceName) const override;
+	std::set<boost::filesystem::path> getResourceNames(const ResourceID & resourceName) const override;
+	void updateFilteredFiles(std::function<bool(const std::string &)> filter) const override;
 	std::unordered_set<ResourceID> getFilteredFiles(std::function<bool(const ResourceID &)> filter) const override;
 	bool createResource(std::string filename, bool update = false) override;
 	std::vector<const ISimpleResourceLoader *> getResourcesWithName(const ResourceID & resourceName) const override;

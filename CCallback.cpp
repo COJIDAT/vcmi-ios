@@ -1,31 +1,3 @@
-#include "StdInc.h"
-#include "CCallback.h"
-
-#include "lib/CCreatureHandler.h"
-#include "client/CGameInfo.h"
-#include "lib/CGameState.h"
-#include "lib/BattleState.h"
-#include "client/CPlayerInterface.h"
-#include "client/Client.h"
-#include "lib/mapping/CMap.h"
-#include "lib/CBuildingHandler.h"
-#include "lib/mapObjects/CObjectClassesHandler.h"
-#include "lib/CGeneralTextHandler.h"
-#include "lib/CHeroHandler.h"
-#include "lib/Connection.h"
-#include "lib/NetPacks.h"
-#include "client/mapHandler.h"
-#include "lib/CSpellHandler.h"
-#include "lib/CArtHandler.h"
-#include "lib/GameConstants.h"
-#ifdef min
-#undef min
-#endif
-#ifdef max
-#undef max
-#endif
-#include "lib/UnlockGuard.h"
-
 /*
  * CCallback.cpp, part of VCMI engine
  *
@@ -35,11 +7,27 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "CCallback.h"
 
-template <ui16 N> bool isType(CPack *pack)
-{
-	return pack->getType() == N;
-}
+#include "lib/CCreatureHandler.h"
+#include "client/CGameInfo.h"
+#include "lib/CGameState.h"
+#include "client/CPlayerInterface.h"
+#include "client/Client.h"
+#include "lib/mapping/CMap.h"
+#include "lib/CBuildingHandler.h"
+#include "lib/mapObjects/CObjectClassesHandler.h"
+#include "lib/CGeneralTextHandler.h"
+#include "lib/CHeroHandler.h"
+#include "lib/NetPacks.h"
+#include "client/mapHandler.h"
+#include "lib/spells/CSpellHandler.h"
+#include "lib/CArtHandler.h"
+#include "lib/GameConstants.h"
+#include "lib/CPlayerState.h"
+#include "lib/UnlockGuard.h"
+#include "lib/battle/BattleInfo.h"
 
 bool CCallback::teleportHero(const CGHeroInstance *who, const CGTownInstance *where)
 {
@@ -48,30 +36,38 @@ bool CCallback::teleportHero(const CGHeroInstance *who, const CGTownInstance *wh
 	return true;
 }
 
-bool CCallback::moveHero(const CGHeroInstance *h, int3 dst)
+bool CCallback::moveHero(const CGHeroInstance *h, int3 dst, bool transit)
 {
-	MoveHero pack(dst,h->id);
+	MoveHero pack(dst,h->id,transit);
 	sendRequest(&pack);
 	return true;
 }
 
 int CCallback::selectionMade(int selection, QueryID queryID)
 {
+	JsonNode reply(JsonNode::JsonType::DATA_INTEGER);
+	reply.Integer() = selection;
+	return sendQueryReply(reply, queryID);
+}
+
+int CCallback::sendQueryReply(const JsonNode & reply, QueryID queryID)
+{
 	ASSERT_IF_CALLED_WITH_PLAYER
 	if(queryID == QueryID(-1))
 	{
-        logGlobal->errorStream() << "Cannot answer the query -1!";
-		return false;
+		logGlobal->error("Cannot answer the query -1!");
+		return -1;
 	}
 
-	QueryReply pack(queryID,selection);
+	QueryReply pack(queryID, reply);
 	pack.player = *player;
 	return sendRequest(&pack);
 }
 
-void CCallback::recruitCreatures(const CGDwelling *obj, const CArmedInstance * dst, CreatureID ID, ui32 amount, si32 level/*=-1*/)
+void CCallback::recruitCreatures(const CGDwelling * obj, const CArmedInstance * dst, CreatureID ID, ui32 amount, si32 level)
 {
-	if(player!=obj->tempOwner  &&  obj->ID != Obj::WAR_MACHINE_FACTORY)
+	// TODO exception for neutral dwellings shouldn't be hardcoded
+	if(player != obj->tempOwner && obj->ID != Obj::WAR_MACHINE_FACTORY && obj->ID != Obj::REFUGEE_CAMP)
 		return;
 
 	RecruitCreatures pack(obj->id, dst->id, ID, amount, level);
@@ -80,7 +76,7 @@ void CCallback::recruitCreatures(const CGDwelling *obj, const CArmedInstance * d
 
 bool CCallback::dismissCreature(const CArmedInstance *obj, SlotID stackPos)
 {
-	if(((player>=0)  &&  obj->tempOwner != player) || (obj->stacksCount()<2  && obj->needsLastStack()))
+	if((player && obj->tempOwner != player) || (obj->stacksCount()<2  && obj->needsLastStack()))
 		return false;
 
 	DisbandCreature pack(stackPos,obj->id);
@@ -97,7 +93,7 @@ bool CCallback::upgradeCreature(const CArmedInstance *obj, SlotID stackPos, Crea
 
 void CCallback::endTurn()
 {
-    logGlobal->traceStream() << "Player " << *player << " ended his turn.";
+	logGlobal->trace("Player %d ended his turn.", player.get().getNum());
 	EndTurn pack;
 	sendRequest(&pack); //report that we ended turn
 }
@@ -178,7 +174,7 @@ bool CCallback::buildBuilding(const CGTownInstance *town, BuildingID buildingID)
 
 int CBattleCallback::battleMakeAction(BattleAction* action)
 {
-	assert(action->actionType == Battle::HERO_SPELL);
+	assert(action->actionType == EActionType::HERO_SPELL);
 	MakeCustomAction mca(*action);
 	sendRequest(&mca);
 	return 0;
@@ -189,9 +185,9 @@ int CBattleCallback::sendRequest(const CPack *request)
 	int requestID = cl->sendRequest(request, *player);
 	if(waitTillRealize)
 	{
-        logGlobal->traceStream() << boost::format("We'll wait till request %d is answered.\n") % requestID;
-		auto gsUnlocker = vstd::makeUnlockSharedGuardIf(getGsMutex(), unlockGsWhenWaiting);
-		cl->waitingRequest.waitWhileContains(requestID);
+		logGlobal->trace("We'll wait till request %d is answered.\n", requestID);
+		auto gsUnlocker = vstd::makeUnlockSharedGuardIf(CGameState::mutex, unlockGsWhenWaiting);
+		CClient::waitingRequest.waitWhileContains(requestID);
 	}
 
 	boost::this_thread::interruption_point();
@@ -216,7 +212,19 @@ void CCallback::buyArtifact(const CGHeroInstance *hero, ArtifactID aid)
 	sendRequest(&pack);
 }
 
-void CCallback::trade(const CGObjectInstance *market, EMarketMode::EMarketMode mode, int id1, int id2, int val1, const CGHeroInstance *hero/* = nullptr*/)
+void CCallback::trade(const CGObjectInstance * market, EMarketMode::EMarketMode mode, ui32 id1, ui32 id2, ui32 val1, const CGHeroInstance * hero)
+{
+	TradeOnMarketplace pack;
+	pack.market = market;
+	pack.hero = hero;
+	pack.mode = mode;
+	pack.r1 = {id1};
+	pack.r2 = {id2};
+	pack.val = {val1};
+	sendRequest(&pack);
+}
+
+void CCallback::trade(const CGObjectInstance * market, EMarketMode::EMarketMode mode, const std::vector<ui32> & id1, const std::vector<ui32> & id2, const std::vector<ui32> & val1, const CGHeroInstance * hero)
 {
 	TradeOnMarketplace pack;
 	pack.market = market;
@@ -230,7 +238,6 @@ void CCallback::trade(const CGObjectInstance *market, EMarketMode::EMarketMode m
 
 void CCallback::setFormation(const CGHeroInstance * hero, bool tight)
 {
-	const_cast<CGHeroInstance*>(hero)-> formation = tight;
 	SetFormation pack(hero->id,tight);
 	sendRequest(&pack);
 }
@@ -272,9 +279,11 @@ void CCallback::buildBoat( const IShipyard *obj )
 	sendRequest(&bb);
 }
 
-CCallback::CCallback( CGameState * GS, boost::optional<PlayerColor> Player, CClient *C )
-	:CBattleCallback(GS, Player, C)
+CCallback::CCallback(CGameState * GS, boost::optional<PlayerColor> Player, CClient * C)
+	: CBattleCallback(Player, C)
 {
+	gs = GS;
+
 	waitTillRealize = false;
 	unlockGsWhenWaiting = false;
 }
@@ -286,13 +295,8 @@ CCallback::~CCallback()
 
 bool CCallback::canMoveBetween(const int3 &a, const int3 &b)
 {
-	//TODO: merge with Pathfinder::canMoveBetween
-	return gs->checkForVisitableDir(a, b) && gs->checkForVisitableDir(b, a);
-}
-
-int CCallback::getMovementCost(const CGHeroInstance * hero, int3 dest)
-{
-	return gs->getMovementCost(hero, hero->visitablePos(), dest, hero->hasBonusOfType (Bonus::FLYING_MOVEMENT), hero->movement);
+	//bidirectional
+	return gs->map->canMoveBetween(a, b);
 }
 
 const CPathsInfo * CCallback::getPathsInfo(const CGHeroInstance *h)
@@ -331,6 +335,8 @@ void CCallback::castSpell(const CGHeroInstance *hero, SpellID spellID, const int
 
 void CCallback::unregisterAllInterfaces()
 {
+	for (auto& pi : cl->playerint)
+		pi.second->finish();
 	cl->playerint.clear();
 	cl->battleints.clear();
 }
@@ -343,29 +349,28 @@ int CCallback::mergeOrSwapStacks(const CArmedInstance *s1, const CArmedInstance 
 		return swapCreatures(s1, s2, p1, p2);
 }
 
-void CCallback::registerGameInterface(shared_ptr<IGameEventsReceiver> gameEvents)
+void CCallback::registerGameInterface(std::shared_ptr<IGameEventsReceiver> gameEvents)
 {
 	cl->additionalPlayerInts[*player].push_back(gameEvents);
 }
 
-void CCallback::registerBattleInterface(shared_ptr<IBattleEventsReceiver> battleEvents)
+void CCallback::registerBattleInterface(std::shared_ptr<IBattleEventsReceiver> battleEvents)
 {
 	cl->additionalBattleInts[*player].push_back(battleEvents);
 }
 
-void CCallback::unregisterGameInterface(shared_ptr<IGameEventsReceiver> gameEvents)
+void CCallback::unregisterGameInterface(std::shared_ptr<IGameEventsReceiver> gameEvents)
 {
 	cl->additionalPlayerInts[*player] -= gameEvents;
 }
 
-void CCallback::unregisterBattleInterface(shared_ptr<IBattleEventsReceiver> battleEvents)
+void CCallback::unregisterBattleInterface(std::shared_ptr<IBattleEventsReceiver> battleEvents)
 {
 	cl->additionalBattleInts[*player] -= battleEvents;
 }
 
-CBattleCallback::CBattleCallback(CGameState *GS, boost::optional<PlayerColor> Player, CClient *C )
+CBattleCallback::CBattleCallback(boost::optional<PlayerColor> Player, CClient *C )
 {
-	gs = GS;
 	player = Player;
 	cl = C;
 }
@@ -377,4 +382,47 @@ bool CBattleCallback::battleMakeTacticAction( BattleAction * action )
 	ma.ba = *action;
 	sendRequest(&ma);
 	return true;
+}
+
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <fnmatch.h>
+
+FILE *fopen$UNIX2003( const char *filename, const char *mode )
+{
+    return fopen(filename, mode);
+}
+
+int fputs$UNIX2003(const char *res1, FILE *res2){
+    return fputs(res1,res2);
+}
+
+int nanosleep$UNIX2003(int val){
+    return usleep(val);
+}
+
+char* strerror$UNIX2003(int errornum){
+    return strerror(errornum);
+}
+
+double strtod$UNIX2003(const char *nptr, char **endptr){
+    return strtod(nptr, endptr);
+}
+
+size_t fwrite$UNIX2003( const void *a, size_t b, size_t c, FILE *d )
+{
+    return fwrite(a, b, c, d);
+}
+
+DIR * opendir$INODE64( char * dirName )
+{
+    return opendir( dirName );
+}
+
+struct dirent * readdir$INODE64( DIR * dir )
+{
+    return readdir( dir );
 }

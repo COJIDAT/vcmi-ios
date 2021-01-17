@@ -1,16 +1,3 @@
-#pragma once
-
-#include "../../lib/VCMI_Lib.h"
-#include "../../lib/CBuildingHandler.h"
-#include "../../lib/CCreatureHandler.h"
-#include "../../lib/CTownHandler.h"
-#include "../../lib/CSpellHandler.h"
-#include "../../lib/Connection.h"
-#include "../../lib/CGameState.h"
-#include "../../lib/mapping/CMap.h"
-#include "../../lib/NetPacks.h"
-#include "../../lib/CStopWatch.h"
-
 /*
  * AIUtility.h, part of VCMI engine
  *
@@ -20,11 +7,22 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "../../lib/VCMI_Lib.h"
+#include "../../lib/CBuildingHandler.h"
+#include "../../lib/CCreatureHandler.h"
+#include "../../lib/CTownHandler.h"
+#include "../../lib/spells/CSpellHandler.h"
+#include "../../lib/CStopWatch.h"
+#include "../../lib/mapObjects/CObjectHandler.h"
+#include "../../lib/mapObjects/CGHeroInstance.h"
+
+class CCallback;
 
 typedef const int3& crint3;
 typedef const std::string& crstring;
 
-const int HERO_GOLD_COST = 2500;
 const int GOLD_MINE_PRODUCTION = 1000, WOOD_ORE_MINE_PRODUCTION = 2, RESOURCE_MINE_PRODUCTION = 1;
 const int ACTUAL_RESOURCE_COUNT = 7;
 const int ALLOWED_ROAMING_HEROES = 8;
@@ -44,7 +42,7 @@ struct HeroPtr
 public:
 	std::string name;
 
-	
+
 	HeroPtr();
 	HeroPtr(const CGHeroInstance *H);
 	~HeroPtr();
@@ -64,7 +62,9 @@ public:
 
 	template <typename Handler> void serialize(Handler &h, const int version)
 	{
-		h & this->h & hid & name;
+		h & this->h;
+		h & hid;
+		h & name;
 	}
 };
 
@@ -107,10 +107,11 @@ struct TimeCheck
 
 	~TimeCheck()
 	{
-        logAi->traceStream() << boost::format("Time of %s was %d ms.") % txt % time.getDiff();
+		logAi->trace("Time of %s was %d ms.",txt,time.getDiff());
 	}
 };
 
+//TODO: replace with vstd::
 struct AtScopeExit
 {
 	std::function<void()> foo;
@@ -131,10 +132,9 @@ private:
 template<int id>
 bool objWithID(const CGObjectInstance *obj)
 {
-        return obj->ID == id;
+	return obj->ID == id;
 }
 
-std::string strFromInt3(int3 pos);
 void foreach_tile_pos(std::function<void(const int3& pos)> foo);
 void foreach_tile_pos(CCallback * cbp, std::function<void(CCallback * cbp, const int3& pos)> foo); // avoid costly retrieval of thread-specific pointer
 void foreach_neighbour(const int3 &pos, std::function<void(const int3& pos)> foo);
@@ -146,6 +146,7 @@ void getVisibleNeighbours(const std::vector<int3> &tiles, std::vector<int3> &out
 
 bool canBeEmbarkmentPoint(const TerrainTile *t, bool fromWater);
 bool isBlockedBorderGate(int3 tileToHit);
+bool isBlockVisitObj(const int3 &pos);
 
 bool isWeeklyRevisitable (const CGObjectInstance * obj);
 bool shouldVisit (HeroPtr h, const CGObjectInstance * obj);
@@ -158,6 +159,7 @@ bool boundaryBetweenTwoPoints (int3 pos1, int3 pos2, CCallback * cbp);
 bool compareMovement(HeroPtr lhs, HeroPtr rhs);
 bool compareHeroStrength(HeroPtr h1, HeroPtr h2);
 bool compareArmyStrength(const CArmedInstance *a1, const CArmedInstance *a2);
+bool compareArtifacts(const CArtifactInstance *a1, const CArtifactInstance *a2);
 ui64 howManyReinforcementsCanGet(HeroPtr h, const CGTownInstance *t);
 int3 whereToExplore(HeroPtr h);
 

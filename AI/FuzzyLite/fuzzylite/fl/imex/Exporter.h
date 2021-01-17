@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #ifndef FL_EXPORTER_H
@@ -32,6 +24,16 @@
 namespace fl {
     class Engine;
 
+    /**
+      The Exporter class is the abstract class for exporters to translate an
+      Engine into different formats.
+
+      @todo declare methods for exporting other components (e.g., Variable)
+
+      @author Juan Rada-Vilela, Ph.D.
+      @see Importer
+      @since 4.0
+     */
     class FL_API Exporter {
     public:
 
@@ -39,10 +41,30 @@ namespace fl {
         virtual ~Exporter();
         FL_DEFAULT_COPY_AND_MOVE(Exporter)
 
+        /**
+          Returns a string representation of the engine
+          @param engine is the engine to export
+          @return a string representation of the engine
+         */
         virtual std::string toString(const Engine* engine) const = 0;
+        /**
+          Stores the string representation of the engine into the specified file
+          @param path is the full path of the file to export the engine to
+          @param engine is the engine to export
+          @throws fl::Exception if the file cannot be created
+         */
         virtual void toFile(const std::string& path, const Engine* engine) const;
 
+        /**
+          Returns the name of the exporter
+          @return the name of the exporter
+         */
         virtual std::string name() const = 0;
+
+        /**
+          Creates a clone of the exporter
+          @return a clone of the exporter
+         */
         virtual Exporter* clone() const = 0;
     };
 

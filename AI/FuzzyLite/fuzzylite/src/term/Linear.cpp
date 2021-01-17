@@ -1,72 +1,72 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/term/Linear.h"
 
-#include "fl/Engine.h"
 #include "fl/variable/InputVariable.h"
-
-#include <cstdarg>
 
 namespace fl {
 
     Linear::Linear(const std::string& name,
             const std::vector<scalar>& coefficients,
             const Engine* engine)
-    : Term(name), _coefficients(coefficients), _engine(engine) {
-    }
+    : Term(name), _coefficients(coefficients), _engine(engine) { }
 
-    Linear::~Linear() {
-    }
+    Linear::~Linear() { }
 
     std::string Linear::className() const {
         return "Linear";
     }
 
+    Complexity Linear::complexity() const {
+        Complexity result;
+        result.comparison(1 + 1);
+        if (_engine) {
+            result.arithmetic(scalar(_engine->variables().size()));
+            result.comparison(scalar(_engine->variables().size())); //if (i < coefficients)
+        }
+        return result;
+    }
+
     scalar Linear::membership(scalar x) const {
-        (void) x;
-        if (not _engine) throw fl::Exception("[linear error] term <" + getName() + "> "
+        FL_IUNUSED(x);
+        if (not _engine)
+            throw Exception("[linear error] term <" + getName() + "> "
                 "is missing a reference to the engine", FL_AT);
 
         scalar result = 0.0;
-        for (std::size_t i = 0; i < _engine->inputVariables().size(); ++i) {
-            if (i < _coefficients.size())
-                result += _coefficients.at(i) * _engine->inputVariables().at(i)->getInputValue();
+        const std::size_t numberOfInputVariables = _engine->inputVariables().size();
+        const std::size_t numberOfCoefficients = _coefficients.size();
+        for (std::size_t i = 0; i < numberOfInputVariables; ++i) {
+            if (i < numberOfCoefficients)
+                result += _coefficients.at(i) * _engine->inputVariables().at(i)->getValue();
         }
-        if (_coefficients.size() > _engine->inputVariables().size()) {
+        if (numberOfCoefficients > numberOfInputVariables) {
             result += _coefficients.back();
         }
         return result;
     }
 
-    void Linear::set(const std::vector<scalar>& coeffs, const Engine* engine) {
-        setCoefficients(coeffs);
+    void Linear::set(const std::vector<scalar>& coefficients, const Engine* engine) {
+        setCoefficients(coefficients);
         setEngine(engine);
     }
 
-    void Linear::setCoefficients(const std::vector<scalar>& coeffs) {
-        this->_coefficients = coeffs;
+    void Linear::setCoefficients(const std::vector<scalar>& coefficients) {
+        this->_coefficients = coefficients;
     }
 
     const std::vector<scalar>& Linear::coefficients() const {
@@ -90,6 +90,7 @@ namespace fl {
     }
 
     void Linear::configure(const std::string& parameters) {
+        this->_coefficients.clear();
         if (parameters.empty()) return;
         std::vector<std::string> strValues = Op::split(parameters, " ");
         std::vector<scalar> values;
@@ -103,33 +104,12 @@ namespace fl {
         return new Linear(*this);
     }
 
+    void Linear::updateReference(const Engine* engine) {
+        setEngine(engine);
+    }
+
     Term* Linear::constructor() {
         return new Linear;
     }
 
-    template <typename T>
-    Linear* Linear::create(const std::string& name,
-            const Engine* engine, T firstCoefficient, ...) {// throw (fl::Exception) {
-        if (not engine) throw fl::Exception("[linear error] cannot create term <" + name + "> "
-                "without a reference to the engine", FL_AT);
-        std::vector<scalar> coefficients;
-        coefficients.push_back(firstCoefficient);
-
-        va_list args;
-        va_start(args, firstCoefficient);
-        for (std::size_t i = 0; i < engine->inputVariables().size(); ++i) {
-            coefficients.push_back((scalar) va_arg(args, T));
-        }
-        va_end(args);
-
-        return new Linear(name, coefficients, engine);
-    }
-
-    template FL_API Linear* Linear::create(const std::string& name,
-            const Engine* engine,
-            double firstCoefficient, ...);
-
-    template FL_API Linear* Linear::create(const std::string& name,
-            const Engine* engine,
-            int firstCoefficient, ...);
 }

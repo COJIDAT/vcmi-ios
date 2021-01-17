@@ -1,60 +1,46 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/factory/FactoryManager.h"
 
-#include "fl/factory/DefuzzifierFactory.h"
-#include "fl/factory/FunctionFactory.h"
-#include "fl/factory/HedgeFactory.h"
-#include "fl/factory/SNormFactory.h"
-#include "fl/factory/TermFactory.h"
-#include "fl/factory/TNormFactory.h"
-
 namespace fl {
 
-    FactoryManager FactoryManager::_instance;
-
     FactoryManager* FactoryManager::instance() {
+        static FL_ITHREAD_LOCAL FactoryManager _instance;
         return &_instance;
     }
 
     FactoryManager::FactoryManager() :
-    _tnorm(new TNormFactory), _snorm(new SNormFactory), _defuzzifier(new DefuzzifierFactory),
-    _term(new TermFactory), _hedge(new HedgeFactory), _function(new FunctionFactory) {
-    }
+    _tnorm(new TNormFactory), _snorm(new SNormFactory), _activation(new ActivationFactory),
+    _defuzzifier(new DefuzzifierFactory), _term(new TermFactory),
+    _hedge(new HedgeFactory), _function(new FunctionFactory) { }
 
     FactoryManager::FactoryManager(TNormFactory* tnorm, SNormFactory* snorm,
-            DefuzzifierFactory* defuzzifier, TermFactory* term,
-            HedgeFactory* hedge, FunctionFactory* function) :
-    _tnorm(tnorm), _snorm(snorm), _defuzzifier(defuzzifier), _term(term), _hedge(hedge),
-    _function(function) {
-    }
+            ActivationFactory* activation, DefuzzifierFactory* defuzzifier,
+            TermFactory* term, HedgeFactory* hedge, FunctionFactory* function) :
+    _tnorm(tnorm), _snorm(snorm), _activation(activation),
+    _defuzzifier(defuzzifier), _term(term), _hedge(hedge), _function(function) { }
 
     FactoryManager::FactoryManager(const FactoryManager& other)
-    : _tnorm(NULL), _snorm(NULL), _defuzzifier(NULL), _term(NULL), _hedge(NULL), _function(NULL) {
+    : _tnorm(fl::null), _snorm(fl::null), _activation(fl::null),
+    _defuzzifier(fl::null), _term(fl::null), _hedge(fl::null),
+    _function(fl::null) {
         if (other._tnorm.get()) this->_tnorm.reset(new TNormFactory(*other._tnorm.get()));
         if (other._snorm.get()) this->_snorm.reset(new SNormFactory(*other._snorm.get()));
+        if (other._activation.get()) this->_activation.reset(new ActivationFactory(*other._activation.get()));
         if (other._defuzzifier.get()) this->_defuzzifier.reset(new DefuzzifierFactory(*other._defuzzifier.get()));
         if (other._term.get()) this->_term.reset(new TermFactory(*other._term.get()));
         if (other._hedge.get()) this->_hedge.reset(new HedgeFactory(*other._hedge.get()));
@@ -63,8 +49,17 @@ namespace fl {
 
     FactoryManager& FactoryManager::operator=(const FactoryManager& other) {
         if (this != &other) {
+            _tnorm.reset(fl::null);
+            _snorm.reset(fl::null);
+            _activation.reset(fl::null);
+            _defuzzifier.reset(fl::null);
+            _term.reset(fl::null);
+            _hedge.reset(fl::null);
+            _function.reset(fl::null);
+
             if (other._tnorm.get()) this->_tnorm.reset(new TNormFactory(*other._tnorm.get()));
             if (other._snorm.get()) this->_snorm.reset(new SNormFactory(*other._snorm.get()));
+            if (other._activation.get()) this->_activation.reset(new ActivationFactory(*other._activation.get()));
             if (other._defuzzifier.get()) this->_defuzzifier.reset(new DefuzzifierFactory(*other._defuzzifier.get()));
             if (other._term.get()) this->_term.reset(new TermFactory(*other._term.get()));
             if (other._hedge.get()) this->_hedge.reset(new HedgeFactory(*other._hedge.get()));
@@ -73,8 +68,7 @@ namespace fl {
         return *this;
     }
 
-    FactoryManager::~FactoryManager() {
-    }
+    FactoryManager::~FactoryManager() { }
 
     void FactoryManager::setTnorm(TNormFactory* tnorm) {
         this->_tnorm.reset(tnorm);
@@ -90,6 +84,14 @@ namespace fl {
 
     SNormFactory* FactoryManager::snorm() const {
         return this->_snorm.get();
+    }
+
+    void FactoryManager::setActivation(ActivationFactory* activation) {
+        this->_activation.reset(activation);
+    }
+
+    ActivationFactory* FactoryManager::activation() const {
+        return this->_activation.get();
     }
 
     void FactoryManager::setDefuzzifier(DefuzzifierFactory* defuzzifier) {

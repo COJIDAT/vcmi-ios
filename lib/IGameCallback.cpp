@@ -7,22 +7,29 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
-
 #include "StdInc.h"
 #include "IGameCallback.h"
 
 #include "CHeroHandler.h" // for CHeroHandler
-#include "CSpellHandler.h" // for CSpell
+#include "spells/CSpellHandler.h"// for CSpell
+#include "CSkillHandler.h"// for CSkill
 #include "NetPacks.h"
 #include "CBonusTypeHandler.h"
 #include "CModHandler.h"
 
-#include "Connection.h" // for SAVEGAME_MAGIC
+#include "serializer/CSerializer.h" // for SAVEGAME_MAGIC
+#include "serializer/BinaryDeserializer.h"
+#include "serializer/BinarySerializer.h"
+#include "serializer/CLoadIntegrityValidator.h"
+#include "rmg/CMapGenOptions.h"
+#include "mapping/CCampaignHandler.h"
 #include "mapObjects/CObjectClassesHandler.h"
 #include "StartInfo.h"
 #include "CGameState.h"
+#include "mapping/CMap.h"
+#include "CPlayerState.h"
 
-void CPrivilagedInfoCallback::getFreeTiles (std::vector<int3> &tiles) const
+void CPrivilegedInfoCallback::getFreeTiles(std::vector<int3> & tiles) const
 {
 	std::vector<int> floors;
 	for (int b = 0; b < (gs->map->twoLevel ? 2 : 1); ++b)
@@ -38,18 +45,18 @@ void CPrivilagedInfoCallback::getFreeTiles (std::vector<int3> &tiles) const
 			for (int yd = 0; yd < gs->map->height; yd++)
 			{
 				tinfo = getTile(int3 (xd,yd,zd));
-				if (tinfo->terType != ETerrainType::WATER && !tinfo->blocked) //land and free
+				if (tinfo->terType != ETerrainType::WATER && tinfo->terType != ETerrainType::ROCK && !tinfo->blocked) //land and free
 					tiles.push_back (int3 (xd,yd,zd));
 			}
 		}
 	}
 }
 
-void CPrivilagedInfoCallback::getTilesInRange( std::unordered_set<int3, ShashInt3> &tiles, int3 pos, int radious, boost::optional<PlayerColor> player/*=uninit*/, int mode/*=0*/ ) const
+void CPrivilegedInfoCallback::getTilesInRange(std::unordered_set<int3, ShashInt3> & tiles, int3 pos, int radious, boost::optional<PlayerColor> player, int mode, int3::EDistanceFormula distanceFormula) const
 {
 	if(!!player && *player >= PlayerColor::PLAYER_LIMIT)
 	{
-        logGlobal->errorStream() << "Illegal call to getTilesInRange!";
+		logGlobal->error("Illegal call to getTilesInRange!");
 		return;
 	}
 	if (radious == -1) //reveal entire map
@@ -61,7 +68,9 @@ void CPrivilagedInfoCallback::getTilesInRange( std::unordered_set<int3, ShashInt
 		{
 			for (int yd = std::max<int>(pos.y - radious, 0); yd <= std::min<int>(pos.y + radious, gs->map->height - 1); yd++)
 			{
-				double distance = pos.dist2d(int3(xd,yd,pos.z)) - 0.5;
+				int3 tilePos(xd,yd,pos.z);
+				double distance = pos.dist(tilePos, distanceFormula);
+
 				if(distance <= radious)
 				{
 					if(!player
@@ -75,11 +84,11 @@ void CPrivilagedInfoCallback::getTilesInRange( std::unordered_set<int3, ShashInt
 	}
 }
 
-void CPrivilagedInfoCallback::getAllTiles (std::unordered_set<int3, ShashInt3> &tiles, boost::optional<PlayerColor> Player/*=uninit*/, int level, int surface ) const
+void CPrivilegedInfoCallback::getAllTiles(std::unordered_set<int3, ShashInt3> & tiles, boost::optional<PlayerColor> Player, int level, int surface) const
 {
 	if(!!Player && *Player >= PlayerColor::PLAYER_LIMIT)
 	{
-        logGlobal->errorStream() << "Illegal call to getAllTiles !";
+		logGlobal->error("Illegal call to getAllTiles !");
 		return;
 	}
 	bool water = surface == 0 || surface == 2,
@@ -111,17 +120,17 @@ void CPrivilagedInfoCallback::getAllTiles (std::unordered_set<int3, ShashInt3> &
 	}
 }
 
-void CPrivilagedInfoCallback::pickAllowedArtsSet(std::vector<const CArtifact*> &out)
+void CPrivilegedInfoCallback::pickAllowedArtsSet(std::vector<const CArtifact *> & out, CRandomGenerator & rand)
 {
 	for (int j = 0; j < 3 ; j++)
-		out.push_back(VLC->arth->artifacts[VLC->arth->pickRandomArtifact(gameState()->getRandomGenerator(), CArtifact::ART_TREASURE)]);
+		out.push_back(VLC->arth->artifacts[VLC->arth->pickRandomArtifact(rand, CArtifact::ART_TREASURE)]);
 	for (int j = 0; j < 3 ; j++)
-		out.push_back(VLC->arth->artifacts[VLC->arth->pickRandomArtifact(gameState()->getRandomGenerator(), CArtifact::ART_MINOR)]);
+		out.push_back(VLC->arth->artifacts[VLC->arth->pickRandomArtifact(rand, CArtifact::ART_MINOR)]);
 
-	out.push_back(VLC->arth->artifacts[VLC->arth->pickRandomArtifact(gameState()->getRandomGenerator(), CArtifact::ART_MAJOR)]);
+	out.push_back(VLC->arth->artifacts[VLC->arth->pickRandomArtifact(rand, CArtifact::ART_MAJOR)]);
 }
 
-void CPrivilagedInfoCallback::getAllowedSpells(std::vector<SpellID> &out, ui16 level)
+void CPrivilegedInfoCallback::getAllowedSpells(std::vector<SpellID> & out, ui16 level)
 {
 	for (ui32 i = 0; i < gs->map->allowedSpell.size(); i++) //spellh size appears to be greater (?)
 	{
@@ -134,52 +143,52 @@ void CPrivilagedInfoCallback::getAllowedSpells(std::vector<SpellID> &out, ui16 l
 	}
 }
 
-CGameState * CPrivilagedInfoCallback::gameState ()
+CGameState * CPrivilegedInfoCallback::gameState()
 {
 	return gs;
 }
 
 template<typename Loader>
-void CPrivilagedInfoCallback::loadCommonState(Loader &in)
+void CPrivilegedInfoCallback::loadCommonState(Loader & in)
 {
-    logGlobal->infoStream() << "Loading lib part of game...";
+	logGlobal->info("Loading lib part of game...");
 	in.checkMagicBytes(SAVEGAME_MAGIC);
 
 	CMapHeader dum;
 	StartInfo *si;
 
-    logGlobal->infoStream() <<"\tReading header";
-	in >> dum;
+	logGlobal->info("\tReading header");
+	in.serializer & dum;
 
-    logGlobal->infoStream() << "\tReading options";
-	in >> si;
+	logGlobal->info("\tReading options");
+	in.serializer & si;
 
-    logGlobal->infoStream() <<"\tReading handlers";
-	in >> *VLC;
+	logGlobal->info("\tReading handlers");
+	in.serializer & *VLC;
 
-    logGlobal->infoStream() <<"\tReading gamestate";
-	in >> gs;
+	logGlobal->info("\tReading gamestate");
+	in.serializer & gs;
 }
 
 template<typename Saver>
-void CPrivilagedInfoCallback::saveCommonState(Saver &out) const
+void CPrivilegedInfoCallback::saveCommonState(Saver & out) const
 {
-    logGlobal->infoStream() << "Saving lib part of game...";
+	logGlobal->info("Saving lib part of game...");
 	out.putMagicBytes(SAVEGAME_MAGIC);
-    logGlobal->infoStream() <<"\tSaving header";
-	out << static_cast<CMapHeader&>(*gs->map);
-    logGlobal->infoStream() << "\tSaving options";
-	out << gs->scenarioOps;
-    logGlobal->infoStream() << "\tSaving handlers";
-	out << *VLC;
-    logGlobal->infoStream() << "\tSaving gamestate";
-	out << gs;
+	logGlobal->info("\tSaving header");
+	out.serializer & static_cast<CMapHeader&>(*gs->map);
+	logGlobal->info("\tSaving options");
+	out.serializer & gs->scenarioOps;
+	logGlobal->info("\tSaving handlers");
+	out.serializer & *VLC;
+	logGlobal->info("\tSaving gamestate");
+	out.serializer & gs;
 }
 
 // hardly memory usage for `-gdwarf-4` flag
-template DLL_LINKAGE void CPrivilagedInfoCallback::loadCommonState<CLoadIntegrityValidator>(CLoadIntegrityValidator&);
-template DLL_LINKAGE void CPrivilagedInfoCallback::loadCommonState<CLoadFile>(CLoadFile&);
-template DLL_LINKAGE void CPrivilagedInfoCallback::saveCommonState<CSaveFile>(CSaveFile&) const;
+template DLL_LINKAGE void CPrivilegedInfoCallback::loadCommonState<CLoadIntegrityValidator>(CLoadIntegrityValidator &);
+template DLL_LINKAGE void CPrivilegedInfoCallback::loadCommonState<CLoadFile>(CLoadFile &);
+template DLL_LINKAGE void CPrivilegedInfoCallback::saveCommonState<CSaveFile>(CSaveFile &) const;
 
 TerrainTile * CNonConstInfoCallback::getTile( int3 pos )
 {

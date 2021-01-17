@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/term/Term.h"
@@ -30,13 +22,9 @@
 
 namespace fl {
 
-    Term::Term(const std::string& name, scalar height) : _name(name), _height(height) {
+    Term::Term(const std::string& name, scalar height) : _name(name), _height(height) { }
 
-    }
-
-    Term::~Term() {
-
-    }
+    Term::~Term() { }
 
     void Term::setName(const std::string& name) {
         this->_name = name;
@@ -58,17 +46,20 @@ namespace fl {
         return FllExporter().toString(this);
     }
 
-    void Term::updateReference(Term* term, const Engine* engine) {
-        if (Linear * linear = dynamic_cast<Linear*> (term)) {
-            linear->setEngine(engine);
-        } else if (Function * function = dynamic_cast<Function*> (term)) {
-            function->setEngine(engine);
-            try {
-                function->load();
-            } catch (...) {
-                //ignore
-            }
-        }
+    void Term::updateReference(const Engine* engine) {
+        FL_IUNUSED(engine);
+        //do nothing
     }
+
+    scalar Term::tsukamoto(scalar activationDegree, scalar minimum, scalar maximum) const {
+        FL_IUNUSED(minimum);
+        FL_IUNUSED(maximum);
+        return membership(activationDegree);
+    }
+
+    bool Term::isMonotonic() const {
+        return false;
+    }
+
 
 }

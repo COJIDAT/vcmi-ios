@@ -1,8 +1,3 @@
-#pragma once
-
-#include <SDL_video.h>
-#include "../../lib/int3.h"
-
 /*
  * Geometries.h, part of VCMI engine
  *
@@ -12,13 +7,10 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
-#ifdef max
-#undef max
-#endif
-#ifdef min
-#undef min
-#endif
+#include <SDL_video.h>
+#include "../../lib/int3.h"
 
 struct SDL_MouseMotionEvent;
 
@@ -106,21 +98,21 @@ struct Rect : public SDL_Rect
 	{
 		x = y = w = h = -1;
 	}
-	Rect(int X, int Y, int W, int H) //c-tor
+	Rect(int X, int Y, int W, int H)
 	{
 		x = X;
 		y = Y;
 		w = W;
 		h = H;
 	}
-	Rect(const Point & position, const Point & size) //c-tor
+	Rect(const Point & position, const Point & size)
 	{
 		x = position.x;
 		y = position.y;
 		w = size.x;
 		h = size.y;
 	}
-	Rect(const SDL_Rect & r) //c-tor
+	Rect(const SDL_Rect & r)
 	{
 		x = r.x;
 		y = r.y;

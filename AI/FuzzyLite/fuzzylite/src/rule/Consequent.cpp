@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/rule/Consequent.h"
@@ -27,24 +19,21 @@
 #include "fl/Engine.h"
 #include "fl/factory/HedgeFactory.h"
 #include "fl/factory/FactoryManager.h"
-#include "fl/hedge/Hedge.h"
 #include "fl/hedge/Any.h"
-#include "fl/norm/TNorm.h"
 #include "fl/rule/Expression.h"
 #include "fl/rule/Rule.h"
-#include "fl/term/Accumulated.h"
-#include "fl/term/Activated.h"
+#include "fl/term/Aggregated.h"
 #include "fl/variable/OutputVariable.h"
-
-#include <algorithm>
 
 namespace fl {
 
-    Consequent::Consequent() {
-    }
+    Consequent::Consequent() { }
 
     Consequent::~Consequent() {
-        unload();
+        for (std::size_t i = 0; i < _conclusions.size(); ++i) {
+            delete _conclusions.at(i);
+        }
+        _conclusions.clear();
     }
 
     std::string Consequent::getText() const {
@@ -59,9 +48,29 @@ namespace fl {
         return this->_conclusions;
     }
 
-    void Consequent::modify(scalar activationDegree, const TNorm* activation) {
+    std::vector<Proposition*>& Consequent::conclusions() {
+        return this->_conclusions;
+    }
+
+    Complexity Consequent::complexity(const TNorm* implication) const {
+        Complexity result;
+        result.comparison(1);
+
+        for (std::size_t i = 0; i < _conclusions.size(); ++i) {
+            Proposition* proposition = _conclusions.at(i);
+            result.comparison(2);
+            for (std::size_t h = 0; h < proposition->hedges.size(); ++h) {
+                result += proposition->hedges.at(h)->complexity();
+            }
+            result += static_cast<OutputVariable*> (proposition->variable)
+                    ->complexity(Activated(proposition->term, fl::nan, implication));
+        }
+        return result;
+    }
+
+    void Consequent::modify(scalar activationDegree, const TNorm* implication) {
         if (not isLoaded()) {
-            throw fl::Exception("[consequent error] consequent <" + _text + "> is not loaded", FL_AT);
+            throw Exception("[consequent error] consequent <" + getText() + "> is not loaded", FL_AT);
         }
         for (std::size_t i = 0; i < _conclusions.size(); ++i) {
             Proposition* proposition = _conclusions.at(i);
@@ -72,10 +81,9 @@ namespace fl {
                         activationDegree = (*rit)->hedge(activationDegree);
                     }
                 }
-                Activated* term = new Activated(_conclusions.at(i)->term, activationDegree, activation);
-                OutputVariable* outputVariable = dynamic_cast<OutputVariable*> (proposition->variable);
-                outputVariable->fuzzyOutput()->addTerm(term);
-                FL_DBG("Accumulating " << term->toString());
+
+                static_cast<OutputVariable*> (proposition->variable)->fuzzyOutput()
+                        ->addTerm(proposition->term, activationDegree, implication);
             }
         }
     }
@@ -91,16 +99,16 @@ namespace fl {
         _conclusions.clear();
     }
 
-    void Consequent::load(Rule* rule, const Engine* engine) {
-        load(_text, rule, engine);
+    void Consequent::load(const Engine* engine) {
+        load(getText(), engine);
     }
 
-    void Consequent::load(const std::string& consequent, Rule* rule, const Engine* engine) {
+    void Consequent::load(const std::string& consequent, const Engine* engine) {
         unload();
-        this->_text = consequent;
+        setText(consequent);
 
-        if (fl::Op::trim(consequent).empty()) {
-            throw fl::Exception("[syntax error] consequent is empty", FL_AT);
+        if (Op::trim(consequent).empty()) {
+            throw Exception("[syntax error] consequent is empty", FL_AT);
         }
 
         /**
@@ -119,7 +127,7 @@ namespace fl {
         };
         int state = S_VARIABLE;
 
-        Proposition* proposition = NULL;
+        Proposition* proposition = fl::null;
 
         std::stringstream tokenizer(consequent);
         std::string token;
@@ -129,8 +137,7 @@ namespace fl {
                     if (engine->hasOutputVariable(token)) {
                         proposition = new Proposition;
                         proposition->variable = engine->getOutputVariable(token);
-                        _conclusions.push_back(proposition);
-
+                        conclusions().push_back(proposition);
                         state = S_IS;
                         continue;
                     }
@@ -144,15 +151,9 @@ namespace fl {
                 }
 
                 if (state bitand S_HEDGE) {
-                    Hedge* hedge = rule->getHedge(token);
-                    if (not hedge) {
-                        std::vector<std::string> hedges = FactoryManager::instance()->hedge()->available();
-                        if (std::find(hedges.begin(), hedges.end(), token) != hedges.end()) {
-                            hedge = FactoryManager::instance()->hedge()->constructObject(token);
-                            rule->addHedge(hedge);
-                        }
-                    }
-                    if (hedge) {
+                    HedgeFactory* factory = FactoryManager::instance()->hedge();
+                    if (factory->hasConstructor(token)) {
+                        Hedge* hedge = factory->constructObject(token);
                         proposition->hedges.push_back(hedge);
                         state = S_HEDGE bitor S_TERM;
                         continue;
@@ -178,19 +179,19 @@ namespace fl {
                 if (state bitand S_VARIABLE) {
                     std::ostringstream ex;
                     ex << "[syntax error] consequent expected output variable, but found <" << token << ">";
-                    throw fl::Exception(ex.str(), FL_AT);
+                    throw Exception(ex.str(), FL_AT);
                 }
                 if (state bitand S_IS) {
                     std::ostringstream ex;
                     ex << "[syntax error] consequent expected keyword <" << Rule::isKeyword() << ">, "
                             "but found <" << token << ">";
-                    throw fl::Exception(ex.str(), FL_AT);
+                    throw Exception(ex.str(), FL_AT);
                 }
 
                 if ((state bitand S_HEDGE) or (state bitand S_TERM)) {
                     std::ostringstream ex;
                     ex << "[syntax error] consequent expected hedge or term, but found <" << token << ">";
-                    throw fl::Exception(ex.str(), FL_AT);
+                    throw Exception(ex.str(), FL_AT);
                 }
 
                 if ((state bitand S_AND) or (state bitand S_WITH)) {
@@ -198,30 +199,30 @@ namespace fl {
                     ex << "[syntax error] consequent expected operator <" << Rule::andKeyword() << "> "
                             << "or keyword <" << Rule::withKeyword() << ">, "
                             << "but found <" << token << ">";
-                    throw fl::Exception(ex.str(), FL_AT);
+                    throw Exception(ex.str(), FL_AT);
                 }
 
                 std::ostringstream ex;
                 ex << "[syntax error] unexpected token <" << token << "> in consequent";
-                throw fl::Exception(ex.str(), FL_AT);
+                throw Exception(ex.str(), FL_AT);
             }
 
             if (not ((state bitand S_AND) or (state bitand S_WITH))) { //only acceptable final state
                 if (state bitand S_VARIABLE) {
                     std::ostringstream ex;
                     ex << "[syntax error] consequent expected output variable after <" << token << ">";
-                    throw fl::Exception(ex.str(), FL_AT);
+                    throw Exception(ex.str(), FL_AT);
                 }
                 if (state bitand S_IS) {
                     std::ostringstream ex;
                     ex << "[syntax error] consequent expected keyword <" << Rule::isKeyword() << "> "
                             "after <" << token << ">";
-                    throw fl::Exception(ex.str(), FL_AT);
+                    throw Exception(ex.str(), FL_AT);
                 }
                 if ((state bitand S_HEDGE) or (state bitand S_TERM)) {
                     std::ostringstream ex;
                     ex << "[syntax error] consequent expected hedge or term after <" << token << ">";
-                    throw fl::Exception(ex.str(), FL_AT);
+                    throw Exception(ex.str(), FL_AT);
                 }
             }
         } catch (...) {
@@ -232,9 +233,9 @@ namespace fl {
 
     std::string Consequent::toString() const {
         std::stringstream ss;
-        for (std::size_t i = 0; i < _conclusions.size(); ++i) {
-            ss << _conclusions.at(i)->toString();
-            if (i + 1 < _conclusions.size())
+        for (std::size_t i = 0; i < conclusions().size(); ++i) {
+            ss << conclusions().at(i)->toString();
+            if (i + 1 < conclusions().size())
                 ss << " " << Rule::andKeyword() << " ";
         }
         return ss.str();

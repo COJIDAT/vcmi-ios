@@ -1,0 +1,138 @@
+PODS:
+  - libnestegg (0.3)
+  - libogg (1.3.4)
+  - liboggz (1.2.0-1):
+    - libogg (>= 1.0)
+  - libopus (1.1):
+    - libopus/float (= 1.1)
+  - libopus/float (1.1)
+  - libtheora (1.2.0-3):
+    - libogg (>= 1.1)
+  - libvorbis (1.3.7):
+    - libogg (>= 1.0)
+  - libvpx (1.7.0)
+  - OGVKit (0.5.13):
+    - OGVKit/AVDecoder (= 0.5.13)
+    - OGVKit/Core (= 0.5.13)
+    - OGVKit/Encoder (= 0.5.13)
+    - OGVKit/EncoderCore (= 0.5.13)
+    - OGVKit/libskeleton (= 0.5.13)
+    - OGVKit/MP3 (= 0.5.13)
+    - OGVKit/MP4 (= 0.5.13)
+    - OGVKit/Ogg (= 0.5.13)
+    - OGVKit/OggDemuxer (= 0.5.13)
+    - OGVKit/OpusDecoder (= 0.5.13)
+    - OGVKit/TheoraDecoder (= 0.5.13)
+    - OGVKit/VorbisDecoder (= 0.5.13)
+    - OGVKit/VorbisEncoder (= 0.5.13)
+    - OGVKit/VP8Decoder (= 0.5.13)
+    - OGVKit/VP8Encoder (= 0.5.13)
+    - OGVKit/WebM (= 0.5.13)
+    - OGVKit/WebMDemuxer (= 0.5.13)
+    - OGVKit/WebMEncoder (= 0.5.13)
+    - OGVKit/WebMMuxer (= 0.5.13)
+  - OGVKit/AVDecoder (0.5.13):
+    - OGVKit/Core
+  - OGVKit/Core (0.5.13)
+  - OGVKit/Encoder (0.5.13):
+    - OGVKit/WebMEncoder
+  - OGVKit/EncoderCore (0.5.13)
+  - OGVKit/libskeleton (0.5.13):
+    - libogg
+  - OGVKit/MP3 (0.5.13):
+    - OGVKit/AVDecoder
+  - OGVKit/MP4 (0.5.13):
+    - OGVKit/AVDecoder
+  - OGVKit/Ogg (0.5.13):
+    - OGVKit/Ogg/Opus (= 0.5.13)
+    - OGVKit/Ogg/Theora (= 0.5.13)
+    - OGVKit/Ogg/Vorbis (= 0.5.13)
+  - OGVKit/Ogg/Opus (0.5.13):
+    - OGVKit/OggDemuxer
+    - OGVKit/OpusDecoder
+  - OGVKit/Ogg/Theora (0.5.13):
+    - OGVKit/OggDemuxer
+    - OGVKit/TheoraDecoder
+    - OGVKit/VorbisDecoder
+  - OGVKit/Ogg/Vorbis (0.5.13):
+    - OGVKit/OggDemuxer
+    - OGVKit/VorbisDecoder
+  - OGVKit/OggDemuxer (0.5.13):
+    - liboggz (= 1.2.0-1)
+    - OGVKit/Core
+    - OGVKit/libskeleton (~> 0.4)
+  - OGVKit/OpusDecoder (0.5.13):
+    - libopus
+    - OGVKit/Core
+  - OGVKit/TheoraDecoder (0.5.13):
+    - libtheora (= 1.2.0-3)
+    - OGVKit/Core
+  - OGVKit/VorbisDecoder (0.5.13):
+    - libvorbis
+    - OGVKit/Core
+  - OGVKit/VorbisEncoder (0.5.13):
+    - OGVKit/EncoderCore
+  - OGVKit/VP8Decoder (0.5.13):
+    - libvpx (~> 1.7.0)
+    - OGVKit/Core
+  - OGVKit/VP8Encoder (0.5.13):
+    - OGVKit/EncoderCore
+  - OGVKit/WebM (0.5.13):
+    - OGVKit/WebM/Opus (= 0.5.13)
+    - OGVKit/WebM/Vorbis (= 0.5.13)
+    - OGVKit/WebM/VP8 (= 0.5.13)
+  - OGVKit/WebM/Opus (0.5.13):
+    - OGVKit/OpusDecoder
+    - OGVKit/WebMDemuxer
+  - OGVKit/WebM/Vorbis (0.5.13):
+    - OGVKit/VorbisDecoder
+    - OGVKit/WebMDemuxer
+  - OGVKit/WebM/VP8 (0.5.13):
+    - OGVKit/VorbisDecoder
+    - OGVKit/VP8Decoder
+    - OGVKit/WebMDemuxer
+  - OGVKit/WebMDemuxer (0.5.13):
+    - libnestegg (~> 0.2)
+    - OGVKit/Core
+  - OGVKit/WebMEncoder (0.5.13):
+    - OGVKit/VorbisEncoder
+    - OGVKit/VP8Encoder
+    - OGVKit/WebMMuxer
+  - OGVKit/WebMMuxer (0.5.13):
+    - OGVKit/EncoderCore
+    - WebM
+  - WebM (1.0.1)
+
+DEPENDENCIES:
+  - OGVKit (from `../../OGVKit-master`)
+
+SPEC REPOS:
+  https://github.com/CocoaPods/Specs.git:
+    - libogg
+    - libopus
+    - libvorbis
+  https://github.com/COJIDAT/OGVKit-Specs.git:
+    - libnestegg
+    - liboggz
+    - libtheora
+    - libvpx
+    - WebM
+
+EXTERNAL SOURCES:
+  OGVKit:
+    :path: "../../OGVKit-master"
+
+SPEC CHECKSUMS:
+  libnestegg: 851afa1dc38c810bb18fa6459c39aa124abd7fc0
+  libogg: c28dfbd284be97fe17f3aa10cf6dd8eaef3fd6e6
+  liboggz: b92f1e2bc4cdd8fb564d6673e0572f19f6d401dd
+  libopus: ad5f060dcb8f30f139777244d70f9111f1c80863
+  libtheora: 30624be24781bfacab55d3ecb7c5ff1293e8026c
+  libvorbis: e1f6613ba6c91044d30c1bac2325e4bb70231e36
+  libvpx: 5abeaf729fa406fd65ae1c19adcf00329c40e02a
+  OGVKit: 46e30d4b1f06e179b1f254c92604bfd6c4b8338c
+  WebM: 60f12246551d73257961ba3bf6ce803e0db4cc46
+
+PODFILE CHECKSUM: c9e9d4529c5b6c6e0f338a0ab33bc1e56c2be3e9
+
+COCOAPODS: 1.10.0

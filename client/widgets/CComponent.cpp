@@ -1,21 +1,3 @@
-#include "StdInc.h"
-#include "CComponent.h"
-
-#include "../gui/CGuiHandler.h"
-#include "../gui/CCursorHandler.h"
-
-#include "../CMessage.h"
-#include "../CGameInfo.h"
-#include "../widgets/Images.h"
-#include "../windows/CAdvmapInterface.h"
-
-#include "../../lib/CArtHandler.h"
-#include "../../lib/CTownHandler.h"
-#include "../../lib/CCreatureHandler.h"
-#include "../../lib/CSpellHandler.h"
-#include "../../lib/CGeneralTextHandler.h"
-#include "../../lib/NetPacksBase.h"
-
 /*
  * CComponent.cpp, part of VCMI engine
  *
@@ -25,6 +7,25 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "CComponent.h"
+
+#include "../gui/CGuiHandler.h"
+#include "../gui/CCursorHandler.h"
+
+#include "../CMessage.h"
+#include "../CGameInfo.h"
+#include "../widgets/Images.h"
+#include "../widgets/CArtifactHolder.h"
+#include "../windows/CAdvmapInterface.h"
+
+#include "../../lib/CArtHandler.h"
+#include "../../lib/CTownHandler.h"
+#include "../../lib/CCreatureHandler.h"
+#include "../../lib/CSkillHandler.h"
+#include "../../lib/spells/CSpellHandler.h"
+#include "../../lib/CGeneralTextHandler.h"
+#include "../../lib/NetPacksBase.h"
 
 CComponent::CComponent(Etype Type, int Subtype, int Val, ESize imageSize):
 	image(nullptr),
@@ -34,7 +35,7 @@ CComponent::CComponent(Etype Type, int Subtype, int Val, ESize imageSize):
 	init(Type, Subtype, Val, imageSize);
 }
 
-CComponent::CComponent(const Component &c):
+CComponent::CComponent(const Component &c, ESize imageSize):
 	image(nullptr),
 	perDay(false)
 {
@@ -43,7 +44,7 @@ CComponent::CComponent(const Component &c):
 	if(c.id == Component::RESOURCE && c.when==-1)
 		perDay = true;
 
-	init((Etype)c.id,c.subtype,c.val, large);
+	init((Etype)c.id,c.subtype,c.val, imageSize);
 }
 
 void CComponent::init(Etype Type, int Subtype, int Val, ESize imageSize)
@@ -144,14 +145,26 @@ size_t CComponent::getIndex()
 
 std::string CComponent::getDescription()
 {
-	switch (compType)
+	switch(compType)
 	{
 	case primskill:  return (subtype < 4)? CGI->generaltexth->arraytxt[2+subtype] //Primary skill
 										 : CGI->generaltexth->allTexts[149]; //mana
-	case secskill:   return CGI->generaltexth->skillInfoTexts[subtype][val-1];
+	case secskill:   return CGI->skillh->skillInfo(subtype, val);
 	case resource:   return CGI->generaltexth->allTexts[242];
 	case creature:   return "";
-	case artifact:   return CGI->arth->artifacts[subtype]->Description();
+	case artifact:
+	{
+		std::unique_ptr<CArtifactInstance> art;
+		if (subtype != ArtifactID::SPELL_SCROLL)
+		{
+			art.reset(CArtifactInstance::createNewArtifactInstance(subtype));
+		}
+		else
+		{
+			art.reset(CArtifactInstance::createScroll(static_cast<SpellID>(val)));
+		}
+		return art->getEffectiveDescription();
+	}
 	case experience: return CGI->generaltexth->allTexts[241];
 	case spell:      return CGI->spellh->objects[subtype]->getLevelInfo(val).description;
 	case morale:     return CGI->generaltexth->heroscrn[ 4 - (val>0) + (val<0)];
@@ -166,7 +179,7 @@ std::string CComponent::getDescription()
 
 std::string CComponent::getSubtitle()
 {
-	if (!perDay)
+	if(!perDay)
 		return getSubtitleInternal();
 
 	std::string ret = CGI->generaltexth->allTexts[3];
@@ -180,25 +193,36 @@ std::string CComponent::getSubtitleInternal()
 	switch(compType)
 	{
 	case primskill:  return boost::str(boost::format("%+d %s") % val % (subtype < 4 ? CGI->generaltexth->primarySkillNames[subtype] : CGI->generaltexth->allTexts[387]));
-	case secskill:   return CGI->generaltexth->levels[val-1] + "\n" + CGI->generaltexth->skillName[subtype];
+	case secskill:   return CGI->generaltexth->levels[val-1] + "\n" + CGI->skillh->skillName(subtype);
 	case resource:   return boost::lexical_cast<std::string>(val);
 	case creature:   return (val? boost::lexical_cast<std::string>(val) + " " : "") + CGI->creh->creatures[subtype]->*(val != 1 ? &CCreature::namePl : &CCreature::nameSing);
 	case artifact:   return CGI->arth->artifacts[subtype]->Name();
 	case experience:
 		{
-			if (subtype == 1) //+1 level - tree of knowledge
+			if(subtype == 1) //+1 level - tree of knowledge
 			{
 				std::string level = CGI->generaltexth->allTexts[442];
 				boost::replace_first(level, "1", boost::lexical_cast<std::string>(val));
 				return level;
 			}
 			else
+			{
 				return boost::lexical_cast<std::string>(val); //amount of experience OR level required for seer hut;
+			}
 		}
 	case spell:      return CGI->spellh->objects[subtype]->name;
 	case morale:     return "";
 	case luck:       return "";
-	case building:   return CGI->townh->factions[subtype]->town->buildings[BuildingID(val)]->Name();
+	case building:
+		{
+			auto building = CGI->townh->factions[subtype]->town->buildings[BuildingID(val)];
+			if(!building)
+			{
+				logGlobal->error("Town of faction %s has no building #%d", CGI->townh->factions[subtype]->town->faction->name, val);
+				return (boost::format("Missing building #%d") % val).str();
+			}
+			return building->Name();
+		}
 	case hero:       return "";
 	case flag:       return CGI->generaltexth->capColors[subtype];
 	}

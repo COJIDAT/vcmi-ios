@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #ifndef FL_FISIMPORTER_H
@@ -39,6 +31,16 @@ namespace fl {
     class Defuzzifier;
     class Variable;
 
+    /**
+      The FisImporter class is an Importer that configures an Engine and its
+      components from utilizing the Fuzzy Inference System format for Matlab or
+      Octave.
+
+      @author Juan Rada-Vilela, Ph.D.
+      @see FisExporter
+      @see Importer
+      @since 4.0
+     */
     class FL_API FisImporter : public Importer {
     public:
         FisImporter();
@@ -61,17 +63,18 @@ namespace fl {
         virtual void importRules(const std::string& section, Engine* engine) const;
         virtual std::string translateProposition(scalar code, Variable* variable) const;
 
-        virtual std::string extractTNorm(const std::string& tnorm) const;
-        virtual std::string extractSNorm(const std::string& tnorm) const;
-        virtual std::string extractDefuzzifier(const std::string& defuzzifier) const;
+        virtual std::string translateTNorm(const std::string& tnorm) const;
+        virtual std::string translateSNorm(const std::string& tnorm) const;
+        virtual std::string translateDefuzzifier(const std::string& defuzzifier) const;
 
         virtual Term* parseTerm(const std::string& line, const Engine* engine) const;
         virtual Term* createInstance(const std::string& termClass, const std::string& name,
                 const std::vector<std::string>& params, const Engine* engine) const;
-        virtual std::pair<scalar, scalar> range(const std::string& range) const;
+
+        virtual std::pair<scalar, scalar> parseRange(const std::string& range) const;
 
     };
-
 }
+
 #endif  /* FL_FISIMPORTER_H */
 

@@ -1,0 +1,14 @@
+CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO
+FRAMEWORK_SEARCH_PATHS = $(inherited) "${PODS_ROOT}/WebM" "${PODS_ROOT}/libvpx"
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) COCOAPODS=1
+HEADER_SEARCH_PATHS = $(inherited) "${PODS_ROOT}/Headers/Public" "${PODS_ROOT}/Headers/Public/OGVKit" "${PODS_ROOT}/Headers/Public/libnestegg" "${PODS_ROOT}/Headers/Public/libogg" "${PODS_ROOT}/Headers/Public/liboggz" "${PODS_ROOT}/Headers/Public/libopus" "${PODS_ROOT}/Headers/Public/libtheora" "${PODS_ROOT}/Headers/Public/libvorbis" "${PODS_ROOT}/libopus/silk"
+LD_RUNPATH_SEARCH_PATHS = $(inherited) '@executable_path/Frameworks' '@loader_path/Frameworks' '@executable_path/../../Frameworks'
+LIBRARY_SEARCH_PATHS = $(inherited) "${PODS_CONFIGURATION_BUILD_DIR}/OGVKit" "${PODS_CONFIGURATION_BUILD_DIR}/libnestegg" "${PODS_CONFIGURATION_BUILD_DIR}/libogg" "${PODS_CONFIGURATION_BUILD_DIR}/liboggz" "${PODS_CONFIGURATION_BUILD_DIR}/libopus" "${PODS_CONFIGURATION_BUILD_DIR}/libtheora" "${PODS_CONFIGURATION_BUILD_DIR}/libvorbis"
+OTHER_CFLAGS = $(inherited) -DOGVKIT_HAVE_ENCODER -DOGVKIT_HAVE_OPUS_DECODER -DOGVKIT_HAVE_THEORA_DECODER -DOGVKIT_HAVE_VP8_DECODER -DOGVKIT_HAVE_VP8_ENCODER -DOGVKIT_HAVE_VORBIS_DECODER -DOGVKIT_HAVE_VORBIS_ENCODER -DOGVKIT_HAVE_WEBM_MUXER
+OTHER_LDFLAGS = $(inherited) -ObjC -l"OGVKit" -l"libnestegg" -l"libogg" -l"liboggz" -l"libopus" -l"libtheora" -l"libvorbis" -framework "VPX" -framework "WebM"
+PODS_BUILD_DIR = ${BUILD_DIR}
+PODS_CONFIGURATION_BUILD_DIR = ${PODS_BUILD_DIR}/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)
+PODS_PODFILE_DIR_PATH = ${SRCROOT}/.
+PODS_ROOT = ${SRCROOT}/Pods
+PODS_XCFRAMEWORKS_BUILD_DIR = $(PODS_CONFIGURATION_BUILD_DIR)/XCFrameworkIntermediates
+USE_RECURSIVE_SCRIPT_INPUTS_IN_SCRIPT_PHASES = YES

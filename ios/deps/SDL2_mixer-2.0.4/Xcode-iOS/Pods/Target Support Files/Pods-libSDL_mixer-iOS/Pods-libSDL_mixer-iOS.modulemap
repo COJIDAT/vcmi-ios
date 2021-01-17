@@ -1,0 +1,6 @@
+framework module Pods_libSDL_mixer_iOS {
+  umbrella header "Pods-libSDL_mixer-iOS-umbrella.h"
+
+  export *
+  module * { export * }
+}

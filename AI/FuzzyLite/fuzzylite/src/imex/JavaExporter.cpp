@@ -1,60 +1,59 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #include "fl/imex/JavaExporter.h"
 
 #include "fl/Headers.h"
 
-#include <algorithm>
 namespace fl {
 
-    JavaExporter::JavaExporter() : Exporter() {
-    }
+    JavaExporter::JavaExporter(bool usingVariableNames) : Exporter(),
+    _usingVariableNames(usingVariableNames) { }
 
-    JavaExporter::~JavaExporter() {
-
-    }
+    JavaExporter::~JavaExporter() { }
 
     std::string JavaExporter::name() const {
         return "JavaExporter";
     }
 
+    void JavaExporter::setUsingVariableNames(bool usingVariableNames) {
+        this->_usingVariableNames = usingVariableNames;
+    }
+
+    bool JavaExporter::isUsingVariableNames() const {
+        return this->_usingVariableNames;
+    }
+
     std::string JavaExporter::toString(const Engine* engine) const {
         std::ostringstream ss;
+        ss << "//Code automatically generated with " << fuzzylite::library() << ".\n\n";
         ss << "Engine engine = new Engine();\n";
         ss << "engine.setName(\"" << engine->getName() << "\");\n";
+        ss << "engine.setDescription(\"" << engine->getDescription() << "\");\n";
         ss << "\n";
 
-        for (int i = 0; i < engine->numberOfInputVariables(); ++i) {
+        for (std::size_t i = 0; i < engine->numberOfInputVariables(); ++i) {
             ss << toString(engine->getInputVariable(i), engine) << "\n";
         }
 
-        for (int i = 0; i < engine->numberOfOutputVariables(); ++i) {
+        for (std::size_t i = 0; i < engine->numberOfOutputVariables(); ++i) {
             ss << toString(engine->getOutputVariable(i), engine) << "\n";
         }
 
-        for (int i = 0; i < engine->numberOfRuleBlocks(); ++i) {
+        for (std::size_t i = 0; i < engine->numberOfRuleBlocks(); ++i) {
             ss << toString(engine->getRuleBlock(i), engine) << "\n";
         }
 
@@ -63,21 +62,28 @@ namespace fl {
 
     std::string JavaExporter::toString(const InputVariable* inputVariable, const Engine* engine) const {
         std::ostringstream ss;
-        std::string name = "inputVariable";
-        if (engine->numberOfInputVariables() > 1) {
-            int index = std::distance(engine->inputVariables().begin(),
-                    std::find(engine->inputVariables().begin(),
-                    engine->inputVariables().end(), inputVariable));
-            name += Op::str<int>(index + 1);
+        std::string name;
+        if (isUsingVariableNames()) {
+            name = Op::validName(inputVariable->getName());
+        } else {
+            name = "inputVariable";
+            if (engine->numberOfInputVariables() > 1) {
+                std::size_t index = std::distance(engine->inputVariables().begin(),
+                        std::find(engine->inputVariables().begin(),
+                        engine->inputVariables().end(), inputVariable));
+                name += Op::str(index + 1);
+            }
         }
         ss << "InputVariable " << name << " = new InputVariable();\n";
-        ss << name << ".setEnabled(" << (inputVariable->isEnabled() ? "true" : "false") << ");\n";
         ss << name << ".setName(\"" << inputVariable->getName() << "\");\n";
+        ss << name << ".setDescription(\"" << inputVariable->getDescription() << "\");\n";
+        ss << name << ".setEnabled(" << (inputVariable->isEnabled() ? "true" : "false") << ");\n";
         ss << name << ".setRange("
                 << toString(inputVariable->getMinimum()) << ", "
                 << toString(inputVariable->getMaximum()) << ");\n";
-
-        for (int i = 0; i < inputVariable->numberOfTerms(); ++i) {
+        ss << name << ".setLockValueInRange("
+                << (inputVariable->isLockValueInRange() ? "true" : "false") << ");\n";
+        for (std::size_t i = 0; i < inputVariable->numberOfTerms(); ++i) {
             ss << name << ".addTerm(" <<
                     toString(inputVariable->getTerm(i)) << ");\n";
         }
@@ -87,30 +93,36 @@ namespace fl {
 
     std::string JavaExporter::toString(const OutputVariable* outputVariable, const Engine* engine) const {
         std::ostringstream ss;
-        std::string name = "outputVariable";
-        if (engine->numberOfOutputVariables() > 1) {
-            int index = std::distance(engine->outputVariables().begin(),
-                    std::find(engine->outputVariables().begin(),
-                    engine->outputVariables().end(), outputVariable));
-            name += Op::str<int>(index + 1);
+        std::string name;
+        if (isUsingVariableNames()) {
+            name = Op::validName(outputVariable->getName());
+        } else {
+            name = "outputVariable";
+            if (engine->numberOfOutputVariables() > 1) {
+                std::size_t index = std::distance(engine->outputVariables().begin(),
+                        std::find(engine->outputVariables().begin(),
+                        engine->outputVariables().end(), outputVariable));
+                name += Op::str(index + 1);
+            }
         }
         ss << "OutputVariable " << name << " = new OutputVariable();\n";
-        ss << name << ".setEnabled(" << (outputVariable->isEnabled() ? "true" : "false") << ");\n";
         ss << name << ".setName(\"" << outputVariable->getName() << "\");\n";
+        ss << name << ".setDescription(\"" << outputVariable->getDescription() << "\");\n";
+        ss << name << ".setEnabled(" << (outputVariable->isEnabled() ? "true" : "false") << ");\n";
         ss << name << ".setRange("
                 << toString(outputVariable->getMinimum()) << ", "
                 << toString(outputVariable->getMaximum()) << ");\n";
-        ss << name << ".fuzzyOutput().setAccumulation(" <<
-                toString(outputVariable->fuzzyOutput()->getAccumulation()) << ");\n";
+        ss << name << ".setLockValueInRange(" <<
+                (outputVariable->isLockValueInRange() ? "true" : "false") << ");\n";
+        ss << name << ".setAggregation(" <<
+                toString(outputVariable->fuzzyOutput()->getAggregation()) << ");\n";
         ss << name << ".setDefuzzifier(" <<
                 toString(outputVariable->getDefuzzifier()) << ");\n";
         ss << name << ".setDefaultValue(" <<
                 toString(outputVariable->getDefaultValue()) << ");\n";
-        ss << name << ".setLockPreviousOutputValue(" <<
-                (outputVariable->isLockedPreviousOutputValue() ? "true" : "false") << ");\n";
-        ss << name << ".setLockOutputValueInRange(" <<
-                (outputVariable->isLockedOutputValueInRange() ? "true" : "false") << ");\n";
-        for (int i = 0; i < outputVariable->numberOfTerms(); ++i) {
+        ss << name << ".setLockPreviousValue(" <<
+                (outputVariable->isLockPreviousValue() ? "true" : "false") << ");\n";
+        for (std::size_t i = 0; i < outputVariable->numberOfTerms(); ++i) {
             ss << name << ".addTerm(" <<
                     toString(outputVariable->getTerm(i)) << ");\n";
         }
@@ -120,23 +132,33 @@ namespace fl {
 
     std::string JavaExporter::toString(const RuleBlock* ruleBlock, const Engine* engine) const {
         std::ostringstream ss;
-        std::string name = "ruleBlock";
-        if (engine->numberOfRuleBlocks() > 1) {
-            int index = std::distance(engine->ruleBlocks().begin(),
-                    std::find(engine->ruleBlocks().begin(),
-                    engine->ruleBlocks().end(), ruleBlock));
-            name += Op::str<int>(index + 1);
+        std::string name;
+
+        if (isUsingVariableNames() and not ruleBlock->getName().empty()) {
+            name = Op::validName(ruleBlock->getName());
+        } else {
+            name = "ruleBlock";
+            if (engine->numberOfRuleBlocks() > 1) {
+                std::size_t index = std::distance(engine->ruleBlocks().begin(),
+                        std::find(engine->ruleBlocks().begin(),
+                        engine->ruleBlocks().end(), ruleBlock));
+                name += Op::str(index + 1);
+            }
         }
+
         ss << "RuleBlock " << name << " = new RuleBlock();\n";
-        ss << name << ".setEnabled(" << (ruleBlock->isEnabled() ? "true" : "false") << ");\n";
         ss << name << ".setName(\"" << ruleBlock->getName() << "\");\n";
+        ss << name << ".setDescription(\"" << ruleBlock->getDescription() << "\");\n";
+        ss << name << ".setEnabled(" << (ruleBlock->isEnabled() ? "true" : "false") << ");\n";
         ss << name << ".setConjunction("
                 << toString(ruleBlock->getConjunction()) << ");\n";
         ss << name << ".setDisjunction("
                 << toString(ruleBlock->getDisjunction()) << ");\n";
+        ss << name << ".setImplication("
+                << toString(ruleBlock->getImplication()) << ");\n";
         ss << name << ".setActivation("
                 << toString(ruleBlock->getActivation()) << ");\n";
-        for (int i = 0; i < ruleBlock->numberOfRules(); ++i) {
+        for (std::size_t i = 0; i < ruleBlock->numberOfRules(); ++i) {
             Rule* rule = ruleBlock->getRule(i);
             ss << name << ".addRule(Rule.parse(\"" << rule->getText() << "\", engine));\n";
         }
@@ -160,7 +182,7 @@ namespace fl {
         if (const Function * function = dynamic_cast<const Function*> (term)) {
             std::ostringstream ss;
             ss << term->className() << ".create(\"" << term->getName() << "\", "
-                    << "\"" << function->getFormula() << "\", engine, true)";
+                    << "\"" << function->getFormula() << "\", engine)";
             return ss.str();
         }
 
@@ -183,7 +205,7 @@ namespace fl {
         if (const IntegralDefuzzifier * integralDefuzzifier =
                 dynamic_cast<const IntegralDefuzzifier*> (defuzzifier)) {
             return "new " + integralDefuzzifier->className() + "("
-                    + fl::Op::str(integralDefuzzifier->getResolution()) + ")";
+                    + Op::str(integralDefuzzifier->getResolution()) + ")";
         }
         if (const WeightedDefuzzifier * weightedDefuzzifier =
                 dynamic_cast<const WeightedDefuzzifier*> (defuzzifier)) {
@@ -193,14 +215,22 @@ namespace fl {
         return "new " + defuzzifier->className() + "()";
     }
 
-    std::string JavaExporter::toString(const TNorm* norm) const {
+    std::string JavaExporter::toString(const Norm* norm) const {
         if (not norm) return "null";
         return "new " + norm->className() + "()";
     }
 
-    std::string JavaExporter::toString(const SNorm* norm) const {
-        if (not norm) return "null";
-        return "new " + norm->className() + "()";
+    std::string JavaExporter::toString(const Activation* activation) const {
+        if (not activation) return "null";
+        std::string parameters = Op::trim(activation->parameters());
+        if (parameters.empty()) return "new " + activation->className() + "()";
+
+        std::vector<std::string> values = Op::split(parameters, " ");
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            std::string parameter = values.at(i);
+            values.at(i) = (Op::isNumeric(parameter) ? parameter : ("\"" + parameter + "\""));
+        }
+        return "new " + activation->className() + "(" + Op::join(values, ", ") + ")";
     }
 
     std::string JavaExporter::toString(scalar value) const {
@@ -218,6 +248,4 @@ namespace fl {
         return new JavaExporter(*this);
     }
 
-
 }
-

@@ -1,6 +1,5 @@
 /*
- *
- * CRewardableObject.cpp, part of VCMI engine
+ * JsonRandom.cpp, part of VCMI engine
  *
  * Authors: listed in file AUTHORS in main folder
  *
@@ -20,7 +19,7 @@
 #include "../CArtHandler.h"
 #include "../CCreatureHandler.h"
 #include "../CCreatureSet.h"
-#include "../CSpellHandler.h"
+#include "../spells/CSpellHandler.h"
 
 namespace JsonRandom
 {
@@ -28,7 +27,7 @@ namespace JsonRandom
 	{
 		if (value.isNull())
 			return defaultValue;
-		if (value.getType() == JsonNode::DATA_FLOAT)
+		if (value.isNumber())
 			return value.Float();
 		if (!value["amount"].isNull())
 			return value["amount"].Float();
@@ -70,7 +69,7 @@ namespace JsonRandom
 
 	ArtifactID loadArtifact(const JsonNode & value, CRandomGenerator & rng)
 	{
-		if (value.getType() == JsonNode::DATA_STRING)
+		if (value.getType() == JsonNode::JsonType::DATA_STRING)
 			return ArtifactID(VLC->modh->identifiers.getIdentifier("artifact", value).get());
 
 		std::set<CArtifact::EartClass> allowedClasses;
@@ -78,13 +77,13 @@ namespace JsonRandom
 		ui32 minValue = 0;
 		ui32 maxValue = std::numeric_limits<ui32>::max();
 
-		if (value["class"].getType() == JsonNode::DATA_STRING)
+		if (value["class"].getType() == JsonNode::JsonType::DATA_STRING)
 			allowedClasses.insert(VLC->arth->stringToClass(value["class"].String()));
 		else
 			for (auto & entry : value["class"].Vector())
 				allowedClasses.insert(VLC->arth->stringToClass(entry.String()));
 
-		if (value["slot"].getType() == JsonNode::DATA_STRING)
+		if (value["slot"].getType() == JsonNode::JsonType::DATA_STRING)
 			allowedPositions.insert(VLC->arth->stringToSlot(value["class"].String()));
 		else
 			for (auto & entry : value["slot"].Vector())
@@ -128,15 +127,15 @@ namespace JsonRandom
 
 	SpellID loadSpell(const JsonNode & value, CRandomGenerator & rng, std::vector<SpellID> spells)
 	{
-		if (value.getType() == JsonNode::DATA_STRING)
+		if (value.getType() == JsonNode::JsonType::DATA_STRING)
 			return SpellID(VLC->modh->identifiers.getIdentifier("spell", value).get());
-		if (value["type"].getType() == JsonNode::DATA_STRING)
+		if (value["type"].getType() == JsonNode::JsonType::DATA_STRING)
 			return SpellID(VLC->modh->identifiers.getIdentifier("spell", value["type"]).get());
 
-		spells.erase(std::remove_if(spells.begin(), spells.end(), [=](SpellID spell)
+		vstd::erase_if(spells, [=](SpellID spell)
 		{
 			return VLC->spellh->objects[spell]->level != si32(value["level"].Float());
-		}), spells.end());
+		});
 
 		return SpellID(*RandomGeneratorUtil::nextItem(spells, rng));
 	}
@@ -219,9 +218,8 @@ namespace JsonRandom
 		std::vector<Bonus> ret;
 		for (const JsonNode & entry : value.Vector())
 		{
-			Bonus * bonus = JsonUtils::parseBonus(entry);
+			auto bonus = JsonUtils::parseBonus(entry);
 			ret.push_back(*bonus);
-			delete bonus;
 		}
 		return ret;
 	}

@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * CFilesystemLoader.h, part of VCMI engine
  *
@@ -9,11 +7,11 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
 
 #include "ISimpleResourceLoader.h"
 #include "ResourceID.h"
 
-class CFileInfo;
 class CInputStream;
 
 /**
@@ -38,7 +36,8 @@ public:
 	bool existsResource(const ResourceID & resourceName) const override;
 	std::string getMountPoint() const override;
 	bool createResource(std::string filename, bool update = false) override;
-	boost::optional<std::string> getResourceName(const ResourceID & resourceName) const override;
+	boost::optional<boost::filesystem::path> getResourceName(const ResourceID & resourceName) const override;
+	void updateFilteredFiles(std::function<bool(const std::string &)> filter) const override;
 	std::unordered_set<ResourceID> getFilteredFiles(std::function<bool(const ResourceID &)> filter) const override;
 
 private:
@@ -51,7 +50,7 @@ private:
 	 * key = ResourceID for resource loader
 	 * value = name that can be used to access file
 	*/
-	std::unordered_map<ResourceID, boost::filesystem::path> fileList;
+	mutable std::unordered_map<ResourceID, boost::filesystem::path> fileList;
 
 	/**
 	 * Returns a list of pathnames denoting the files in the directory denoted by this pathname.

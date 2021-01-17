@@ -1,5 +1,4 @@
 /*
- *
  * CRewardableObject.cpp, part of VCMI engine
  *
  * Authors: listed in file AUTHORS in main folder
@@ -17,18 +16,19 @@
 #include "../NetPacks.h"
 #include "../IGameCallback.h"
 #include "../CGameState.h"
+#include "../CPlayerState.h"
 
 #include "CObjectClassesHandler.h"
 
 bool CRewardLimiter::heroAllowed(const CGHeroInstance * hero) const
 {
-	if (dayOfWeek != 0)
+	if(dayOfWeek != 0)
 	{
 		if (IObjectInterface::cb->getDate(Date::DAY_OF_WEEK) != dayOfWeek)
 			return false;
 	}
 
-	for (auto & reqStack : creatures)
+	for(auto & reqStack : creatures)
 	{
 		size_t count = 0;
 		for (auto slot : hero->Slots())
@@ -41,25 +41,25 @@ bool CRewardLimiter::heroAllowed(const CGHeroInstance * hero) const
 			return false;
 	}
 
-	if (!IObjectInterface::cb->getPlayer(hero->tempOwner)->resources.canAfford(resources))
+	if(!IObjectInterface::cb->getPlayer(hero->tempOwner)->resources.canAfford(resources))
 		return false;
 
-	if (minLevel > hero->level)
+	if(minLevel > hero->level)
 		return false;
 
-	for (size_t i=0; i<primary.size(); i++)
+	for(size_t i=0; i<primary.size(); i++)
 	{
 		if (primary[i] > hero->getPrimSkillLevel(PrimarySkill::PrimarySkill(i)))
 			return false;
 	}
 
-	for (auto & skill : secondary)
+	for(auto & skill : secondary)
 	{
 		if (skill.second > hero->getSecSkillLevel(skill.first))
 			return false;
 	}
 
-	for (auto & art : artifacts)
+	for(auto & art : artifacts)
 	{
 		if (!hero->hasArt(art))
 			return false;
@@ -72,33 +72,38 @@ std::vector<ui32> CRewardableObject::getAvailableRewards(const CGHeroInstance * 
 {
 	std::vector<ui32> ret;
 
-	for (size_t i=0; i<info.size(); i++)
+	for(size_t i=0; i<info.size(); i++)
 	{
 		const CVisitInfo & visit = info[i];
 
-		if ((visit.limiter.numOfGrants == 0 || visit.numOfGrants < visit.limiter.numOfGrants) // reward has unlimited uses or some are still available
+		if((visit.limiter.numOfGrants == 0 || visit.numOfGrants < visit.limiter.numOfGrants) // reward has unlimited uses or some are still available
 			&& visit.limiter.heroAllowed(hero))
 		{
-			logGlobal->debugStream() << "Reward " << i << " is allowed";
+			logGlobal->trace("Reward %d is allowed", i);
 			ret.push_back(i);
 		}
 	}
 	return ret;
 }
 
+CVisitInfo CRewardableObject::getVisitInfo(int index, const CGHeroInstance *) const
+{
+	return info[index];
+}
+
 void CRewardableObject::onHeroVisit(const CGHeroInstance *h) const
 {
 	auto grantRewardWithMessage = [&](int index) -> void
 	{
-		logGlobal->debugStream() << "Granting reward " << index << ". Message says: " << info[index].message.toString();
+		auto vi = getVisitInfo(index, h);
+		logGlobal->debug("Granting reward %d. Message says: %s", index, vi.message.toString());
 		// show message only if it is not empty
-		if (!info[index].message.toString().empty())
+		if (!vi.message.toString().empty())
 		{
 			InfoWindow iw;
 			iw.player = h->tempOwner;
-			iw.soundID = soundID;
-			iw.text = info[index].message;
-			info[index].reward.loadComponents(iw.components);
+			iw.text = vi.message;
+			vi.reward.loadComponents(iw.components, h);
 			cb->showInfoDialog(&iw);
 		}
 		// grant reward afterwards. Note that it may remove object
@@ -108,24 +113,29 @@ void CRewardableObject::onHeroVisit(const CGHeroInstance *h) const
 	{
 		BlockingDialog sd(canRefuse, rewards.size() > 1);
 		sd.player = h->tempOwner;
-		sd.soundID = soundID;
 		sd.text = onSelect;
 		for (auto index : rewards)
-			sd.components.push_back(info[index].reward.getDisplayedComponent());
+			sd.components.push_back(getVisitInfo(index, h).reward.getDisplayedComponent(h));
 		cb->showBlockingDialog(&sd);
 	};
 
-	if (!wasVisited(h))
+	if(!wasVisited(h))
 	{
 		auto rewards = getAvailableRewards(h);
-		logGlobal->debugStream() << "Visiting object with " << rewards.size() << " possible rewards";
+		bool objectRemovalPossible = false;
+		for(auto index : rewards)
+		{
+			if(getVisitInfo(index, h).reward.removeObject)
+				objectRemovalPossible = true;
+		}
+
+		logGlobal->debug("Visiting object with %d possible rewards", rewards.size());
 		switch (rewards.size())
 		{
 			case 0: // no available rewards, e.g. empty flotsam
 			{
 				InfoWindow iw;
 				iw.player = h->tempOwner;
-				iw.soundID = soundID;
 				if (!onEmpty.toString().empty())
 					iw.text = onEmpty;
 				else
@@ -151,19 +161,24 @@ void CRewardableObject::onHeroVisit(const CGHeroInstance *h) const
 						grantRewardWithMessage(rewards[0]);
 						break;
 					case SELECT_RANDOM: // select one randomly //TODO: use weights
-						grantRewardWithMessage(rewards[cb->gameState()->getRandomGenerator().nextInt(rewards.size()-1)]);
+						grantRewardWithMessage(rewards[CRandomGenerator::getDefault().nextInt(rewards.size()-1)]);
 						break;
 				}
-				return;
+				break;
 			}
+		}
+
+		if(!objectRemovalPossible && getAvailableRewards(h).size() == 0)
+		{
+			ChangeObjectVisitors cov(ChangeObjectVisitors::VISITOR_ADD_TEAM, id, h->id);
+			cb->sendAndApply(&cov);
 		}
 	}
 	else
 	{
-		logGlobal->debugStream() << "Revisiting already visited object";
+		logGlobal->debug("Revisiting already visited object");
 		InfoWindow iw;
 		iw.player = h->tempOwner;
-		iw.soundID = soundID;
 		if (!onVisited.toString().empty())
 			iw.text = onVisited;
 		else
@@ -174,15 +189,15 @@ void CRewardableObject::onHeroVisit(const CGHeroInstance *h) const
 
 void CRewardableObject::heroLevelUpDone(const CGHeroInstance *hero) const
 {
-	grantRewardAfterLevelup(info[selectedReward], hero);
+	grantRewardAfterLevelup(getVisitInfo(selectedReward, hero), hero);
 }
 
 void CRewardableObject::blockingDialogAnswered(const CGHeroInstance *hero, ui32 answer) const
 {
-	if (answer == 0)
+	if(answer == 0)
 		return; // player refused
 
-	if (answer > 0 && answer-1 < info.size())
+	if(answer > 0 && answer-1 < info.size())
 	{
 		auto list = getAvailableRewards(hero);
 		grantReward(list[answer - 1], hero);
@@ -204,7 +219,7 @@ void CRewardableObject::grantReward(ui32 rewardID, const CGHeroInstance * hero) 
 	cb->sendAndApply(&cov);
 	cb->setObjProperty(id, ObjProperty::REWARD_SELECT, rewardID);
 
-	grantRewardBeforeLevelup(info[rewardID], hero);
+	grantRewardBeforeLevelup(getVisitInfo(rewardID, hero), hero);
 }
 
 void CRewardableObject::grantRewardBeforeLevelup(const CVisitInfo & info, const CGHeroInstance * hero) const
@@ -217,7 +232,7 @@ void CRewardableObject::grantRewardBeforeLevelup(const CVisitInfo & info, const 
 
 	cb->giveResources(hero->tempOwner, info.reward.resources);
 
-	for (auto & entry : info.reward.secondary)
+	for(auto & entry : info.reward.secondary)
 	{
 		int current = hero->getSecSkillLevel(entry.first);
 		if( (current != 0 && current < entry.second) ||
@@ -234,11 +249,11 @@ void CRewardableObject::grantRewardBeforeLevelup(const CVisitInfo & info, const 
 	si64 expToGive = 0;
 	expToGive += VLC->heroh->reqExp(hero->level+info.reward.gainedLevels) - VLC->heroh->reqExp(hero->level);
 	expToGive += hero->calculateXp(info.reward.gainedExp);
-	if (expToGive)
+	if(expToGive)
 		cb->changePrimSkill(hero, PrimarySkill::EXPERIENCE, expToGive);
 
 	// hero is not blocked by levelup dialog - grant remainer immediately
-	if (!cb->isVisitCoveredByAnotherQuery(this, hero))
+	if(!cb->isVisitCoveredByAnotherQuery(this, hero))
 	{
 		grantRewardAfterLevelup(info, hero);
 	}
@@ -246,7 +261,7 @@ void CRewardableObject::grantRewardBeforeLevelup(const CVisitInfo & info, const 
 
 void CRewardableObject::grantRewardAfterLevelup(const CVisitInfo & info, const CGHeroInstance * hero) const
 {
-	if (info.reward.manaDiff || info.reward.manaPercentage >= 0)
+	if(info.reward.manaDiff || info.reward.manaPercentage >= 0)
 	{
 		si32 mana = hero->mana;
 		if (info.reward.manaPercentage >= 0)
@@ -268,7 +283,7 @@ void CRewardableObject::grantRewardAfterLevelup(const CVisitInfo & info, const C
 		cb->setMovePoints(&smp);
 	}
 
-	for (const Bonus & bonus : info.reward.bonuses)
+	for(const Bonus & bonus : info.reward.bonuses)
 	{
 		assert(bonus.source == Bonus::OBJECT);
 		assert(bonus.sid == ID);
@@ -279,16 +294,16 @@ void CRewardableObject::grantRewardAfterLevelup(const CVisitInfo & info, const C
 		cb->giveHeroBonus(&gb);
 	}
 
-	for (ArtifactID art : info.reward.artifacts)
+	for(ArtifactID art : info.reward.artifacts)
 		cb->giveHeroNewArtifact(hero, VLC->arth->artifacts[art],ArtifactPosition::FIRST_AVAILABLE);
 
-	if (!info.reward.spells.empty())
+	if(!info.reward.spells.empty())
 	{
 		std::set<SpellID> spellsToGive(info.reward.spells.begin(), info.reward.spells.end());
 		cb->changeSpells(hero, true, spellsToGive);
 	}
 
-	if (!info.reward.creatures.empty())
+	if(!info.reward.creatures.empty())
 	{
 		CCreatureSet creatures;
 		for (auto & crea : info.reward.creatures)
@@ -299,23 +314,19 @@ void CRewardableObject::grantRewardAfterLevelup(const CVisitInfo & info, const C
 
 	onRewardGiven(hero);
 
-	if (info.reward.removeObject)
+	if(info.reward.removeObject)
 		cb->removeObject(this);
 }
 
-bool CRewardableObject::wasVisited (PlayerColor player) const
+bool CRewardableObject::wasVisited(PlayerColor player) const
 {
 	switch (visitMode)
 	{
 		case VISIT_UNLIMITED:
 		case VISIT_BONUS:
 			return false;
-		case VISIT_ONCE: // FIXME: hide this info deeper and return same as player?
-			for (auto & visit : info)
-			{
-				if (visit.numOfGrants != 0)
-					return true;
-			}
+		case VISIT_ONCE:
+			return vstd::contains(cb->getPlayer(player)->visitedObjects, ObjectInstanceID(id));
 		case VISIT_HERO:
 			return false;
 		case VISIT_PLAYER:
@@ -325,7 +336,7 @@ bool CRewardableObject::wasVisited (PlayerColor player) const
 	}
 }
 
-bool CRewardableObject::wasVisited (const CGHeroInstance * h) const
+bool CRewardableObject::wasVisited(const CGHeroInstance * h) const
 {
 	switch (visitMode)
 	{
@@ -340,19 +351,24 @@ bool CRewardableObject::wasVisited (const CGHeroInstance * h) const
 	}
 }
 
-void CRewardInfo::loadComponents(std::vector<Component> & comps) const
+void CRewardInfo::loadComponents(std::vector<Component> & comps,
+                                 const CGHeroInstance * h) const
 {
 	for (auto comp : extraComponents)
 		comps.push_back(comp);
 
-	if (gainedExp)    comps.push_back(Component(Component::EXPERIENCE, 0, gainedExp, 0));
+	if (gainedExp)
+	{
+		comps.push_back(Component(
+			Component::EXPERIENCE, 0, h->calculateXp(gainedExp), 0));
+	}
 	if (gainedLevels) comps.push_back(Component(Component::EXPERIENCE, 0, gainedLevels, 0));
 
-	if (manaDiff)   comps.push_back(Component(Component::PRIM_SKILL, 5, manaDiff,   0));
+	if (manaDiff) comps.push_back(Component(Component::PRIM_SKILL, 5, manaDiff, 0));
 
 	for (size_t i=0; i<primary.size(); i++)
 	{
-		if (primary[i] !=0)
+		if (primary[i] != 0)
 			comps.push_back(Component(Component::PRIM_SKILL, i, primary[i], 0));
 	}
 
@@ -375,10 +391,10 @@ void CRewardInfo::loadComponents(std::vector<Component> & comps) const
 	}
 }
 
-Component CRewardInfo::getDisplayedComponent() const
+Component CRewardInfo::getDisplayedComponent(const CGHeroInstance * h) const
 {
 	std::vector<Component> comps;
-	loadComponents(comps);
+	loadComponents(comps, h);
 	assert(!comps.empty());
 	return comps.front();
 }
@@ -419,15 +435,20 @@ void CRewardableObject::setPropertyDer(ui8 what, ui32 val)
 	}
 }
 
-void CRewardableObject::newTurn() const
+void CRewardableObject::triggerRewardReset() const
 {
-	if (resetDuration != 0 && cb->getDate(Date::DAY) % (resetDuration+1) == 0)
-		cb->setObjProperty(id, ObjProperty::REWARD_RESET, 0);
+	cb->setObjProperty(id, ObjProperty::REWARD_RESET, 0);
+}
+
+void CRewardableObject::newTurn(CRandomGenerator & rand) const
+{
+	if (resetDuration != 0 && cb->getDate(Date::DAY) > 1 && (cb->getDate(Date::DAY) % resetDuration) == 1)
+		triggerRewardReset();
 }
 
 CRewardableObject::CRewardableObject():
-	soundID(soundBase::invalid),
 	selectMode(0),
+	visitMode(0),
 	selectedReward(0),
 	resetDuration(0),
 	canRefuse(false)
@@ -438,11 +459,11 @@ CRewardableObject::CRewardableObject():
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Helper, selects random art class based on weights
-static int selectRandomArtClass(int treasure, int minor, int major, int relic)
+static int selectRandomArtClass(CRandomGenerator & rand, int treasure, int minor, int major, int relic)
 {
 	int total = treasure + minor + major + relic;
 	assert(total != 0);
-	int hlp = IObjectInterface::cb->gameState()->getRandomGenerator().nextInt(total - 1);
+	int hlp = rand.nextInt(total - 1);
 
 	if(hlp < treasure)
 		return CArtifact::ART_TREASURE;
@@ -454,10 +475,10 @@ static int selectRandomArtClass(int treasure, int minor, int major, int relic)
 }
 
 /// Helper, adds random artifact to reward selecting class based on weights
-static void loadRandomArtifact(CVisitInfo & info, int treasure, int minor, int major, int relic)
+static void loadRandomArtifact(CRandomGenerator & rand, CVisitInfo & info, int treasure, int minor, int major, int relic)
 {
-	int artClass = selectRandomArtClass(treasure, minor, major, relic);
-	ArtifactID artID = VLC->arth->pickRandomArtifact(IObjectInterface::cb->gameState()->getRandomGenerator(), artClass);
+	int artClass = selectRandomArtClass(rand, treasure, minor, major, relic);
+	ArtifactID artID = VLC->arth->pickRandomArtifact(rand, artClass);
 	info.reward.artifacts.push_back(artID);
 }
 
@@ -467,16 +488,15 @@ CGPickable::CGPickable()
 	selectMode = SELECT_PLAYER;
 }
 
-void CGPickable::initObj()
+void CGPickable::initObj(CRandomGenerator & rand)
 {
 	blockVisit = true;
 	switch(ID)
 	{
 	case Obj::CAMPFIRE:
 		{
-			soundID = soundBase::experience;
-			int givenRes = cb->gameState()->getRandomGenerator().nextInt(5);
-			int givenAmm = cb->gameState()->getRandomGenerator().nextInt(4, 6);
+			int givenRes = rand.nextInt(5);
+			int givenAmm = rand.nextInt(4, 6);
 
 			info.resize(1);
 			info[0].reward.resources[givenRes] = givenAmm;
@@ -487,14 +507,14 @@ void CGPickable::initObj()
 		}
 	case Obj::FLOTSAM:
 		{
-			int type = cb->gameState()->getRandomGenerator().nextInt(3);
-			soundID = soundBase::GENIE;
+			int type = rand.nextInt(3);
 			switch(type)
 			{
 			case 0:
 					info.resize(1);
 					info[0].message.addTxt(MetaString::ADVOB_TXT, 51);
 					info[0].reward.removeObject = true;
+					break;
 			case 1:
 				{
 					info.resize(1);
@@ -526,8 +546,7 @@ void CGPickable::initObj()
 		}
 	case Obj::SEA_CHEST:
 		{
-			soundID = soundBase::chest;
-			int hlp = cb->gameState()->getRandomGenerator().nextInt(99);
+			int hlp = rand.nextInt(99);
 			if(hlp < 20)
 			{
 				info.resize(1);
@@ -544,7 +563,7 @@ void CGPickable::initObj()
 			else
 			{
 				info.resize(1);
-				loadRandomArtifact(info[0], 100, 0, 0, 0);
+				loadRandomArtifact(rand, info[0], 100, 0, 0, 0);
 				info[0].reward.resources[Res::GOLD] = 1000;
 				info[0].message.addTxt(MetaString::ADVOB_TXT, 117);
 				info[0].message.addReplacement(MetaString::ART_NAMES, info[0].reward.artifacts.back());
@@ -554,9 +573,8 @@ void CGPickable::initObj()
 		break;
 	case Obj::SHIPWRECK_SURVIVOR:
 		{
-			soundID = soundBase::experience;
 			info.resize(1);
-			loadRandomArtifact(info[0], 55, 20, 20, 5);
+			loadRandomArtifact(rand, info[0], 55, 20, 20, 5);
 			info[0].message.addTxt(MetaString::ADVOB_TXT, 125);
 			info[0].message.addReplacement(MetaString::ART_NAMES, info[0].reward.artifacts.back());
 			info[0].reward.removeObject = true;
@@ -564,12 +582,11 @@ void CGPickable::initObj()
 		break;
 	case Obj::TREASURE_CHEST:
 		{
-			int hlp = cb->gameState()->getRandomGenerator().nextInt(99);
+			int hlp = rand.nextInt(99);
 			if(hlp >= 95)
 			{
-				soundID = soundBase::treasure;
 				info.resize(1);
-				loadRandomArtifact(info[0], 100, 0, 0, 0);
+				loadRandomArtifact(rand, info[0], 100, 0, 0, 0);
 				info[0].message.addTxt(MetaString::ADVOB_TXT,145);
 				info[0].message.addReplacement(MetaString::ART_NAMES, info[0].reward.artifacts.back());
 				info[0].reward.removeObject = true;
@@ -577,7 +594,6 @@ void CGPickable::initObj()
 			}
 			else if (hlp >= 65)
 			{
-				soundID = soundBase::chest;
 				onSelect.addTxt(MetaString::ADVOB_TXT,146);
 				info.resize(2);
 				info[0].reward.resources[Res::GOLD] = 2000;
@@ -587,7 +603,6 @@ void CGPickable::initObj()
 			}
 			else if(hlp >= 33)
 			{
-				soundID = soundBase::chest;
 				onSelect.addTxt(MetaString::ADVOB_TXT,146);
 				info.resize(2);
 				info[0].reward.resources[Res::GOLD] = 1500;
@@ -597,7 +612,6 @@ void CGPickable::initObj()
 			}
 			else
 			{
-				soundID = soundBase::chest;
 				onSelect.addTxt(MetaString::ADVOB_TXT,146);
 				info.resize(2);
 				info[0].reward.resources[Res::GOLD] = 1000;
@@ -618,7 +632,7 @@ CGBonusingObject::CGBonusingObject()
 	selectMode = SELECT_FIRST;
 }
 
-void CGBonusingObject::initObj()
+void CGBonusingObject::initObj(CRandomGenerator & rand)
 {
 	auto configureBonusDuration = [&](CVisitInfo & visit, Bonus::BonusDuration duration, Bonus::BonusType type, si32 value, si32 descrID)
 	{
@@ -635,11 +649,10 @@ void CGBonusingObject::initObj()
 		configureBonusDuration(visit, Bonus::ONE_BATTLE, type, value, descrID);
 	};
 
-	auto configureMessage = [&](CVisitInfo & visit, int onGrantID, int onVisitedID, soundBase::soundID sound)
+	auto configureMessage = [&](CVisitInfo & visit, int onGrantID, int onVisitedID)
 	{
 		visit.message.addTxt(MetaString::ADVOB_TXT, onGrantID);
 		onVisited.addTxt(MetaString::ADVOB_TXT, onVisitedID);
-		soundID = sound;
 	};
 
 	info.resize(1);
@@ -648,16 +661,16 @@ void CGBonusingObject::initObj()
 	{
 	case Obj::BUOY:
 			blockVisit = true;
-		configureMessage(info[0], 21, 22, soundBase::MORALE);
+		configureMessage(info[0], 21, 22);
 		configureBonus(info[0], Bonus::MORALE, +1, 94);
 		break;
 	case Obj::SWAN_POND:
-		configureMessage(info[0], 29, 30, soundBase::LUCK);
+		configureMessage(info[0], 29, 30);
 		configureBonus(info[0], Bonus::LUCK, 2, 67);
 		info[0].reward.movePercentage = 0;
 		break;
 	case Obj::FAERIE_RING:
-		configureMessage(info[0], 49, 50, soundBase::LUCK);
+		configureMessage(info[0], 49, 50);
 		configureBonus(info[0], Bonus::LUCK, 1, 71);
 		break;
 	case Obj::FOUNTAIN_OF_FORTUNE:
@@ -667,7 +680,6 @@ void CGBonusingObject::initObj()
 		{
 			configureBonus(info[i], Bonus::LUCK, i-1, 69); //NOTE: description have %d that should be replaced with value
 			info[i].message.addTxt(MetaString::ADVOB_TXT, 55);
-			soundID = soundBase::LUCK;
 		}
 		onVisited.addTxt(MetaString::ADVOB_TXT, 56);
 		break;
@@ -679,28 +691,26 @@ void CGBonusingObject::initObj()
 			info[i].limiter.dayOfWeek = i+1;
 			configureBonus(info[i], (i%2) ? Bonus::MORALE : Bonus::LUCK, 1, 68);
 			info[i].message.addTxt(MetaString::ADVOB_TXT, 62);
-			soundID = soundBase::experience;
 		}
-		onVisited.addTxt(MetaString::ADVOB_TXT, 63);
 		info.back().limiter.dayOfWeek = 7;
 		configureBonus(info.back(), Bonus::MORALE, 1, 68); // on last day of week
 		configureBonus(info.back(), Bonus::LUCK,   1, 68);
-		configureMessage(info.back(), 62, 63, soundBase::experience);
+		configureMessage(info.back(), 62, 63);
 
 		break;
 	case Obj::MERMAID:
 		blockVisit = true;
-		configureMessage(info[0], 83, 82, soundBase::LUCK);
+		configureMessage(info[0], 83, 82);
 		configureBonus(info[0], Bonus::LUCK, 1, 72);
 		break;
 	case Obj::RALLY_FLAG:
-		configureMessage(info[0], 111, 110, soundBase::MORALE);
+		configureMessage(info[0], 111, 110);
 		configureBonus(info[0], Bonus::MORALE, 1, 102);
 		configureBonus(info[0], Bonus::LUCK,   1, 102);
 		info[0].reward.movePoints = 400;
 		break;
 	case Obj::OASIS:
-		configureMessage(info[0], 95, 94, soundBase::MORALE);
+		configureMessage(info[0], 95, 94);
 		configureBonus(info[0], Bonus::MORALE, 1, 95);
 		info[0].reward.movePoints = 800;
 		break;
@@ -713,42 +723,87 @@ void CGBonusingObject::initObj()
 		info[0].message.addTxt(MetaString::ADVOB_TXT, 140);
 		info[1].message.addTxt(MetaString::ADVOB_TXT, 140);
 		onVisited.addTxt(MetaString::ADVOB_TXT, 141);
-		soundID = soundBase::temple;
 		break;
 	case Obj::WATERING_HOLE:
-		configureMessage(info[0], 166, 167, soundBase::MORALE);
+		configureMessage(info[0], 166, 167);
 		configureBonus(info[0], Bonus::MORALE, 1, 100);
 		info[0].reward.movePoints = 400;
 		break;
 	case Obj::FOUNTAIN_OF_YOUTH:
-		configureMessage(info[0], 57, 58, soundBase::MORALE);
+		configureMessage(info[0], 57, 58);
 		configureBonus(info[0], Bonus::MORALE, 1, 103);
 		info[0].reward.movePoints = 400;
 		break;
 	case Obj::STABLES:
-		configureMessage(info[0], 137, 136, soundBase::STORE);
-
-		configureBonusDuration(info[0], Bonus::ONE_WEEK, Bonus::LAND_MOVEMENT, 600, 0);
-		info[0].reward.movePoints = 600;
-		//TODO: upgrade champions to cavaliers
-/*
-		bool someUpgradeDone = false;
-
-		for (auto i = h->Slots().begin(); i != h->Slots().end(); ++i)
-		{
-			if(i->second->type->idNumber == CreatureID::CAVALIER)
-			{
-				cb->changeStackType(StackLocation(h, i->first), VLC->creh->creatures[CreatureID::CHAMPION]);
-				someUpgradeDone = true;
-			}
-		}
-		if (someUpgradeDone)
-		{
-			grantMessage.addTxt(MetaString::ADVOB_TXT, 138);
-			iw.components.push_back(Component(Component::CREATURE,11,0,1));
-		}*/
+		configureMessage(info[0], 137, 136);
+		configureBonusDuration(info[0], Bonus::ONE_WEEK, Bonus::LAND_MOVEMENT, 400, 0);
+		info[0].reward.movePoints = 400;
 		break;
 	}
+}
+
+CVisitInfo CGBonusingObject::getVisitInfo(int index, const CGHeroInstance *h) const
+{
+	if(ID == Obj::STABLES)
+	{
+		assert(index == 0);
+		for(auto& slot : h->Slots())
+		{
+			if(slot.second->type->idNumber == CreatureID::CAVALIER)
+			{
+				CVisitInfo vi(info[0]);
+				vi.message.clear();
+				vi.message.addTxt(MetaString::ADVOB_TXT, 138);
+				vi.reward.extraComponents.push_back(Component(
+					Component::CREATURE, CreatureID::CHAMPION, 0, 1));
+				return std::move(vi);
+			}
+		}
+	}
+	return info[index];
+}
+
+void CGBonusingObject::onHeroVisit(const CGHeroInstance *h) const
+{
+	CRewardableObject::onHeroVisit(h);
+	if(ID == Obj::STABLES)
+	{
+		//regardless of whether this hero visited stables or not, cavaliers must be upgraded
+		for(auto& slot : h->Slots())
+		{
+			if(slot.second->type->idNumber == CreatureID::CAVALIER)
+			{
+				cb->changeStackType(StackLocation(h, slot.first),
+									VLC->creh->creatures[CreatureID::CHAMPION]);
+			}
+		}
+	}
+}
+
+bool CGBonusingObject::wasVisited(const CGHeroInstance * h) const
+{
+	if(ID == Obj::STABLES)
+	{
+		for(auto& slot : h->Slots())
+		{
+			if(slot.second->type->idNumber == CreatureID::CAVALIER)
+			{
+				// always display the reward message if the hero got cavaliers
+				return false;
+			}
+		}
+	}
+	return CRewardableObject::wasVisited(h);
+}
+
+void CGBonusingObject::grantReward(ui32 rewardID, const CGHeroInstance * hero) const
+{
+	if(ID == Obj::STABLES && CRewardableObject::wasVisited(hero))
+	{
+		// reward message has been displayed - do not give the actual bonus
+		return;
+	}
+	CRewardableObject::grantReward(rewardID, hero);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -759,68 +814,71 @@ CGOnceVisitable::CGOnceVisitable()
 	selectMode = SELECT_FIRST;
 }
 
-void CGOnceVisitable::initObj()
+void CGOnceVisitable::initObj(CRandomGenerator & rand)
 {
 	switch(ID)
 	{
 	case Obj::CORPSE:
 		{
 			onEmpty.addTxt(MetaString::ADVOB_TXT, 38);
-			soundID = soundBase::MYSTERY;
 			blockVisit = true;
-			if(cb->gameState()->getRandomGenerator().nextInt(99) < 20)
+			if(rand.nextInt(99) < 20)
 			{
 				info.resize(1);
-				loadRandomArtifact(info[0], 10, 10, 10, 0);
+				loadRandomArtifact(rand, info[0], 10, 10, 10, 0);
 				info[0].message.addTxt(MetaString::ADVOB_TXT, 37);
+				info[0].limiter.numOfGrants = 1;
 			}
 		}
 		break;
 	case Obj::LEAN_TO:
 		{
-			soundID = soundBase::GENIE;
 			onEmpty.addTxt(MetaString::ADVOB_TXT, 65);
 			info.resize(1);
-			int type =  cb->gameState()->getRandomGenerator().nextInt(5); //any basic resource without gold
-			int value = cb->gameState()->getRandomGenerator().nextInt(1, 4);
+			int type =  rand.nextInt(5); //any basic resource without gold
+			int value = rand.nextInt(1, 4);
 			info[0].reward.resources[type] = value;
 			info[0].message.addTxt(MetaString::ADVOB_TXT, 64);
+			info[0].limiter.numOfGrants = 1;
 		}
 		break;
 	case Obj::WARRIORS_TOMB:
 		{
-			soundID = soundBase::GRAVEYARD;
 			onSelect.addTxt(MetaString::ADVOB_TXT, 161);
 
 			info.resize(2);
-			loadRandomArtifact(info[0], 30, 50, 25, 5);
+			loadRandomArtifact(rand, info[0], 30, 50, 25, 5);
 
 			Bonus bonus(Bonus::ONE_BATTLE, Bonus::MORALE, Bonus::OBJECT, -3, ID);
 			info[0].reward.bonuses.push_back(bonus);
 			info[1].reward.bonuses.push_back(bonus);
+			info[0].limiter.numOfGrants = 1;
 			info[0].message.addTxt(MetaString::ADVOB_TXT, 162);
+			info[0].message.addReplacement(VLC->arth->artifacts[info[0].reward.artifacts.back()]->Name());
 			info[1].message.addTxt(MetaString::ADVOB_TXT, 163);
 		}
 		break;
 	case Obj::WAGON:
 		{
-			soundID = soundBase::GENIE;
 			onVisited.addTxt(MetaString::ADVOB_TXT, 156);
 
-			int hlp = cb->gameState()->getRandomGenerator().nextInt(99);
+			int hlp = rand.nextInt(99);
 
 			if(hlp < 40) //minor or treasure art
 			{
 				info.resize(1);
-				loadRandomArtifact(info[0], 10, 10, 0, 0);
+				loadRandomArtifact(rand, info[0], 10, 10, 0, 0);
+				info[0].limiter.numOfGrants = 1;
 				info[0].message.addTxt(MetaString::ADVOB_TXT, 155);
+				info[0].message.addReplacement(VLC->arth->artifacts[info[0].reward.artifacts.back()]->Name());
 			}
 			else if(hlp < 90) //2 - 5 of non-gold resource
 			{
 				info.resize(1);
-				int type  = cb->gameState()->getRandomGenerator().nextInt(5);
-				int value = cb->gameState()->getRandomGenerator().nextInt(2, 5);
+				int type  = rand.nextInt(5);
+				int value = rand.nextInt(2, 5);
 				info[0].reward.resources[type] = value;
+				info[0].limiter.numOfGrants = 1;
 				info[0].message.addTxt(MetaString::ADVOB_TXT, 154);
 			}
 			// or nothing
@@ -837,12 +895,11 @@ CGVisitableOPH::CGVisitableOPH()
 	selectMode = SELECT_PLAYER;
 }
 
-void CGVisitableOPH::initObj()
+void CGVisitableOPH::initObj(CRandomGenerator & rand)
 {
 	switch(ID)
 	{
 		case Obj::ARENA:
-			soundID = soundBase::NOMAD;
 			info.resize(2);
 			info[0].reward.primary[PrimarySkill::ATTACK] = 2;
 			info[1].reward.primary[PrimarySkill::DEFENSE] = 2;
@@ -853,46 +910,40 @@ void CGVisitableOPH::initObj()
 		case Obj::MERCENARY_CAMP:
 			info.resize(1);
 			info[0].reward.primary[PrimarySkill::ATTACK] = 1;
-			soundID = soundBase::NOMAD;
 			info[0].message.addTxt(MetaString::ADVOB_TXT, 80);
 			onVisited.addTxt(MetaString::ADVOB_TXT, 81);
 			break;
 		case Obj::MARLETTO_TOWER:
 			info.resize(1);
 			info[0].reward.primary[PrimarySkill::DEFENSE] = 1;
-			soundID = soundBase::NOMAD;
 			info[0].message.addTxt(MetaString::ADVOB_TXT, 39);
 			onVisited.addTxt(MetaString::ADVOB_TXT, 40);
 			break;
 		case Obj::STAR_AXIS:
 			info.resize(1);
 			info[0].reward.primary[PrimarySkill::SPELL_POWER] = 1;
-			soundID = soundBase::gazebo;
 			info[0].message.addTxt(MetaString::ADVOB_TXT, 100);
 			onVisited.addTxt(MetaString::ADVOB_TXT, 101);
 			break;
 		case Obj::GARDEN_OF_REVELATION:
 			info.resize(1);
 			info[0].reward.primary[PrimarySkill::KNOWLEDGE] = 1;
-			soundID = soundBase::GETPROTECTION;
 			info[0].message.addTxt(MetaString::ADVOB_TXT, 59);
 			onVisited.addTxt(MetaString::ADVOB_TXT, 60);
 			break;
 		case Obj::LEARNING_STONE:
 			info.resize(1);
 			info[0].reward.gainedExp = 1000;
-			soundID = soundBase::gazebo;
 			info[0].message.addTxt(MetaString::ADVOB_TXT, 143);
 			onVisited.addTxt(MetaString::ADVOB_TXT, 144);
 			break;
 		case Obj::TREE_OF_KNOWLEDGE:
-			soundID = soundBase::gazebo;
 			info.resize(1);
 			canRefuse = true;
 			info[0].reward.gainedLevels = 1;
 			onVisited.addTxt(MetaString::ADVOB_TXT, 147);
 			info.resize(1);
-			switch (cb->gameState()->getRandomGenerator().nextInt(2))
+			switch (rand.nextInt(2))
 			{
 			case 0: // free
 				onSelect.addTxt(MetaString::ADVOB_TXT, 148);
@@ -931,7 +982,6 @@ void CGVisitableOPH::initObj()
 				visit.message.addTxt(MetaString::ADVOB_TXT, 66);
 				info.push_back(visit);
 			}
-			soundID = soundBase::gazebo;
 			break;
 		}
 		case Obj::SCHOOL_OF_MAGIC:
@@ -943,7 +993,6 @@ void CGVisitableOPH::initObj()
 			onSelect.addTxt(MetaString::ADVOB_TXT, 71);
 			onVisited.addTxt(MetaString::ADVOB_TXT, 72);
 			onEmpty.addTxt(MetaString::ADVOB_TXT, 73);
-			soundID = soundBase::faerie;
 			canRefuse = true;
 			break;
 		case Obj::SCHOOL_OF_WAR:
@@ -955,7 +1004,6 @@ void CGVisitableOPH::initObj()
 			onSelect.addTxt(MetaString::ADVOB_TXT, 158);
 			onVisited.addTxt(MetaString::ADVOB_TXT, 159);
 			onEmpty.addTxt(MetaString::ADVOB_TXT, 160);
-			soundID = soundBase::MILITARY;
 			canRefuse = true;
 			break;
 	}
@@ -966,55 +1014,97 @@ void CGVisitableOPH::initObj()
 CGVisitableOPW::CGVisitableOPW()
 {
 	visitMode = VISIT_ONCE;
-	selectMode = SELECT_RANDOM;
 	resetDuration = 7;
 }
 
-void CGVisitableOPW::initObj()
+void CGVisitableOPW::triggerRewardReset() const
+{
+	CRewardableObject::triggerRewardReset();
+
+	ChangeObjectVisitors cov(ChangeObjectVisitors::VISITOR_CLEAR, id);
+	cb->sendAndApply(&cov);
+}
+
+void CGVisitableOPW::initObj(CRandomGenerator & rand)
+{
+	setRandomReward(rand);
+
+	switch (ID)
+	{
+	case Obj::MYSTICAL_GARDEN:
+		onEmpty.addTxt(MetaString::ADVOB_TXT, 93);
+		info[0].message.addTxt(MetaString::ADVOB_TXT, 92);
+		break;
+	case Obj::WINDMILL:
+		onEmpty.addTxt(MetaString::ADVOB_TXT, 169);
+		info[0].message.addTxt(MetaString::ADVOB_TXT, 170);
+		break;
+	case Obj::WATER_WHEEL:
+		onEmpty.addTxt(MetaString::ADVOB_TXT, 165);
+		info[0].message.addTxt(MetaString::ADVOB_TXT, 164);
+		break;
+	}
+}
+
+void CGVisitableOPW::setPropertyDer(ui8 what, ui32 val)
+{
+	if(what == ObjProperty::REWARD_RESET)
+	{
+		setRandomReward(cb->gameState()->getRandomGenerator());
+
+		if (ID == Obj::WATER_WHEEL)
+		{
+			auto& reward = info[0].reward.resources[Res::GOLD];
+			if(cb->getDate() > 7)
+			{
+				reward = 1000;
+			}
+			else
+			{
+				reward = 500;
+			}
+		}
+	}
+
+	CRewardableObject::setPropertyDer(what, val);
+}
+
+void CGVisitableOPW::setRandomReward(CRandomGenerator &rand)
 {
 	switch (ID)
 	{
 	case Obj::MYSTICAL_GARDEN:
-		soundID = soundBase::experience;
-		onEmpty.addTxt(MetaString::ADVOB_TXT, 93);
-		info.resize(2);
-		info[0].reward.resources[Res::GEMS] = 5;
-		info[1].reward.resources[Res::GOLD] = 500;
-		info[0].message.addTxt(MetaString::ADVOB_TXT, 92);
-		info[1].message.addTxt(MetaString::ADVOB_TXT, 92);
-		break;
-	case Obj::WINDMILL:
-		soundID = soundBase::GENIE;
-		onEmpty.addTxt(MetaString::ADVOB_TXT, 169);
-		// 3-6 of any resource but wood and gold
-		for (int resID = Res::MERCURY; resID < Res::GOLD; resID++)
+		info.resize(1);
+		info[0].limiter.numOfGrants = 1;
+		info[0].reward.resources.amin(0);
+		if (rand.nextInt(1) == 0)
 		{
-			for (int val = 3; val <=6; val++)
-			{
-				CVisitInfo visit;
-				visit.reward.resources[resID] = val;
-				visit.message.addTxt(MetaString::ADVOB_TXT, 92);
-				info.push_back(visit);
-			}
+			info[0].reward.resources[Res::GEMS] = 5;
+		}
+		else
+		{
+			info[0].reward.resources[Res::GOLD] = 500;
 		}
 		break;
+	case Obj::WINDMILL:
+		info.resize(1);
+		info[0].reward.resources.amin(0);
+		// 3-6 of any resource but wood and gold
+		info[0].reward.resources[rand.nextInt(Res::MERCURY, Res::GEMS)] = rand.nextInt(3, 6);
+		info[0].limiter.numOfGrants = 1;
+		break;
 	case Obj::WATER_WHEEL:
-		soundID = soundBase::GENIE;
-		onEmpty.addTxt(MetaString::ADVOB_TXT, 165);
-
-		info.resize(2);
-		info[0].limiter.dayOfWeek = 7; // double amount on sunday
-		info[0].reward.resources[Res::GOLD] = 1000;
-		info[1].reward.resources[Res::GOLD] = 500;
-		info[0].message.addTxt(MetaString::ADVOB_TXT, 164);
-		info[1].message.addTxt(MetaString::ADVOB_TXT, 164);
+		info.resize(1);
+		info[0].reward.resources.amin(0);
+		info[0].reward.resources[Res::GOLD] = 500;
+		info[0].limiter.numOfGrants = 1;
 		break;
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-void CGMagicSpring::initObj()
+void CGMagicSpring::initObj(CRandomGenerator & rand)
 {
 	CVisitInfo visit; // TODO: "player above max mana" limiter. Use logical expressions for limiters?
 	visit.reward.manaPercentage = 200;
@@ -1022,7 +1112,6 @@ void CGMagicSpring::initObj()
 	info.push_back(visit); // two rewards, one for each entrance
 	info.push_back(visit);
 	onEmpty.addTxt(MetaString::ADVOB_TXT, 75);
-	soundID = soundBase::GENIE;
 }
 
 std::vector<int3> CGMagicSpring::getVisitableOffsets() const
@@ -1043,7 +1132,7 @@ int3 CGMagicSpring::getVisitableOffset() const
 
 	if (visitableTiles.size() != info.size())
 	{
-		logGlobal->warnStream() << "Unexpected number of visitable tiles of Magic Spring at " << pos << "!";
+		logGlobal->warn("Unexpected number of visitable tiles of Magic Spring at %s", pos.toString());
 		return int3(-1,-1,-1);
 	}
 

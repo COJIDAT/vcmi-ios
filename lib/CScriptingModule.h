@@ -1,8 +1,3 @@
-#pragma once
-
-
-#include "IGameEventsReceiver.h"
-
 /*
  * CScriptingModule.h, part of VCMI engine
  *
@@ -12,9 +7,12 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "IGameEventsReceiver.h"
 
 class IGameEventRealizer;
-class CPrivilagedInfoCallback;
+class CPrivilegedInfoCallback;
 
 class CScriptingModule : public IGameEventsReceiver, public IBattleEventsReceiver
 {
@@ -22,7 +20,7 @@ public:
 	virtual void executeUserCommand(const std::string &cmd){};
 	virtual void init(){}; //called upon the start of game (after map randomization, before first turn)
 	virtual void giveActionCB(IGameEventRealizer *cb){}; 
-	virtual void giveInfoCB(CPrivilagedInfoCallback *cb){}; 
+	virtual void giveInfoCB(CPrivilegedInfoCallback *cb){};
 
 	CScriptingModule(){}
 	virtual ~CScriptingModule(){}

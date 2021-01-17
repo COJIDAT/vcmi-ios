@@ -1,3 +1,12 @@
+/*
+ * CCreatureSet.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CCreatureSet.h"
 
@@ -8,19 +17,11 @@
 #include "IGameCallback.h"
 #include "CGameState.h"
 #include "CGeneralTextHandler.h"
-#include "CSpellHandler.h"
+#include "spells/CSpellHandler.h"
 #include "CHeroHandler.h"
 #include "IBonusTypeHandler.h"
-
-/*
- * CCreatureSet.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
+#include "serializer/JsonSerializeFormat.h"
+#include "NetPacksBase.h"
 
 const CStackInstance &CCreatureSet::operator[](SlotID slot) const
 {
@@ -44,12 +45,12 @@ bool CCreatureSet::setCreature(SlotID slot, CreatureID type, TQuantity quantity)
 {
 	if(!slot.validSlot())
 	{
-        logGlobal->errorStream() << "Cannot set slot " << slot;
+		logGlobal->error("Cannot set slot %d", slot.getNum());
 		return false;
 	}
 	if(!quantity)
 	{
-        logGlobal->warnStream() << "Using set creature to delete stack?";
+		logGlobal->warn("Using set creature to delete stack?");
 		eraseStack(slot);
 		return true;
 	}
@@ -61,12 +62,12 @@ bool CCreatureSet::setCreature(SlotID slot, CreatureID type, TQuantity quantity)
 	return true;
 }
 
-SlotID CCreatureSet::getSlotFor(CreatureID creature, ui32 slotsAmount/*=7*/) const /*returns -1 if no slot available */
+SlotID CCreatureSet::getSlotFor(CreatureID creature, ui32 slotsAmount) const /*returns -1 if no slot available */
 {
 	return getSlotFor(VLC->creh->creatures[creature], slotsAmount);
 }
 
-SlotID CCreatureSet::getSlotFor(const CCreature *c, ui32 slotsAmount/*=ARMY_SIZE*/) const
+SlotID CCreatureSet::getSlotFor(const CCreature *c, ui32 slotsAmount) const
 {
 	assert(c->valid());
 	for(auto & elem : stacks)
@@ -80,7 +81,7 @@ SlotID CCreatureSet::getSlotFor(const CCreature *c, ui32 slotsAmount/*=ARMY_SIZE
 	return getFreeSlot(slotsAmount);
 }
 
-SlotID CCreatureSet::getFreeSlot(ui32 slotsAmount/*=ARMY_SIZE*/) const
+SlotID CCreatureSet::getFreeSlot(ui32 slotsAmount) const
 {
 	for(ui32 i=0; i<slotsAmount; i++)
 	{
@@ -111,7 +112,7 @@ TExpType CCreatureSet::getStackExperience(SlotID slot) const
 }
 
 
-bool CCreatureSet::mergableStacks(std::pair<SlotID, SlotID> &out, SlotID preferable /*= -1*/) const /*looks for two same stacks, returns slot positions */
+bool CCreatureSet::mergableStacks(std::pair<SlotID, SlotID> &out, SlotID preferable) const /*looks for two same stacks, returns slot positions */
 {
 	//try to match creature to our preferred stack
 	if(preferable.validSlot() &&  vstd::contains(stacks, preferable))
@@ -156,7 +157,7 @@ void CCreatureSet::sweep()
 	}
 }
 
-void CCreatureSet::addToSlot(SlotID slot, CreatureID cre, TQuantity count, bool allowMerging/* = true*/)
+void CCreatureSet::addToSlot(SlotID slot, CreatureID cre, TQuantity count, bool allowMerging)
 {
 	const CCreature *c = VLC->creh->creatures[cre];
 
@@ -170,11 +171,11 @@ void CCreatureSet::addToSlot(SlotID slot, CreatureID cre, TQuantity count, bool 
 	}
 	else
 	{
-        logGlobal->errorStream() << "Failed adding to slot!";
+		logGlobal->error("Failed adding to slot!");
 	}
 }
 
-void CCreatureSet::addToSlot(SlotID slot, CStackInstance *stack, bool allowMerging/* = true*/)
+void CCreatureSet::addToSlot(SlotID slot, CStackInstance *stack, bool allowMerging)
 {
 	assert(stack->valid(true));
 
@@ -188,11 +189,11 @@ void CCreatureSet::addToSlot(SlotID slot, CStackInstance *stack, bool allowMergi
 	}
 	else
 	{
-        logGlobal->errorStream() << "Cannot add to slot " << slot << " stack " << *stack;
+		logGlobal->error("Cannot add to slot %d stack %s", slot.getNum(), stack->nodeName());
 	}
 }
 
-bool CCreatureSet::validTypes(bool allowUnrandomized /*= false*/) const
+bool CCreatureSet::validTypes(bool allowUnrandomized) const
 {
 	for(auto & elem : stacks)
 	{
@@ -225,12 +226,37 @@ ui64 CCreatureSet::getPower (SlotID slot) const
 	return getStack(slot).getPower();
 }
 
-std::string CCreatureSet::getRoughAmount (SlotID slot) const
+std::string CCreatureSet::getRoughAmount(SlotID slot, int mode) const
 {
+	/// Mode represent return string format
+	/// "Pack" - 0, "A pack of" - 1, "a pack of" - 2
 	int quantity = CCreature::getQuantityID(getStackCount(slot));
-	if (quantity)
-		return VLC->generaltexth->arraytxt[174 + 3*CCreature::getQuantityID(getStackCount(slot))];
+	if(quantity)
+		return VLC->generaltexth->arraytxt[(174 + mode) + 3*CCreature::getQuantityID(getStackCount(slot))];
 	return "";
+}
+
+std::string CCreatureSet::getArmyDescription() const
+{
+	std::string text;
+	std::vector<std::string> guards;
+	for(auto & elem : stacks)
+	{
+		auto str = boost::str(boost::format("%s %s") % getRoughAmount(elem.first, 2) % getCreature(elem.first)->namePl);
+		guards.push_back(str);
+	}
+	if(guards.size())
+	{
+		for(int i = 0; i < guards.size(); i++)
+		{
+			text += guards[i];
+			if(i + 2 < guards.size())
+				text += ", ";
+			else if(i + 2 == guards.size())
+				text += VLC->generaltexth->allTexts[237];
+		}
+	}
+	return text;
 }
 
 int CCreatureSet::stacksCount() const
@@ -387,10 +413,10 @@ CStackInstance * CCreatureSet::detachStack(SlotID slot)
 	CStackInstance *ret = stacks[slot];
 
 	//if(CArmedInstance *armedObj = castToArmyObj())
-    if(ret)
+	if(ret)
 	{
 		ret->setArmyObj(nullptr); //detaches from current armyobj
-        assert(!ret->armyObj); //we failed detaching?
+		assert(!ret->armyObj); //we failed detaching?
 	}
 
 	stacks.erase(slot);
@@ -454,6 +480,53 @@ CCreatureSet & CCreatureSet::operator=(const CCreatureSet&cs)
 
 void CCreatureSet::armyChanged()
 {
+
+}
+
+void CCreatureSet::serializeJson(JsonSerializeFormat & handler, const std::string & fieldName, const boost::optional<int> fixedSize)
+{
+	if(handler.saving && stacks.empty())
+		return;
+
+	auto a = handler.enterArray(fieldName);
+
+
+	if(handler.saving)
+	{
+		size_t sz = 0;
+
+		for(const auto & p : stacks)
+			vstd::amax(sz, p.first.getNum()+1);
+
+		if(fixedSize)
+			vstd::amax(sz, fixedSize.get());
+
+		a.resize(sz, JsonNode::JsonType::DATA_STRUCT);
+
+		for(const auto & p : stacks)
+		{
+			auto s = a.enterStruct(p.first.getNum());
+			p.second->serializeJson(handler);
+		}
+	}
+	else
+	{
+		for(size_t idx = 0; idx < a.size(); idx++)
+		{
+			auto s = a.enterStruct(idx);
+
+			TQuantity amount = 0;
+
+			handler.serializeInt("amount", amount);
+
+			if(amount > 0)
+			{
+				CStackInstance * new_stack = new CStackInstance();
+				new_stack->serializeJson(handler);
+				putStack(SlotID(idx), new_stack);
+			}
+		}
+	}
 }
 
 CStackInstance::CStackInstance()
@@ -566,11 +639,12 @@ void CStackInstance::setType(const CCreature *c)
 			experience *= VLC->creh->expAfterUpgrade / 100.0;
 	}
 
-	type = c;
+	CStackBasicDescriptor::setType(c);
+
 	if(type)
 		attachTo(const_cast<CCreature*>(type));
 }
-std::string CStackInstance::bonusToString(const Bonus *bonus, bool description) const
+std::string CStackInstance::bonusToString(const std::shared_ptr<Bonus>& bonus, bool description) const
 {
 	if(Bonus::MAGIC_RESISTANCE == bonus->type)
 	{
@@ -580,10 +654,10 @@ std::string CStackInstance::bonusToString(const Bonus *bonus, bool description) 
 	{
 		return VLC->getBth()->bonusToString(bonus, this, description);
 	}
-	
+
 }
 
-std::string CStackInstance::bonusToGraphics(const Bonus *bonus) const
+std::string CStackInstance::bonusToGraphics(const std::shared_ptr<Bonus>& bonus) const
 {
 	return VLC->getBth()->bonusToGraphics(bonus);
 }
@@ -600,7 +674,7 @@ void CStackInstance::setArmyObj(const CArmedInstance *ArmyObj)
 	}
 }
 
-std::string CStackInstance::getQuantityTXT(bool capitalized /*= true*/) const
+std::string CStackInstance::getQuantityTXT(bool capitalized) const
 {
 	int quantity = getQuantityID();
 
@@ -675,6 +749,45 @@ ArtBearer::ArtBearer CStackInstance::bearerType() const
 	return ArtBearer::CREATURE;
 }
 
+void CStackInstance::putArtifact(ArtifactPosition pos, CArtifactInstance * art)
+{
+	assert(!getArt(pos));
+	art->putAt(ArtifactLocation(this, pos));
+}
+
+void CStackInstance::serializeJson(JsonSerializeFormat & handler)
+{
+	//todo: artifacts
+	CStackBasicDescriptor::serializeJson(handler);//must be first
+
+	if(handler.saving)
+	{
+		if(idRand > -1)
+		{
+			int level = (int)idRand / 2;
+
+			boost::logic::tribool upgraded = (idRand % 2) > 0;
+
+			handler.serializeInt("level", level, 0);
+			handler.serializeBool("upgraded", upgraded);
+		}
+	}
+	else
+	{
+		//type set by CStackBasicDescriptor::serializeJson
+		if(type == nullptr)
+		{
+			int level = 0;
+			bool upgraded = false;
+
+			handler.serializeInt("level", level, 0);
+			handler.serializeBool("upgraded", upgraded);
+
+			idRand = level * 2 + (int)(bool)upgraded;
+		}
+	}
+}
+
 CCommanderInstance::CCommanderInstance()
 {
 	init();
@@ -712,7 +825,7 @@ void CCommanderInstance::setAlive (bool Alive)
 	alive = Alive;
 	if (!alive)
 	{
-		getBonusList().remove_if (Bonus::UntilCommanderKilled);
+		popBonuses(Bonus::UntilCommanderKilled);
 	}
 }
 
@@ -737,7 +850,7 @@ void CCommanderInstance::levelUp ()
 	level++;
 	for (auto bonus : VLC->creh->commanderLevelPremy)
 	{ //grant all regular level-up bonuses
-		accumulateBonus (*bonus);
+		accumulateBonus(bonus);
 	}
 }
 
@@ -767,18 +880,30 @@ CStackBasicDescriptor::CStackBasicDescriptor(const CCreature *c, TQuantity Count
 {
 }
 
-DLL_LINKAGE std::ostream & operator<<(std::ostream & str, const CStackInstance & sth)
+void CStackBasicDescriptor::setType(const CCreature * c)
 {
-	if(!sth.valid(true))
-		str << "an invalid stack!";
+	type = c;
+}
 
-	str << "stack with " << sth.count << " of ";
-	if(sth.type)
-		str << sth.type->namePl;
+void CStackBasicDescriptor::serializeJson(JsonSerializeFormat & handler)
+{
+	handler.serializeInt("amount", count);
+
+	if(handler.saving)
+	{
+		if(type)
+		{
+			std::string typeName = type->identifier;
+			handler.serializeString("type", typeName);
+		}
+	}
 	else
-		str << sth.idRand;
-
-	return str;
+	{
+		std::string typeName("");
+		handler.serializeString("type", typeName);
+		if(typeName != "")
+			setType(VLC->creh->getCreature("core", typeName));
+	}
 }
 
 void CSimpleArmy::clear()

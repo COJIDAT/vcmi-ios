@@ -1,5 +1,15 @@
+/*
+ * CGuiHandler.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "CGuiHandler.h"
+#include "../lib/CondSh.h"
 
 #include <SDL.h>
 
@@ -11,13 +21,14 @@
 #include "../../lib/CConfigHandler.h"
 #include "../CMT.h"
 #include "../CPlayerInterface.h"
+#include "../battle/CBattleInterface.h"
 
 extern std::queue<SDL_Event> events;
 extern boost::mutex eventsM;
 
 boost::thread_specific_ptr<bool> inGuiThread;
 
-SObjectConstruction::SObjectConstruction( CIntObject *obj )
+SObjectConstruction::SObjectConstruction(CIntObject *obj)
 :myObj(obj)
 {
 	GH.createdObj.push_front(obj);
@@ -57,16 +68,14 @@ void CGuiHandler::processLists(const ui16 activityFlag, std::function<void (std:
 {
 	processList(CIntObject::LCLICK,activityFlag,&lclickable,cb);
 	processList(CIntObject::RCLICK,activityFlag,&rclickable,cb);
+	processList(CIntObject::MCLICK,activityFlag,&mclickable,cb);
 	processList(CIntObject::HOVER,activityFlag,&hoverable,cb);
 	processList(CIntObject::MOVE,activityFlag,&motioninterested,cb);
 	processList(CIntObject::KEYBOARD,activityFlag,&keyinterested,cb);
 	processList(CIntObject::TIME,activityFlag,&timeinterested,cb);
 	processList(CIntObject::WHEEL,activityFlag,&wheelInterested,cb);
 	processList(CIntObject::DOUBLECLICK,activityFlag,&doubleClickInterested,cb);
-	
-	#ifndef VCMI_SDL1
 	processList(CIntObject::TEXTINPUT,activityFlag,&textInterested,cb);
-	#endif // VCMI_SDL1
 }
 
 void CGuiHandler::handleElementActivate(CIntObject * elem, ui16 activityFlag)
@@ -87,7 +96,7 @@ void CGuiHandler::handleElementDeActivate(CIntObject * elem, ui16 activityFlag)
 	elem->active_m &= ~activityFlag;
 }
 
-void CGuiHandler::popInt( IShowActivatable *top )
+void CGuiHandler::popInt(IShowActivatable *top)
 {
 	assert(listInt.front() == top);
 	top->deactivate();
@@ -96,9 +105,11 @@ void CGuiHandler::popInt( IShowActivatable *top )
 	if(!listInt.empty())
 		listInt.front()->activate();
 	totalRedraw();
+
+	pushSDLEvent(SDL_USEREVENT, INTERFACE_CHANGED);
 }
 
-void CGuiHandler::popIntTotally( IShowActivatable *top )
+void CGuiHandler::popIntTotally(IShowActivatable *top)
 {
 	assert(listInt.front() == top);
 	popInt(top);
@@ -106,7 +117,7 @@ void CGuiHandler::popIntTotally( IShowActivatable *top )
 	fakeMouseMove();
 }
 
-void CGuiHandler::pushInt( IShowActivatable *newInt )
+void CGuiHandler::pushInt(IShowActivatable *newInt)
 {
 	assert(newInt);
 	assert(boost::range::find(listInt, newInt) == listInt.end()); // do not add same object twice
@@ -120,9 +131,11 @@ void CGuiHandler::pushInt( IShowActivatable *newInt )
 	newInt->activate();
 	objsToBlit.push_back(newInt);
 	totalRedraw();
+
+	pushSDLEvent(SDL_USEREVENT, INTERFACE_CHANGED);
 }
 
-void CGuiHandler::popInts( int howMany )
+void CGuiHandler::popInts(int howMany)
 {
 	if(!howMany) return; //senseless but who knows...
 
@@ -141,6 +154,8 @@ void CGuiHandler::popInts( int howMany )
 		totalRedraw();
 	}
 	fakeMouseMove();
+
+	pushSDLEvent(SDL_USEREVENT, INTERFACE_CHANGED);
 }
 
 IShowActivatable * CGuiHandler::topInt()
@@ -171,39 +186,76 @@ void CGuiHandler::updateTime()
 
 void CGuiHandler::handleEvents()
 {
-	//player interface may want special event handling 	
+	//player interface may want special event handling
 	if(nullptr != LOCPLINT && LOCPLINT->capturedAllEvents())
 		return;
-	
-	boost::unique_lock<boost::mutex> lock(eventsM);	
+
+	boost::unique_lock<boost::mutex> lock(eventsM);
 	while(!events.empty())
 	{
+		continueEventHandling = true;
 		SDL_Event ev = events.front();
-		events.pop();		
-		this->handleEvent(&ev);
+		current = &ev;
+		events.pop();
+		handleCurrentEvent();
 	}
 }
 
-void CGuiHandler::handleEvent(SDL_Event *sEvent)
+void CGuiHandler::handleCurrentEvent()
 {
-	current = sEvent;
-	bool prev;
-
-	if (sEvent->type==SDL_KEYDOWN || sEvent->type==SDL_KEYUP)
+	if(current->type == SDL_KEYDOWN || current->type == SDL_KEYUP)
 	{
-		SDL_KeyboardEvent key = sEvent->key;
+		SDL_KeyboardEvent key = current->key;
+		if(current->type == SDL_KEYDOWN && key.keysym.sym >= SDLK_F1 && key.keysym.sym <= SDLK_F15 && settings["session"]["spectate"].Bool())
+		{
+			//TODO: we need some central place for all interface-independent hotkeys
+			Settings s = settings.write["session"];
+			switch(key.keysym.sym)
+			{
+			case SDLK_F5:
+				if(settings["session"]["spectate-locked-pim"].Bool())
+					LOCPLINT->pim->unlock();
+				else
+					LOCPLINT->pim->lock();
+				s["spectate-locked-pim"].Bool() = !settings["session"]["spectate-locked-pim"].Bool();
+				break;
+
+			case SDLK_F6:
+				s["spectate-ignore-hero"].Bool() = !settings["session"]["spectate-ignore-hero"].Bool();
+				break;
+
+			case SDLK_F7:
+				s["spectate-skip-battle"].Bool() = !settings["session"]["spectate-skip-battle"].Bool();
+				break;
+
+			case SDLK_F8:
+				s["spectate-skip-battle-result"].Bool() = !settings["session"]["spectate-skip-battle-result"].Bool();
+				break;
+
+			case SDLK_F9:
+				//not working yet since CClient::run remain locked after CBattleInterface removal
+				if(LOCPLINT->battleInt)
+				{
+					GH.popIntTotally(GH.topInt());
+					vstd::clear_pointer(LOCPLINT->battleInt);
+				}
+				break;
+
+			default:
+				break;
+			}
+			return;
+		}
 
 		//translate numpad keys
 		if(key.keysym.sym == SDLK_KP_ENTER)
 		{
-			key.keysym.sym = (SDLKey)SDLK_RETURN;
-			#ifndef VCMI_SDL1
+			key.keysym.sym = SDLK_RETURN;
 			key.keysym.scancode = SDL_SCANCODE_RETURN;
-			#endif // VCMI_SDL1
 		}
 
 		bool keysCaptured = false;
-		for(auto i=keyinterested.begin(); i != keyinterested.end() && current; i++)
+		for(auto i = keyinterested.begin(); i != keyinterested.end() && continueEventHandling; i++)
 		{
 			if((*i)->captureThisEvent(key))
 			{
@@ -213,27 +265,27 @@ void CGuiHandler::handleEvent(SDL_Event *sEvent)
 		}
 
 		std::list<CIntObject*> miCopy = keyinterested;
-		for(auto i=miCopy.begin(); i != miCopy.end() && current; i++)
+		for(auto i = miCopy.begin(); i != miCopy.end() && continueEventHandling; i++)
 			if(vstd::contains(keyinterested,*i) && (!keysCaptured || (*i)->captureThisEvent(key)))
 				(**i).keyPressed(key);
 	}
-	else if(sEvent->type==SDL_MOUSEMOTION)
+	else if(current->type == SDL_MOUSEMOTION)
 	{
-		CCS->curh->cursorMove(sEvent->motion.x, sEvent->motion.y);
-		handleMouseMotion(sEvent);
+		CCS->curh->cursorMove(current->motion.x, current->motion.y);
+		handleMouseMotion();
 	}
-	else if (sEvent->type==SDL_MOUSEBUTTONDOWN)
+	else if(current->type == SDL_MOUSEBUTTONDOWN)
 	{
-		if(sEvent->button.button == SDL_BUTTON_LEFT)
+		switch(current->button.button)
 		{
-
-			if(lastClick == sEvent->motion  &&  (SDL_GetTicks() - lastClickTime) < 300)
+		case SDL_BUTTON_LEFT:
+			if(lastClick == current->motion && (SDL_GetTicks() - lastClickTime) < 300)
 			{
 				std::list<CIntObject*> hlp = doubleClickInterested;
-				for(auto i=hlp.begin(); i != hlp.end() && current; i++)
+				for(auto i = hlp.begin(); i != hlp.end() && continueEventHandling; i++)
 				{
-					if(!vstd::contains(doubleClickInterested,*i)) continue;
-					if (isItIn(&(*i)->pos,sEvent->motion.x,sEvent->motion.y))
+					if(!vstd::contains(doubleClickInterested, *i)) continue;
+					if(isItIn(&(*i)->pos, current->motion.x, current->motion.y))
 					{
 						(*i)->onDoubleClick();
 					}
@@ -241,116 +293,94 @@ void CGuiHandler::handleEvent(SDL_Event *sEvent)
 
 			}
 
-			lastClick = sEvent->motion;
+			lastClick = current->motion;
 			lastClickTime = SDL_GetTicks();
 
-			std::list<CIntObject*> hlp = lclickable;
-			for(auto i=hlp.begin(); i != hlp.end() && current; i++)
-			{
-				if(!vstd::contains(lclickable,*i)) continue;
-				if (isItIn(&(*i)->pos,sEvent->motion.x,sEvent->motion.y))
-				{
-					prev = (*i)->pressedL;
-					(*i)->pressedL = true;
-					(*i)->clickLeft(true, prev);
-				}
-			}
+			handleMouseButtonClick(lclickable, EIntObjMouseBtnType::LEFT, true);
+			break;
+		case SDL_BUTTON_RIGHT:
+			handleMouseButtonClick(rclickable, EIntObjMouseBtnType::RIGHT, true);
+			break;
+		case SDL_BUTTON_MIDDLE:
+			handleMouseButtonClick(mclickable, EIntObjMouseBtnType::MIDDLE, true);
+			break;
+		default:
+			break;
 		}
-		else if (sEvent->button.button == SDL_BUTTON_RIGHT)
-		{
-			std::list<CIntObject*> hlp = rclickable;
-			for(auto i=hlp.begin(); i != hlp.end() && current; i++)
-			{
-				if(!vstd::contains(rclickable,*i)) continue;
-				if (isItIn(&(*i)->pos,sEvent->motion.x,sEvent->motion.y))
-				{
-					prev = (*i)->pressedR;
-					(*i)->pressedR = true;
-					(*i)->clickRight(true, prev);
-				}
-			}
-		}
-		#ifdef VCMI_SDL1 //SDL1x only events
-		else if(sEvent->button.button == SDL_BUTTON_WHEELDOWN || sEvent->button.button == SDL_BUTTON_WHEELUP)
-		{
-			std::list<CIntObject*> hlp = wheelInterested;
-			for(auto i=hlp.begin(); i != hlp.end() && current; i++)
-			{
-				if(!vstd::contains(wheelInterested,*i)) continue;
-				(*i)->wheelScrolled(sEvent->button.button == SDL_BUTTON_WHEELDOWN, isItIn(&(*i)->pos,sEvent->motion.x,sEvent->motion.y));
-			}
-		}
-		#endif
 	}
-	#ifndef VCMI_SDL1 //SDL2x only events	
-	else if (sEvent->type == SDL_MOUSEWHEEL)
+	else if(current->type == SDL_MOUSEWHEEL)
 	{
 		std::list<CIntObject*> hlp = wheelInterested;
-		for(auto i=hlp.begin(); i != hlp.end() && current; i++)
+		for(auto i = hlp.begin(); i != hlp.end() && continueEventHandling; i++)
 		{
 			if(!vstd::contains(wheelInterested,*i)) continue;
-			(*i)->wheelScrolled(sEvent->wheel.y < 0, isItIn(&(*i)->pos,sEvent->motion.x,sEvent->motion.y));
-		}		
+			// SDL doesn't have the proper values for mouse positions on SDL_MOUSEWHEEL, refetch them
+			int x = 0, y = 0;
+			SDL_GetMouseState(&x, &y);
+			(*i)->wheelScrolled(current->wheel.y < 0, isItIn(&(*i)->pos, x, y));
+		}
 	}
-	else if(sEvent->type == SDL_TEXTINPUT)
+	else if(current->type == SDL_TEXTINPUT)
 	{
 		for(auto it : textInterested)
 		{
-			it->textInputed(sEvent->text);
+			it->textInputed(current->text);
 		}
-	}	
-	else if(sEvent->type == SDL_TEXTEDITING)
+	}
+	else if(current->type == SDL_TEXTEDITING)
 	{
 		for(auto it : textInterested)
 		{
-			it->textEdited(sEvent->edit);
+			it->textEdited(current->edit);
 		}
-	}	
+	}
 	//todo: muiltitouch
-	#endif // VCMI_SDL1
-	else if ((sEvent->type==SDL_MOUSEBUTTONUP) && (sEvent->button.button == SDL_BUTTON_LEFT))
+	else if(current->type == SDL_MOUSEBUTTONUP)
 	{
-		std::list<CIntObject*> hlp = lclickable;
-		for(auto i=hlp.begin(); i != hlp.end() && current; i++)
+		switch(current->button.button)
 		{
-			if(!vstd::contains(lclickable,*i)) continue;
-			prev = (*i)->pressedL;
-			(*i)->pressedL = false;
-			if (isItIn(&(*i)->pos,sEvent->motion.x,sEvent->motion.y))
-			{
-				(*i)->clickLeft(false, prev);
-			}
-			else
-				(*i)->clickLeft(boost::logic::indeterminate, prev);
-		}
-	}
-	else if ((sEvent->type==SDL_MOUSEBUTTONUP) && (sEvent->button.button == SDL_BUTTON_RIGHT))
-	{
-		std::list<CIntObject*> hlp = rclickable;
-		for(auto i=hlp.begin(); i != hlp.end() && current; i++)
-		{
-			if(!vstd::contains(rclickable,*i)) continue;
-			prev = (*i)->pressedR;
-			(*i)->pressedR = false;
-			if (isItIn(&(*i)->pos,sEvent->motion.x,sEvent->motion.y))
-			{
-				(*i)->clickRight(false, prev);
-			}
-			else
-				(*i)->clickRight(boost::logic::indeterminate, prev);
+		case SDL_BUTTON_LEFT:
+			handleMouseButtonClick(lclickable, EIntObjMouseBtnType::LEFT, false);
+			break;
+		case SDL_BUTTON_RIGHT:
+			handleMouseButtonClick(rclickable, EIntObjMouseBtnType::RIGHT, false);
+			break;
+		case SDL_BUTTON_MIDDLE:
+			handleMouseButtonClick(mclickable, EIntObjMouseBtnType::MIDDLE, false);
+			break;
 		}
 	}
 	current = nullptr;
-
 } //event end
 
-void CGuiHandler::handleMouseMotion(SDL_Event *sEvent)
+void CGuiHandler::handleMouseButtonClick(CIntObjectList & interestedObjs, EIntObjMouseBtnType btn, bool isPressed)
+{
+	auto hlp = interestedObjs;
+	for(auto i = hlp.begin(); i != hlp.end() && continueEventHandling; i++)
+	{
+		if(!vstd::contains(interestedObjs, *i)) continue;
+
+		auto prev = (*i)->mouseState(btn);
+		if(!isPressed)
+			(*i)->updateMouseState(btn, isPressed);
+		if(isItIn(&(*i)->pos, current->motion.x, current->motion.y))
+		{
+			if(isPressed)
+				(*i)->updateMouseState(btn, isPressed);
+			(*i)->click(btn, isPressed, prev);
+		}
+		else if(!isPressed)
+			(*i)->click(btn, boost::logic::indeterminate, prev);
+	}
+}
+
+void CGuiHandler::handleMouseMotion()
 {
 	//sending active, hovered hoverable objects hover() call
 	std::vector<CIntObject*> hlp;
 	for(auto & elem : hoverable)
 	{
-		if (isItIn(&(elem)->pos,sEvent->motion.x,sEvent->motion.y))
+		if(isItIn(&(elem)->pos, current->motion.x, current->motion.y))
 		{
 			if (!(elem)->hovered)
 				hlp.push_back((elem));
@@ -367,7 +397,7 @@ void CGuiHandler::handleMouseMotion(SDL_Event *sEvent)
 		elem->hovered = true;
 	}
 
-	handleMoveInterested(sEvent->motion);
+	handleMoveInterested(current->motion);
 }
 
 void CGuiHandler::simpleRedraw()
@@ -375,16 +405,17 @@ void CGuiHandler::simpleRedraw()
 	//update only top interface and draw background
 	if(objsToBlit.size() > 1)
 		blitAt(screen2,0,0,screen); //blit background
-	objsToBlit.back()->show(screen); //blit active interface/window
+	if(!objsToBlit.empty())
+		objsToBlit.back()->show(screen); //blit active interface/window
 }
 
-void CGuiHandler::handleMoveInterested( const SDL_MouseMotionEvent & motion )
+void CGuiHandler::handleMoveInterested(const SDL_MouseMotionEvent & motion)
 {
 	//sending active, MotionInterested objects mouseMoved() call
 	std::list<CIntObject*> miCopy = motioninterested;
 	for(auto & elem : miCopy)
 	{
-		if ((elem)->strongInterest || isItIn(&(elem)->pos, motion.x, motion.y))
+		if(elem->strongInterest || isItInOrLowerBounds(&elem->pos, motion.x, motion.y)) //checking lower bounds fixes bug #2476
 		{
 			(elem)->mouseMoved(motion);
 		}
@@ -393,52 +424,58 @@ void CGuiHandler::handleMoveInterested( const SDL_MouseMotionEvent & motion )
 
 void CGuiHandler::fakeMouseMove()
 {
-	SDL_Event evnt;
-#ifdef VCMI_SDL1
-	SDL_MouseMotionEvent sme = {SDL_MOUSEMOTION, 0, 0, 0, 0, 0, 0};
-#else
+	SDL_Event event;
 	SDL_MouseMotionEvent sme = {SDL_MOUSEMOTION, 0, 0, 0, 0, 0, 0, 0, 0};
-#endif	
 	int x, y;
+
 	sme.state = SDL_GetMouseState(&x, &y);
 	sme.x = x;
 	sme.y = y;
 
-	evnt.motion = sme;
-	current = &evnt;
-	handleMouseMotion(&evnt);
+	event.motion = sme;
+	SDL_PushEvent(&event);
 }
 
 void CGuiHandler::renderFrame()
 {
-	auto doUpdate = [](IUpdateable * target)
+
+	// Updating GUI requires locking pim mutex (that protects screen and GUI state).
+	// During game:
+	// When ending the game, the pim mutex might be hold by other thread,
+	// that will notify us about the ending game by setting terminate_cond flag.
+	//in PreGame terminate_cond stay false
+
+	bool acquiredTheLockOnPim = false; //for tracking whether pim mutex locking succeeded
+	while(!terminate_cond->get() && !(acquiredTheLockOnPim = CPlayerInterface::pim->try_lock())) //try acquiring long until it succeeds or we are told to terminate
+		boost::this_thread::sleep(boost::posix_time::milliseconds(15));
+
+	if(acquiredTheLockOnPim)
 	{
-		if(nullptr != target)
-			target -> update();
+		// If we are here, pim mutex has been successfully locked - let's store it in a safe RAII lock.
+		boost::unique_lock<boost::recursive_mutex> un(*CPlayerInterface::pim, boost::adopt_lock);
+
+		if(nullptr != curInt)
+			curInt->update();
+
+		if (settings["general"]["showfps"].Bool())
+			drawFPSCounter();
+
 		// draw the mouse cursor and update the screen
 		CCS->curh->render();
 
-		#ifndef	VCMI_SDL1
-		if(0 != SDL_RenderCopy(mainRenderer, screenTexture, nullptr, nullptr))
-			logGlobal->errorStream() << __FUNCTION__ << " SDL_RenderCopy " << SDL_GetError();
+		SDL_RenderCopy(mainRenderer, screenTexture, nullptr, nullptr);
 
-		SDL_RenderPresent(mainRenderer);				
-		#endif		
-		
-	};
-	
-	if(curInt)
-		curInt->runLocked(doUpdate);
-	else
-		doUpdate(nullptr);
-	
-	mainFPSmng->framerateDelay(); // holds a constant FPS	
+		SDL_RenderPresent(mainRenderer);
+	}
+
+	mainFPSmng->framerateDelay(); // holds a constant FPS
 }
 
 
 CGuiHandler::CGuiHandler()
-:lastClick(-500, -500)
+	: lastClick(-500, -500),lastClickTime(0), defActionsDef(0), captureChildren(false)
 {
+	continueEventHandling = true;
 	curInt = nullptr;
 	current = nullptr;
 	statusbar = nullptr;
@@ -446,16 +483,19 @@ CGuiHandler::CGuiHandler()
 	// Creates the FPS manager and sets the framerate to 48 which is doubled the value of the original Heroes 3 FPS rate
 	mainFPSmng = new CFramerateManager(48);
 	//do not init CFramerateManager here --AVS
+
+	terminate_cond = new CondSh<bool>(false);
 }
 
 CGuiHandler::~CGuiHandler()
 {
 	delete mainFPSmng;
+	delete terminate_cond;
 }
 
 void CGuiHandler::breakEventHandling()
 {
-	current = nullptr;
+	continueEventHandling = false;
 }
 
 void CGuiHandler::drawFPSCounter()
@@ -468,23 +508,8 @@ void CGuiHandler::drawFPSCounter()
 	graphics->fonts[FONT_BIG]->renderTextLeft(screen, fps, yellow, Point(10, 10));
 }
 
-SDLKey CGuiHandler::arrowToNum( SDLKey key )
+SDL_Keycode CGuiHandler::arrowToNum(SDL_Keycode key)
 {
-	#ifdef VCMI_SDL1
-	switch(key)
-	{
-	case SDLK_DOWN:
-		return SDLK_KP2;
-	case SDLK_UP:
-		return SDLK_KP8;
-	case SDLK_LEFT:
-		return SDLK_KP4;
-	case SDLK_RIGHT:
-		return SDLK_KP6;
-	default:
-		throw std::runtime_error("Wrong key!");assert(0);
-	}	
-	#else
 	switch(key)
 	{
 	case SDLK_DOWN:
@@ -497,21 +522,15 @@ SDLKey CGuiHandler::arrowToNum( SDLKey key )
 		return SDLK_KP_6;
 	default:
 		throw std::runtime_error("Wrong key!");
-	}	
-	#endif // 0
+	}
 }
 
-SDLKey CGuiHandler::numToDigit( SDLKey key )
+SDL_Keycode CGuiHandler::numToDigit(SDL_Keycode key)
 {
-#ifdef VCMI_SDL1
-	if(key >= SDLK_KP0 && key <= SDLK_KP9)
-		return SDLKey(key - SDLK_KP0 + SDLK_0);
-#endif // 0
 
 #define REMOVE_KP(keyName) case SDLK_KP_ ## keyName : return SDLK_ ## keyName;
 	switch(key)
 	{
-#ifndef VCMI_SDL1
 		REMOVE_KP(0)
 		REMOVE_KP(1)
 		REMOVE_KP(2)
@@ -521,8 +540,7 @@ SDLKey CGuiHandler::numToDigit( SDLKey key )
 		REMOVE_KP(6)
 		REMOVE_KP(7)
 		REMOVE_KP(8)
-		REMOVE_KP(9)		
-#endif // VCMI_SDL1		
+		REMOVE_KP(9)
 		REMOVE_KP(PERIOD)
 		REMOVE_KP(MINUS)
 		REMOVE_KP(PLUS)
@@ -540,22 +558,15 @@ SDLKey CGuiHandler::numToDigit( SDLKey key )
 #undef REMOVE_KP
 }
 
-bool CGuiHandler::isNumKey( SDLKey key, bool number )
+bool CGuiHandler::isNumKey(SDL_Keycode key, bool number)
 {
-	#ifdef VCMI_SDL1
-	if(number)
-		return key >= SDLK_KP0 && key <= SDLK_KP9;
-	else
-		return key >= SDLK_KP0 && key <= SDLK_KP_EQUALS;
-	#else
 	if(number)
 		return key >= SDLK_KP_1 && key <= SDLK_KP_0;
 	else
 		return (key >= SDLK_KP_1 && key <= SDLK_KP_0) || key == SDLK_KP_MINUS || key == SDLK_KP_PLUS || key == SDLK_KP_EQUALS;
-	#endif // 0
 }
 
-bool CGuiHandler::isArrowKey( SDLKey key )
+bool CGuiHandler::isArrowKey(SDL_Keycode key)
 {
 	return key == SDLK_UP || key == SDLK_DOWN || key == SDLK_LEFT || key == SDLK_RIGHT;
 }
@@ -578,6 +589,10 @@ CFramerateManager::CFramerateManager(int rate)
 	this->rate = rate;
 	this->rateticks = (1000.0 / rate);
 	this->fps = 0;
+	this->accumulatedFrames = 0;
+	this->accumulatedTime = 0;
+	this->lastticks = 0;
+	this->timeElapsed = 0;
 }
 
 void CFramerateManager::init()
@@ -595,12 +610,22 @@ void CFramerateManager::framerateDelay()
 	{
 		SDL_Delay(ceil(this->rateticks) - timeElapsed);
 	}
+
+	accumulatedTime += timeElapsed;
+	accumulatedFrames++;
+
+	if(accumulatedFrames >= 100)
+	{
+		//about 2 second should be passed
+		fps = ceil(1000.0 / (accumulatedTime/accumulatedFrames));
+		accumulatedTime = 0;
+		accumulatedFrames = 0;
+	}
+
 	currentTicks = SDL_GetTicks();
-
-	fps = ceil(1000.0 / timeElapsed);
-
 	// recalculate timeElapsed for external calls via getElapsed()
 	// limit it to 1000 ms to avoid breaking animation in case of huge lag (e.g. triggered breakpoint)
 	timeElapsed = std::min<ui32>(currentTicks - lastticks, 1000);
+
 	lastticks = SDL_GetTicks();
 }

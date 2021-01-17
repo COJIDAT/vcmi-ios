@@ -1,4 +1,14 @@
+fl/Benchmark.h
+fl/Complexity.h
 fl/Console.h
+fl/activation/Activation.h
+fl/activation/First.h
+fl/activation/General.h
+fl/activation/Highest.h
+fl/activation/Last.h
+fl/activation/Lowest.h
+fl/activation/Proportional.h
+fl/activation/Threshold.h
 fl/defuzzifier/Bisector.h
 fl/defuzzifier/Centroid.h
 fl/defuzzifier/Defuzzifier.h
@@ -7,10 +17,13 @@ fl/defuzzifier/LargestOfMaximum.h
 fl/defuzzifier/MeanOfMaximum.h
 fl/defuzzifier/SmallestOfMaximum.h
 fl/defuzzifier/WeightedAverage.h
+fl/defuzzifier/WeightedAverageCustom.h
 fl/defuzzifier/WeightedDefuzzifier.h
 fl/defuzzifier/WeightedSum.h
+fl/defuzzifier/WeightedSumCustom.h
 fl/Engine.h
 fl/Exception.h
+fl/factory/ActivationFactory.h
 fl/factory/CloningFactory.h
 fl/factory/ConstructionFactory.h
 fl/factory/DefuzzifierFactory.h
@@ -25,6 +38,7 @@ fl/Headers.h
 fl/hedge/Any.h
 fl/hedge/Extremely.h
 fl/hedge/Hedge.h
+fl/hedge/HedgeFunction.h
 fl/hedge/Not.h
 fl/hedge/Seldom.h
 fl/hedge/Somewhat.h
@@ -40,6 +54,7 @@ fl/imex/FllExporter.h
 fl/imex/FllImporter.h
 fl/imex/Importer.h
 fl/imex/JavaExporter.h
+fl/imex/RScriptExporter.h
 fl/norm/Norm.h
 fl/norm/s/AlgebraicSum.h
 fl/norm/s/BoundedSum.h
@@ -49,6 +64,8 @@ fl/norm/s/HamacherSum.h
 fl/norm/s/Maximum.h
 fl/norm/s/NilpotentMaximum.h
 fl/norm/s/NormalizedSum.h
+fl/norm/s/SNormFunction.h
+fl/norm/s/UnboundedSum.h
 fl/norm/SNorm.h
 fl/norm/t/AlgebraicProduct.h
 fl/norm/t/BoundedDifference.h
@@ -57,6 +74,7 @@ fl/norm/t/EinsteinProduct.h
 fl/norm/t/HamacherProduct.h
 fl/norm/t/Minimum.h
 fl/norm/t/NilpotentMinimum.h
+fl/norm/t/TNormFunction.h
 fl/norm/TNorm.h
 fl/Operation.h
 fl/rule/Antecedent.h
@@ -64,9 +82,10 @@ fl/rule/Consequent.h
 fl/rule/Expression.h
 fl/rule/RuleBlock.h
 fl/rule/Rule.h
-fl/term/Accumulated.h
 fl/term/Activated.h
+fl/term/Aggregated.h
 fl/term/Bell.h
+fl/term/Binary.h
 fl/term/Concave.h
 fl/term/Constant.h
 fl/term/Cosine.h

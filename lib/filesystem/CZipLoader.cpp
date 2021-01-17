@@ -1,9 +1,3 @@
-#include "StdInc.h"
-#include "../../Global.h"
-#include "CZipLoader.h"
-
-#include "../ScopeGuard.h"
-
 /*
  * CZipLoader.cpp, part of VCMI engine
  *
@@ -13,11 +7,20 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "CZipLoader.h"
+#include "FileStream.h"
 
-CZipStream::CZipStream(const std::string & archive, unz_file_pos filepos)
+#include "../ScopeGuard.h"
+
+CZipStream::CZipStream(std::shared_ptr<CIOApi> api, const boost::filesystem::path & archive, unz64_file_pos filepos)
 {
-	file = unzOpen(archive.c_str());
-	unzGoToFilePos(file, &filepos);
+	zlib_filefunc64_def zlibApi;
+
+	zlibApi = api->getApiStructure();
+
+	file = unzOpen2_64(archive.c_str(), &zlibApi);
+	unzGoToFilePos64(file, &filepos);
 	unzOpenCurrentFile(file);
 }
 
@@ -34,47 +37,53 @@ si64 CZipStream::readMore(ui8 * data, si64 size)
 
 si64 CZipStream::getSize()
 {
-	unz_file_info info;
-	unzGetCurrentFileInfo (file, &info, nullptr, 0, nullptr, 0, nullptr, 0);
+	unz_file_info64 info;
+	unzGetCurrentFileInfo64 (file, &info, nullptr, 0, nullptr, 0, nullptr, 0);
 	return info.uncompressed_size;
 }
 
 ui32 CZipStream::calculateCRC32()
 {
-	unz_file_info info;
-	unzGetCurrentFileInfo (file, &info, nullptr, 0, nullptr, 0, nullptr, 0);
+	unz_file_info64 info;
+	unzGetCurrentFileInfo64 (file, &info, nullptr, 0, nullptr, 0, nullptr, 0);
 	return info.crc;
 }
 
-CZipLoader::CZipLoader(const std::string & mountPoint, const std::string & archive):
+///CZipLoader
+CZipLoader::CZipLoader(const std::string & mountPoint, const boost::filesystem::path & archive, std::shared_ptr<CIOApi> api):
+	ioApi(api),
+    zlibApi(ioApi->getApiStructure()),
     archiveName(archive),
     mountPoint(mountPoint),
     files(listFiles(mountPoint, archive))
 {
-	logGlobal->traceStream() << "Zip archive loaded, " << files.size() << " files found";
+	logGlobal->trace("Zip archive loaded, %d files found", files.size());
 }
 
-std::unordered_map<ResourceID, unz_file_pos> CZipLoader::listFiles(const std::string & mountPoint, const std::string & archive)
+std::unordered_map<ResourceID, unz64_file_pos> CZipLoader::listFiles(const std::string & mountPoint, const boost::filesystem::path & archive)
 {
-	std::unordered_map<ResourceID, unz_file_pos> ret;
+	std::unordered_map<ResourceID, unz64_file_pos> ret;
 
-	unzFile file = unzOpen(archive.c_str());
+	unzFile file = unzOpen2_64(archive.c_str(), &zlibApi);
+
+	if(file == nullptr)
+		logGlobal->error("%s failed to open", archive.string());
 
 	if (unzGoToFirstFile(file) == UNZ_OK)
 	{
 		do
 		{
-			unz_file_info info;
+			unz_file_info64 info;
 			std::vector<char> filename;
 			// Fill unz_file_info structure with current file info
-			unzGetCurrentFileInfo (file, &info, nullptr, 0, nullptr, 0, nullptr, 0);
+			unzGetCurrentFileInfo64 (file, &info, nullptr, 0, nullptr, 0, nullptr, 0);
 
 			filename.resize(info.size_filename);
 			// Get name of current file. Contrary to docs "info" parameter can't be null
-			unzGetCurrentFileInfo (file, &info, filename.data(), filename.size(), nullptr, 0, nullptr, 0);
+			unzGetCurrentFileInfo64 (file, &info, filename.data(), filename.size(), nullptr, 0, nullptr, 0);
 
 			std::string filenameString(filename.data(), filename.size());
-			unzGetFilePos(file, &ret[ResourceID(mountPoint + filenameString)]);
+			unzGetFilePos64(file, &ret[ResourceID(mountPoint + filenameString)]);
 		}
 		while (unzGoToNextFile(file) == UNZ_OK);
 	}
@@ -85,7 +94,7 @@ std::unordered_map<ResourceID, unz_file_pos> CZipLoader::listFiles(const std::st
 
 std::unique_ptr<CInputStream> CZipLoader::load(const ResourceID & resourceName) const
 {
-	return std::unique_ptr<CInputStream>(new CZipStream(archiveName, files.at(resourceName)));
+	return std::unique_ptr<CInputStream>(new CZipStream(ioApi, archiveName, files.at(resourceName)));
 }
 
 bool CZipLoader::existsResource(const ResourceID & resourceName) const
@@ -140,24 +149,24 @@ static bool extractCurrent(unzFile file, std::ostream & where)
 	return false;
 }
 
-std::vector<std::string> ZipArchive::listFiles(std::string filename)
+std::vector<std::string> ZipArchive::listFiles(boost::filesystem::path filename)
 {
 	std::vector<std::string> ret;
 
-	unzFile file = unzOpen(filename.c_str());
+	unzFile file = unzOpen2_64(filename.c_str(), FileStream::GetMinizipFilefunc());
 
 	if (unzGoToFirstFile(file) == UNZ_OK)
 	{
 		do
 		{
-			unz_file_info info;
+			unz_file_info64 info;
 			std::vector<char> filename;
 
-			unzGetCurrentFileInfo (file, &info, nullptr, 0, nullptr, 0, nullptr, 0);
+			unzGetCurrentFileInfo64 (file, &info, nullptr, 0, nullptr, 0, nullptr, 0);
 
 			filename.resize(info.size_filename);
 			// Get name of current file. Contrary to docs "info" parameter can't be null
-			unzGetCurrentFileInfo (file, &info, filename.data(), filename.size(), nullptr, 0, nullptr, 0);
+			unzGetCurrentFileInfo64 (file, &info, filename.data(), filename.size(), nullptr, 0, nullptr, 0);
 
 			ret.push_back(std::string(filename.data(), filename.size()));
 		}
@@ -168,29 +177,29 @@ std::vector<std::string> ZipArchive::listFiles(std::string filename)
 	return ret;
 }
 
-bool ZipArchive::extract(std::string from, std::string where)
+bool ZipArchive::extract(boost::filesystem::path from, boost::filesystem::path where)
 {
 	// Note: may not be fast enough for large archives (should NOT happen with mods)
 	// because locating each file by name may be slow. Unlikely slower than decompression though
 	return extract(from, where, listFiles(from));
 }
 
-bool ZipArchive::extract(std::string from, std::string where, std::vector<std::string> what)
+bool ZipArchive::extract(boost::filesystem::path from, boost::filesystem::path where, std::vector<std::string> what)
 {
-	unzFile archive = unzOpen(from.c_str());
+	unzFile archive = unzOpen2_64(from.c_str(), FileStream::GetMinizipFilefunc());
 
 	auto onExit = vstd::makeScopeGuard([&]()
 	{
 		unzClose(archive);
 	});
 
-	for (std::string & file : what)
+	for (const std::string & file : what)
 	{
 		if (unzLocateFile(archive, file.c_str(), 1) != UNZ_OK)
 			return false;
 
-		std::string fullName = where + '/' + file;
-		std::string fullPath = fullName.substr(0, fullName.find_last_of("/"));
+		const boost::filesystem::path fullName = where / file;
+		const boost::filesystem::path fullPath = fullName.parent_path();
 
 		boost::filesystem::create_directories(fullPath);
 		// directory. No file to extract
@@ -198,7 +207,7 @@ bool ZipArchive::extract(std::string from, std::string where, std::vector<std::s
 		if (boost::algorithm::ends_with(file, "/"))
 			continue;
 
-		std::ofstream destFile(fullName, std::ofstream::binary);
+		FileStream destFile(fullName, std::ios::out | std::ios::binary);
 		if (!destFile.good())
 			return false;
 

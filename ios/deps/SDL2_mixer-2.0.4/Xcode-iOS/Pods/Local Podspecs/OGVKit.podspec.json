@@ -1,0 +1,414 @@
+{
+  "name": "OGVKit",
+  "version": "0.5.13",
+  "summary": "Ogg Vorbis/Theora and WebM media playback widget for iOS.",
+  "description": "Ogg Vorbis/Theora and WebM media playback widget for iOS.\nPackages Xiph.org's libogg, libvorbis, and libtheora, and\nuses Google's VPX library, along with a UIView subclass\nto play a video or audio file from a URL.",
+  "homepage": "https://github.com/brion/OGVKit",
+  "license": {
+    "type": "MIT",
+    "file": "LICENSE"
+  },
+  "authors": {
+    "Brion Vibber": "brion@pobox.com"
+  },
+  "social_media_url": "https://brionv.com/",
+  "platforms": {
+    "ios": "8.0"
+  },
+  "source": {
+    "git": "https://github.com/brion/OGVKit.git",
+    "tag": "0.5.13",
+    "submodules": true
+  },
+  "header_dir": "OGVKit",
+  "module_name": "OGVKit",
+  "subspecs": [
+    {
+      "name": "Core",
+      "source_files": [
+        "Classes/OGVKit.{h,m}",
+        "Classes/OGVLogger.{h,m}",
+        "Classes/OGVQueue.{h,m}",
+        "Classes/OGVMediaType.{h,m}",
+        "Classes/OGVAudioFormat.{h,m}",
+        "Classes/OGVAudioBuffer.{h,m}",
+        "Classes/OGVVideoFormat.{h,m}",
+        "Classes/OGVVideoPlane.{h,m}",
+        "Classes/OGVVideoBuffer.{h,m}",
+        "Classes/OGVHTTPContentRange.{h,m}",
+        "Classes/OGVInputStream.{h,m}",
+        "Classes/OGVDataInputStream.{h,m}",
+        "Classes/OGVFileInputStream.{h,m}",
+        "Classes/OGVHTTPInputStream.{h,m}",
+        "Classes/OGVDecoder.{h,m}",
+        "Classes/OGVFrameView.{h,m}",
+        "Classes/OGVAudioFeeder.{h,m}",
+        "Classes/OGVPlayerState.{h,m}",
+        "Classes/OGVPlayerView.{h,m}"
+      ],
+      "public_header_files": [
+        "Classes/OGVKit.h",
+        "Classes/OGVQueue.h",
+        "Classes/OGVLogger.h",
+        "Classes/OGVMediaType.h",
+        "Classes/OGVAudioFormat.h",
+        "Classes/OGVAudioBuffer.h",
+        "Classes/OGVVideoFormat.h",
+        "Classes/OGVVideoPlane.h",
+        "Classes/OGVVideoBuffer.h",
+        "Classes/OGVInputStream.h",
+        "Classes/OGVDecoder.h",
+        "Classes/OGVFrameView.h",
+        "Classes/OGVAudioFeeder.h",
+        "Classes/OGVPlayerState.h",
+        "Classes/OGVPlayerView.h"
+      ],
+      "resource_bundles": {
+        "OGVKitResources": [
+          "Resources/OGVFrameView.fsh",
+          "Resources/OGVFrameView.vsh",
+          "Resources/OGVPlayerView.xib",
+          "Resources/ogvkit-iconfont.ttf"
+        ]
+      }
+    },
+    {
+      "name": "Ogg",
+      "subspecs": [
+        {
+          "name": "Theora",
+          "dependencies": {
+            "OGVKit/OggDemuxer": [
+
+            ],
+            "OGVKit/TheoraDecoder": [
+
+            ],
+            "OGVKit/VorbisDecoder": [
+
+            ]
+          }
+        },
+        {
+          "name": "Vorbis",
+          "dependencies": {
+            "OGVKit/OggDemuxer": [
+
+            ],
+            "OGVKit/VorbisDecoder": [
+
+            ]
+          }
+        },
+        {
+          "name": "Opus",
+          "dependencies": {
+            "OGVKit/OggDemuxer": [
+
+            ],
+            "OGVKit/OpusDecoder": [
+
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "WebM",
+      "subspecs": [
+        {
+          "name": "VP8",
+          "dependencies": {
+            "OGVKit/WebMDemuxer": [
+
+            ],
+            "OGVKit/VP8Decoder": [
+
+            ],
+            "OGVKit/VorbisDecoder": [
+
+            ]
+          }
+        },
+        {
+          "name": "Vorbis",
+          "dependencies": {
+            "OGVKit/WebMDemuxer": [
+
+            ],
+            "OGVKit/VorbisDecoder": [
+
+            ]
+          }
+        },
+        {
+          "name": "Opus",
+          "dependencies": {
+            "OGVKit/WebMDemuxer": [
+
+            ],
+            "OGVKit/OpusDecoder": [
+
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "MP4",
+      "dependencies": {
+        "OGVKit/AVDecoder": [
+
+        ]
+      }
+    },
+    {
+      "name": "MP3",
+      "dependencies": {
+        "OGVKit/AVDecoder": [
+
+        ]
+      }
+    },
+    {
+      "name": "OggDemuxer",
+      "source_files": [
+        "Classes/OGVDecoderOgg.{h,m}",
+        "Classes/OGVDecoderOggPacket.{h,m}"
+      ],
+      "private_header_files": [
+        "Classes/OGVDecoderOgg.h",
+        "Classes/OGVDecoderOggPacket.h"
+      ],
+      "dependencies": {
+        "OGVKit/Core": [
+
+        ],
+        "liboggz": [
+          "1.2.0-1"
+        ],
+        "OGVKit/libskeleton": [
+          "~>0.4"
+        ]
+      }
+    },
+    {
+      "name": "WebMDemuxer",
+      "source_files": [
+        "Classes/OGVDecoderWebM.{h,m}",
+        "Classes/OGVDecoderWebMPacket.{h,m}"
+      ],
+      "private_header_files": [
+        "Classes/OGVDecoderWebM.h",
+        "Classes/OGVDecoderWebMPacket.h"
+      ],
+      "dependencies": {
+        "OGVKit/Core": [
+
+        ],
+        "libnestegg": [
+          "~>0.2"
+        ]
+      }
+    },
+    {
+      "name": "TheoraDecoder",
+      "xcconfig": {
+        "OTHER_CFLAGS": "-DOGVKIT_HAVE_THEORA_DECODER"
+      },
+      "dependencies": {
+        "OGVKit/Core": [
+
+        ],
+        "libtheora": [
+          "1.2.0-3"
+        ]
+      }
+    },
+    {
+      "name": "VP8Decoder",
+      "xcconfig": {
+        "OTHER_CFLAGS": "-DOGVKIT_HAVE_VP8_DECODER"
+      },
+      "dependencies": {
+        "OGVKit/Core": [
+
+        ],
+        "libvpx": [
+          "~>1.7.0"
+        ]
+      }
+    },
+    {
+      "name": "VorbisDecoder",
+      "xcconfig": {
+        "OTHER_CFLAGS": "-DOGVKIT_HAVE_VORBIS_DECODER"
+      },
+      "dependencies": {
+        "OGVKit/Core": [
+
+        ],
+        "libvorbis": [
+
+        ]
+      }
+    },
+    {
+      "name": "OpusDecoder",
+      "xcconfig": {
+        "OTHER_CFLAGS": "-DOGVKIT_HAVE_OPUS_DECODER"
+      },
+      "dependencies": {
+        "OGVKit/Core": [
+
+        ],
+        "libopus": [
+
+        ]
+      },
+      "source_files": [
+        "opus-tools/src/opus_header.h",
+        "opus-tools/src/opus_header.c"
+      ]
+    },
+    {
+      "name": "AVDecoder",
+      "dependencies": {
+        "OGVKit/Core": [
+
+        ]
+      },
+      "source_files": "Classes/OGVDecoderAV.{h,m}",
+      "private_header_files": "Classes/OGVDecoderAV.h"
+    },
+    {
+      "name": "Encoder",
+      "dependencies": {
+        "OGVKit/WebMEncoder": [
+
+        ]
+      }
+    },
+    {
+      "name": "WebMEncoder",
+      "dependencies": {
+        "OGVKit/VorbisEncoder": [
+
+        ],
+        "OGVKit/VP8Encoder": [
+
+        ],
+        "OGVKit/WebMMuxer": [
+
+        ]
+      }
+    },
+    {
+      "name": "EncoderCore",
+      "xcconfig": {
+        "OTHER_CFLAGS": "-DOGVKIT_HAVE_ENCODER"
+      },
+      "source_files": [
+        "Classes/OGVPacket.h",
+        "Classes/OGVPacket.m",
+        "Classes/OGVMuxer.h",
+        "Classes/OGVMuxer.m",
+        "Classes/OGVOutputStream.h",
+        "Classes/OGVOutputStream.m",
+        "Classes/OGVFileOutputStream.h",
+        "Classes/OGVFileOutputStream.m",
+        "Classes/OGVAudioEncoder.h",
+        "Classes/OGVAudioEncoder.m",
+        "Classes/OGVVideoEncoder.h",
+        "Classes/OGVVideoEncoder.m",
+        "Classes/OGVEncoder.h",
+        "Classes/OGVEncoder.m"
+      ],
+      "public_header_files": [
+        "Classes/OGVPacket.h",
+        "Classes/OGVMuxer.h",
+        "Classes/OGVOutputStream.h",
+        "Classes/OGVFileOutputStream.h",
+        "Classes/OGVAudioEncoder.h",
+        "Classes/OGVVideoEncoder.h",
+        "Classes/OGVEncoder.h"
+      ]
+    },
+    {
+      "name": "VorbisEncoder",
+      "xcconfig": {
+        "OTHER_CFLAGS": "-DOGVKIT_HAVE_VORBIS_ENCODER"
+      },
+      "dependencies": {
+        "OGVKit/EncoderCore": [
+
+        ]
+      },
+      "source_files": [
+        "Classes/OGVVorbisEncoder.h",
+        "Classes/OGVVorbisEncoder.m"
+      ]
+    },
+    {
+      "name": "VP8Encoder",
+      "xcconfig": {
+        "OTHER_CFLAGS": "-DOGVKIT_HAVE_VP8_ENCODER"
+      },
+      "dependencies": {
+        "OGVKit/EncoderCore": [
+
+        ]
+      },
+      "source_files": [
+        "Classes/OGVVP8Encoder.h",
+        "Classes/OGVVP8Encoder.m"
+      ]
+    },
+    {
+      "name": "WebMMuxer",
+      "xcconfig": {
+        "OTHER_CFLAGS": "-DOGVKIT_HAVE_WEBM_MUXER"
+      },
+      "dependencies": {
+        "OGVKit/EncoderCore": [
+
+        ],
+        "WebM": [
+
+        ]
+      },
+      "source_files": [
+        "Classes/OGVWebMMuxer.h",
+        "Classes/OGVWebMMuxer.mm"
+      ]
+    },
+    {
+      "name": "libskeleton",
+      "source_files": [
+        "libskeleton/include/skeleton/skeleton.h",
+        "libskeleton/include/skeleton/skeleton_constants.h",
+        "libskeleton/include/skeleton/skeleton_query.h",
+        "libskeleton/src/skeleton.c",
+        "libskeleton/src/skeleton_macros.h",
+        "libskeleton/src/skeleton_private.h",
+        "libskeleton/src/skeleton_query.c",
+        "libskeleton/src/skeleton_vector.h",
+        "libskeleton/src/skeleton_vector.c"
+      ],
+      "compiler_flags": [
+        "-Wno-conversion",
+        "-Wno-unused-function"
+      ],
+      "public_header_files": [
+        "libskeleton/include/skeleton/skeleton.h",
+        "libskeleton/include/skeleton/skeleton_constants.h",
+        "libskeleton/include/skeleton/skeleton_query.h"
+      ],
+      "dependencies": {
+        "libogg": [
+
+        ]
+      }
+    }
+  ]
+}

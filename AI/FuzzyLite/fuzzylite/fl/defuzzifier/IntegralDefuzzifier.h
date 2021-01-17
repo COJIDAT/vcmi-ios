@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #ifndef FL_INTEGRALDEFUZZIFIER_H
@@ -28,24 +20,52 @@
 #include "fl/defuzzifier/Defuzzifier.h"
 
 namespace fl {
-    //TODO: check  http://en.wikipedia.org/wiki/Adaptive_quadrature
 
+    /**
+      The IntegralDefuzzifier class is the base class for defuzzifiers which integrate
+      over the fuzzy set.
+
+      @author Juan Rada-Vilela, Ph.D.
+      @since 4.0
+     */
     class FL_API IntegralDefuzzifier : public Defuzzifier {
-    protected:
+    private:
         static int _defaultResolution;
 
         int _resolution;
     public:
-
-        static void setDefaultResolution(int defaultResolution);
-        static int defaultResolution();
-
-        IntegralDefuzzifier(int resolution = defaultResolution());
+        explicit IntegralDefuzzifier(int resolution = defaultResolution());
         virtual ~IntegralDefuzzifier() FL_IOVERRIDE;
         FL_DEFAULT_COPY_AND_MOVE(IntegralDefuzzifier)
 
+        /**
+          Sets the resolution of the defuzzifier. The resolution refers to the
+          number of divisions in which the range `[minimum,maximum]` is divided
+          in order to integrate the area under the curve
+
+          @param resolution is the resolution of the defuzzifier
+         */
         virtual void setResolution(int resolution);
+        /**
+          Gets the resolution of the defuzzifier. The resolution refers to the
+          number of divisions in which the range `[minimum,maximum]` is divided
+          in order to integrate the area under the curve
+
+          @return the resolution of the defuzzifier
+         */
         virtual int getResolution() const;
+
+        /**
+          Sets the default resolution for integral-based defuzzifiers
+          @param defaultResolution is the default resolution for integral-based defuzzifiers
+         */
+        static void setDefaultResolution(int defaultResolution);
+        /**
+          Gets the default resolution for integral-based defuzzifiers
+          @return the default resolution for integral-based defuzzifiers
+         */
+        static int defaultResolution();
+
     };
 }
 

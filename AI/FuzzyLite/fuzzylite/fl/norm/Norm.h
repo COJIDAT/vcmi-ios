@@ -1,25 +1,17 @@
 /*
- Author: Juan Rada-Vilela, Ph.D.
- Copyright (C) 2010-2014 FuzzyLite Limited
- All rights reserved
+ fuzzylite (R), a fuzzy logic control library in C++.
+ Copyright (C) 2010-2017 FuzzyLite Limited. All rights reserved.
+ Author: Juan Rada-Vilela, Ph.D. <jcrada@fuzzylite.com>
 
  This file is part of fuzzylite.
 
  fuzzylite is free software: you can redistribute it and/or modify it under
- the terms of the GNU Lesser General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+ the terms of the FuzzyLite License included with the software.
 
- fuzzylite is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- for more details.
+ You should have received a copy of the FuzzyLite License along with
+ fuzzylite. If not, see <http://www.fuzzylite.com/license/>.
 
- You should have received a copy of the GNU Lesser General Public License
- along with fuzzylite.  If not, see <http://www.gnu.org/licenses/>.
-
- fuzzylite™ is a trademark of FuzzyLite Limited.
-
+ fuzzylite is a registered trademark of FuzzyLite Limited.
  */
 
 #ifndef FL_NORM_H
@@ -27,12 +19,22 @@
 
 #include "fl/fuzzylite.h"
 
-#include "fl/Operation.h"
+#include "fl/Complexity.h"
 
 #include <string>
 
 namespace fl {
 
+    /**
+      The Norm class is the abstract class for norms.
+
+      @author Juan Rada-Vilela, Ph.D.
+      @see TNorm
+      @see SNorm
+      @see TNormFactory
+      @see SNormFactory
+      @since 4.0
+     */
     class FL_API Norm {
     public:
 
@@ -43,13 +45,31 @@ namespace fl {
         }
 
         FL_DEFAULT_COPY_AND_MOVE(Norm)
-
+        /**
+          Returns the name of the class of the norm
+          @return the name of the class of the norm
+         */
         virtual std::string className() const = 0;
+
+        /**
+          Computes the estimated complexity of computing the hedge
+          @return the complexity of computing the hedge
+         */
+        virtual Complexity complexity() const = 0;
+        /**
+          Computes the norm for @f$a@f$ and @f$b@f$
+          @param a is a membership function value
+          @param b is a membership function value
+          @return the norm between @f$a@f$ and @f$b@f$
+         */
         virtual scalar compute(scalar a, scalar b) const = 0;
 
+        /**
+          Creates a clone of the norm
+          @return a clone of the norm
+         */
         virtual Norm* clone() const = 0;
 
     };
 }
 #endif  /* FL_NORM_H */
-

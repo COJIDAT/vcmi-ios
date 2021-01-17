@@ -1,10 +1,3 @@
-#pragma once
-
-#include "CRewardableObject.h"
-#include "CObjectClassesHandler.h"
-
-#include "../JsonNode.h"
-
 /*
  * CRewardableConstructor.h, part of VCMI engine
  *
@@ -14,6 +7,12 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#pragma once
+
+#include "CRewardableObject.h"
+#include "CObjectClassesHandler.h"
+
+#include "../JsonNode.h"
 
 class DLL_LINKAGE CRandomRewardObjectInfo : public IObjectInfo
 {
@@ -50,9 +49,9 @@ class DLL_LINKAGE CRewardableConstructor : public AObjectTypeHandler
 public:
 	CRewardableConstructor();
 
-	CGObjectInstance * create(ObjectTemplate tmpl) const override;
+	CGObjectInstance * create(const ObjectTemplate & tmpl) const override;
 
 	void configureObject(CGObjectInstance * object, CRandomGenerator & rng) const override;
 
-	std::unique_ptr<IObjectInfo> getObjectInfo(ObjectTemplate tmpl) const override;
+	std::unique_ptr<IObjectInfo> getObjectInfo(const ObjectTemplate & tmpl) const override;
 };

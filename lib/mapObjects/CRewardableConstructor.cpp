@@ -1,12 +1,3 @@
-#include "StdInc.h"
-#include "CRewardableConstructor.h"
-
-#include "../CRandomGenerator.h"
-#include "../StringConstants.h"
-#include "../CCreatureHandler.h"
-#include "JsonRandom.h"
-#include "../IGameCallback.h"
-
 /*
  * CRewardableConstructor.cpp, part of VCMI engine
  *
@@ -16,12 +7,20 @@
  * Full text of license available in license.txt file, in main folder
  *
  */
+#include "StdInc.h"
+#include "CRewardableConstructor.h"
+
+#include "../CRandomGenerator.h"
+#include "../StringConstants.h"
+#include "../CCreatureHandler.h"
+#include "JsonRandom.h"
+#include "../IGameCallback.h"
 
 namespace {
 	MetaString loadMessage(const JsonNode & value)
 	{
 		MetaString ret;
-		if (value.getType() == JsonNode::DATA_FLOAT)
+		if (value.isNumber())
 			ret.addTxt(MetaString::ADVOB_TXT, value.Float());
 		else
 			ret << value.String();
@@ -120,7 +119,6 @@ void CRandomRewardObjectInfo::configureObject(CRewardableObject * object, CRando
 
 	//TODO: visitMode and selectMode
 
-	object->soundID = parameters["soundID"].Float();
 	object->resetDuration = parameters["resetDuration"].Float();
 	object->canRefuse =parameters["canRefuse"].Bool();
 }
@@ -185,9 +183,10 @@ void CRewardableConstructor::initTypeData(const JsonNode & config)
 	objectInfo.init(config);
 }
 
-CGObjectInstance * CRewardableConstructor::create(ObjectTemplate tmpl) const
+CGObjectInstance * CRewardableConstructor::create(const ObjectTemplate & tmpl) const
 {
 	auto ret = new CRewardableObject();
+	preInitObject(ret);
 	ret->appearance = tmpl;
 	return ret;
 }
@@ -197,7 +196,7 @@ void CRewardableConstructor::configureObject(CGObjectInstance * object, CRandomG
 	objectInfo.configureObject(dynamic_cast<CRewardableObject*>(object), rng);
 }
 
-std::unique_ptr<IObjectInfo> CRewardableConstructor::getObjectInfo(ObjectTemplate tmpl) const
+std::unique_ptr<IObjectInfo> CRewardableConstructor::getObjectInfo(const ObjectTemplate & tmpl) const
 {
 	return std::unique_ptr<IObjectInfo>(new CRandomRewardObjectInfo(objectInfo));
 }

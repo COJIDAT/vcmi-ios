@@ -1,3 +1,12 @@
+/*
+ * MiscWidgets.cpp, part of VCMI engine
+ *
+ * Authors: listed in file AUTHORS in main folder
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
 #include "StdInc.h"
 #include "MiscWidgets.h"
 
@@ -21,16 +30,6 @@
 #include "../../lib/CGeneralTextHandler.h"
 #include "../../lib/CModHandler.h"
 #include "../../lib/CGameState.h"
-
-/*
- * MiscWidgets.cpp, part of VCMI engine
- *
- * Authors: listed in file AUTHORS in main folder
- *
- * License: GNU General Public License v2.0 or later
- * Full text of license available in license.txt file, in main folder
- *
- */
 
 void CHoverableArea::hover (bool on)
 {
@@ -67,7 +66,7 @@ LRClickableAreaWText::LRClickableAreaWText()
 	init();
 }
 
-LRClickableAreaWText::LRClickableAreaWText(const Rect &Pos, const std::string &HoverText /*= ""*/, const std::string &ClickText /*= ""*/)
+LRClickableAreaWText::LRClickableAreaWText(const Rect &Pos, const std::string &HoverText, const std::string &ClickText)
 {
 	init();
 	pos = Pos + pos;
@@ -94,7 +93,7 @@ void LRClickableAreaWTextComp::clickLeft(tribool down, bool previousState)
 }
 
 LRClickableAreaWTextComp::LRClickableAreaWTextComp(const Rect &Pos, int BaseType)
-	: LRClickableAreaWText(Pos), baseType(BaseType), bonusValue(-1)
+	: LRClickableAreaWText(Pos), baseType(BaseType), bonusValue(-1), type(-1)
 {
 }
 
@@ -134,13 +133,13 @@ CHeroArea::CHeroArea(int x, int y, const CGHeroInstance * _hero):hero(_hero)
 
 void CHeroArea::clickLeft(tribool down, bool previousState)
 {
-	if((!down) && previousState && hero)
+	if(hero && (!down) && previousState)
 		LOCPLINT->openHeroWindow(hero);
 }
 
 void CHeroArea::clickRight(tribool down, bool previousState)
 {
-	if((!down) && previousState && hero)
+	if(hero && (!down) && previousState)
 		LOCPLINT->openHeroWindow(hero);
 }
 
@@ -154,24 +153,24 @@ void CHeroArea::hover(bool on)
 
 void LRClickableAreaOpenTown::clickLeft(tribool down, bool previousState)
 {
-	if((!down) && previousState && town)
-		{
+	if(town && (!down) && previousState)
+	{
 		LOCPLINT->openTownWindow(town);
 		if ( type == 2 )
 			LOCPLINT->castleInt->builds->buildingClicked(BuildingID::VILLAGE_HALL);
 		else if ( type == 3 && town->fortLevel() )
 			LOCPLINT->castleInt->builds->buildingClicked(BuildingID::FORT);
-		}
+	}
 }
 
 void LRClickableAreaOpenTown::clickRight(tribool down, bool previousState)
 {
-	if((!down) && previousState && town)
+	if(town && (!down) && previousState)
 		LOCPLINT->openTownWindow(town);//TODO: popup?
 }
 
-LRClickableAreaOpenTown::LRClickableAreaOpenTown()
-	: LRClickableAreaWTextComp(Rect(0,0,0,0), -1)
+LRClickableAreaOpenTown::LRClickableAreaOpenTown(const Rect & Pos, const CGTownInstance * Town)
+	: LRClickableAreaWTextComp(Pos, -1), town(Town)
 {
 }
 
@@ -235,7 +234,7 @@ void CArmyTooltip::init(const InfoAboutArmy &army)
 	{
 		if(slot.first.getNum() >= GameConstants::ARMY_SIZE)
 		{
-			logGlobal->warnStream() << "Warning: " << army.name << " has stack in slot " << slot.first;
+			logGlobal->warn("%s has stack in slot %d", army.name, slot.first.getNum());
 			continue;
 		}
 
@@ -294,9 +293,9 @@ CHeroTooltip::CHeroTooltip(Point pos, const InfoAboutHero &hero):
 }
 
 CHeroTooltip::CHeroTooltip(Point pos, const CGHeroInstance * hero):
-	CArmyTooltip(pos, InfoAboutHero(hero, true))
+	CArmyTooltip(pos, InfoAboutHero(hero, InfoAboutHero::EInfoLevel::DETAILED))
 {
-	init(InfoAboutHero(hero, true));
+	init(InfoAboutHero(hero, InfoAboutHero::EInfoLevel::DETAILED));
 }
 
 void CTownTooltip::init(const InfoAboutTown &town)
@@ -361,40 +360,56 @@ void MoraleLuckBox::set(const IBonusBearer *node)
 	const int hoverTextBase[] = {7, 4};
 	const Bonus::BonusType bonusType[] = {Bonus::LUCK, Bonus::MORALE};
 	int (IBonusBearer::*getValue[])() const = {&IBonusBearer::LuckVal, &IBonusBearer::MoraleVal};
-
-	int mrlt = -9;
-	TModDescr mrl;
+	TBonusListPtr modifierList(new BonusList());
 
 	if (node)
 	{
-		node->getModifiersWDescr(mrl, bonusType[morale]);
+		modifierList = node->getBonuses(Selector::type(bonusType[morale]));
 		bonusValue = (node->*getValue[morale])();
 	}
 	else
 		bonusValue = 0;
 
-	mrlt = (bonusValue>0)-(bonusValue<0); //signum: -1 - bad luck / morale, 0 - neutral, 1 - good
+	int mrlt = (bonusValue>0)-(bonusValue<0); //signum: -1 - bad luck / morale, 0 - neutral, 1 - good
 	hoverText = CGI->generaltexth->heroscrn[hoverTextBase[morale] - mrlt];
 	baseType = componentType[morale];
 	text = CGI->generaltexth->arraytxt[textId[morale]];
 	boost::algorithm::replace_first(text,"%s",CGI->generaltexth->arraytxt[neutralDescr[morale]-mrlt]);
-	if (!mrl.size())
+
+	if (morale && node && (node->hasBonusOfType(Bonus::UNDEAD)
+			|| node->hasBonusOfType(Bonus::BLOCK_MORALE)
+			|| node->hasBonusOfType(Bonus::NON_LIVING)))
+	{
+		text += CGI->generaltexth->arraytxt[113]; //unaffected by morale
+		bonusValue = 0;
+	}
+	else if(!morale && node && node->hasBonusOfType(Bonus::BLOCK_LUCK))
+	{
+		// TODO: there is no text like "Unaffected by luck" so probably we need own text
 		text += CGI->generaltexth->arraytxt[noneTxtId];
+		bonusValue = 0;
+	}
+	else if(morale && node && node->hasBonusOfType(Bonus::NO_MORALE))
+	{
+		auto noMorale = node->getBonus(Selector::type(Bonus::NO_MORALE));
+		text += "\n" + noMorale->Description();
+		bonusValue = 0;
+	}
+	else if (!morale && node && node->hasBonusOfType(Bonus::NO_LUCK))
+	{
+		auto noLuck = node->getBonus(Selector::type(Bonus::NO_LUCK));
+		text += "\n" + noLuck->Description();
+		bonusValue = 0;
+	}
+	else if(modifierList->empty())
+		text += CGI->generaltexth->arraytxt[noneTxtId];//no modifiers
 	else
 	{
-		//it's a creature window
-		if ((morale && node && node->hasBonusOfType(Bonus::UNDEAD)) ||
-			node->hasBonusOfType(Bonus::BLOCK_MORALE) || node->hasBonusOfType(Bonus::NON_LIVING))
+		for(auto& elem : *modifierList)
 		{
-			text += CGI->generaltexth->arraytxt[113]; //unaffected by morale
-		}
-		else
-		{
-			for(auto & elem : mrl)
-			{
-				if (elem.first) //no bonuses with value 0
-					text += "\n" + elem.second;
-			}
+			if(elem->val != 0)
+				//no bonuses with value 0
+				text += "\n" + elem->Description();
 		}
 	}
 
